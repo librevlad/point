@@ -323,21 +323,30 @@ class GraphPipelineIntegrationTest {
             override fun all(): List<ChosenApp> = emptyList()
             override suspend fun record(app: ChosenApp) = Unit
         },
-        object : UserKeyStore {
-            override fun keys() = com.point.core.flow.UserAiKeys.NONE
-                .with(com.point.core.flow.UserAiKey("openrouter", "k"))
-            override suspend fun save(key: com.point.core.flow.UserAiKey) = Unit
-            override suspend fun forget(providerId: String) = Unit
-            override suspend fun clear() = Unit
-        },
-        object : com.point.core.flow.AiFacts {
-            override fun all(): Map<String, com.point.core.flow.AiFact> = emptyMap()
-            override fun remember(providerId: String, outcome: com.point.core.flow.AiOutcome) = Unit
-        },
-        object : com.point.core.flow.BuiltInAiKeys {
-            override fun key(providerId: String) = ""
-            override fun have(): Set<String> = emptySet()
-        },
+        SettingsParts(
+            object : UserKeyStore {
+                override fun keys() = com.point.core.flow.UserAiKeys.NONE
+                    .with(com.point.core.flow.UserAiKey("openrouter", "k"))
+                override suspend fun save(key: com.point.core.flow.UserAiKey) = Unit
+                override suspend fun forget(providerId: String) = Unit
+                override suspend fun clear() = Unit
+            },
+            object : com.point.core.flow.AiFacts {
+                override fun all(): Map<String, com.point.core.flow.AiFact> = emptyMap()
+                override fun remember(providerId: String, outcome: com.point.core.flow.AiOutcome) = Unit
+            },
+            object : com.point.core.flow.BuiltInAiKeys {
+                override fun key(providerId: String) = ""
+                override fun have(): Set<String> = emptySet()
+            },
+            object : com.point.core.flow.AiKeyCheck {
+                override suspend fun check(config: UserAiConfig) = KeyProbe(status = 200, reply = "ok")
+            },
+            object : SensorySettings {
+                override fun isSoundEnabled() = false
+                override suspend fun setSoundEnabled(enabled: Boolean) = Unit
+            },
+        ),
         consent,
         object : AppLauncher {
             override suspend fun handlers(obj: PointObject): List<AppTarget> = emptyList()
@@ -352,10 +361,6 @@ class GraphPipelineIntegrationTest {
             override fun tap() = Unit
             override fun success() = Unit
             override fun failure() = Unit
-        },
-        object : SensorySettings {
-            override fun isSoundEnabled() = false
-            override suspend fun setSoundEnabled(enabled: Boolean) = Unit
         },
         object : com.point.core.flow.CloudPrivacySettings {
             override fun level() = com.point.core.flow.PrivacyLevel.DEFAULT
@@ -401,9 +406,6 @@ class GraphPipelineIntegrationTest {
             override fun frame(path: String, maxPx: Int) = null
         },
         com.point.core.flow.PhoneRegion { "UA" },
-        object : com.point.core.flow.AiKeyCheck {
-            override suspend fun check(config: UserAiConfig) = KeyProbe(status = 200, reply = "ok")
-        },
         AccountParts(
             FakeAccountStore(TEST_ACCOUNT),
             FakeCircleClient(),
