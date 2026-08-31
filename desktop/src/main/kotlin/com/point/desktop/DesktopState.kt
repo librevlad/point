@@ -8,6 +8,7 @@ import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -351,6 +352,19 @@ class DesktopState(
      * числа, а живая просьба в последние секунды ожидания получала бы обещание работы вместо
      * готового исхода.
      */
+    /**
+     * Чем отмерять бюджет ответа телефону (#1299).
+     *
+     * Шов рядом с [background] и [io], и по той же причине: под тестом срок обязан наступать
+     * событием, а не секундами на занятой машине. Механический перевод на планировщик теста
+     * даёт здесь не зелёный тест, а тихо неправильный — работа идёт настоящими потоками, и
+     * виртуальные секунды пролетают раньше настоящей.
+     *
+     * В бою — обычные часы: срок ответа телефону меряется реальным временем, потому что
+     * реально его и ждёт человек с телефоном в руке.
+     */
+    internal var budgetTimer: suspend (Long) -> Unit = { ms -> kotlinx.coroutines.delay(ms) }
+
     fun runRemoteActionNow(
         id: String,
         item: InboxItem,
@@ -383,7 +397,13 @@ class DesktopState(
         }
         val startedAt = clock.now()
         val quick = kotlinx.coroutines.runBlocking {
-            kotlinx.coroutines.withTimeoutOrNull(budgetMs) { work.await() }
+            val timer = async { budgetTimer(budgetMs) }
+            val outcome = kotlinx.coroutines.selects.select<ActionResult?> {
+                work.onAwait { it }
+                timer.onAwait { null }
+            }
+            timer.cancel()
+            outcome
         }
 
         // Сколько просьбе лет к тому мигу, когда ответ готов: сколько письмо пролежало плюс

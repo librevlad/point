@@ -47,6 +47,14 @@ class SlowPcActionTest {
 
         /** Шаг состоялся словами, без объекта — как отмена у диалога «Сохранить в…» (#1073). */
         private val saysDone: ActionResult.Done? = null,
+
+        /**
+         * Пока эта дверь закрыта, работа не кончается (#1299).
+         *
+         * Так «долгое действие» становится событием, а не сроком: тест открывает дверь, когда
+         * ему нужно, и не гадает, успеет ли машина за отведённые миллисекунды.
+         */
+        private val holds: kotlinx.coroutines.CompletableDeferred<Unit>? = null,
     ) : Realizer {
         override val capabilityId = CapabilityId(id)
 
@@ -55,7 +63,7 @@ class SlowPcActionTest {
 
         override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
             try {
-                kotlinx.coroutines.delay(delayMs)
+                if (holds != null) holds.await() else kotlinx.coroutines.delay(delayMs)
             } catch (e: CancellationException) {
                 cancelled = true
                 throw e
@@ -97,11 +105,17 @@ class SlowPcActionTest {
         return state to item
     }
 
+    /**
+     * Работа уложилась в бюджет — телефон получает результат (#1299).
+     *
+     * Срок здесь не наступает вовсе: под тестом он событие, а не секунды на занятой машине.
+     */
     @Test
     fun `быстрое действие отвечает результатом, как раньше`() {
         val outbox = Outbox(temp.newFolder("out-fast"))
-        val slow = Slow("read", temp.newFolder("r1"), delayMs = 10)
+        val slow = Slow("read", temp.newFolder("r1"), delayMs = 0)
         val (state, item) = harness(slow, outbox)
+        state.budgetTimer = { kotlinx.coroutines.awaitCancellation() }
 
         val result = state.runRemoteActionNow("read", item, 5_000)
 
@@ -109,16 +123,27 @@ class SlowPcActionTest {
         assertTrue(outbox.entries().isEmpty())
     }
 
+    /**
+     * Бюджет вышел раньше работы — и работа не обрывается (#1299).
+     *
+     * Оба события здесь названы, а не отмерены: срок наступает сразу, а работа кончается
+     * тогда, когда тест откроет ей дверь. Прежде это была гонка 400 мс против 50, и на
+     * занятой машине она решалась не в ту сторону молча.
+     */
     @Test
     fun `долгое действие не обрывается — телефону честный ответ, результат в очереди со знанием`() {
         val outbox = Outbox(temp.newFolder("out-slow"))
-        val slow = Slow("read", temp.newFolder("r2"), delayMs = 400)
+        val until = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val slow = Slow("read", temp.newFolder("r2"), delayMs = 0, holds = until)
         val (state, item) = harness(slow, outbox)
+        state.budgetTimer = { }
 
-        val result = state.runRemoteActionNow("read", item, 50)
+        val result = state.runRemoteActionNow("read", item, 5_000)
 
         assertEquals(com.point.core.flow.PC_STILL_WORKING, (result as ActionResult.Done).message)
+        assertFalse("работа кончилась раньше, чем её отпустили", slow.finished)
 
+        until.complete(Unit)
         waitUntil { slow.finished && outbox.entries().isNotEmpty() }
         assertFalse("работа не смеет отменяться бюджетом ответа", slow.cancelled)
         val entry = outbox.entries().single()
@@ -133,10 +158,13 @@ class SlowPcActionTest {
     @Test
     fun `долгий отказ едет телефону исходом без объекта, а не молчанием`() {
         val outbox = Outbox(temp.newFolder("out-fail"))
-        val slow = Slow("read", temp.newFolder("r3"), delayMs = 200, fail = true)
+        val until = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val slow = Slow("read", temp.newFolder("r3"), delayMs = 0, fail = true, holds = until)
         val (state, item) = harness(slow, outbox)
+        state.budgetTimer = { }
 
-        val result = state.runRemoteActionNow("read", item, 50)
+        val result = state.runRemoteActionNow("read", item, 5_000)
+        until.complete(Unit)
 
         assertEquals(com.point.core.flow.PC_STILL_WORKING, (result as ActionResult.Done).message)
         waitUntil { slow.finished && outbox.entries().isNotEmpty() }
@@ -156,17 +184,21 @@ class SlowPcActionTest {
     fun `долгое «готово» без объекта — отмена у диалога — едет телефону к своему объекту`() {
         val outbox = Outbox(temp.newFolder("out-cancel"))
         val cancelled = com.point.core.flow.PC_CANCELLED
+        val until = kotlinx.coroutines.CompletableDeferred<Unit>()
         val slow = Slow(
-            "pc-save-as", temp.newFolder("r5"), delayMs = 200,
+            "pc-save-as", temp.newFolder("r5"), delayMs = 0,
             saysDone = ActionResult.Done(
                 cancelled,
                 com.point.core.model.Findings(metadata = mapOf("entity.phone" to "+380671234567")),
             ),
+            holds = until,
         )
         val (state, item) = harness(slow, outbox)
         val fromPhone = item.copy(obj = item.obj.copy(metadata = mapOf(com.point.core.flow.META_ORIGIN_ID to "phone-obj")))
+        state.budgetTimer = { }
 
-        val result = state.runRemoteActionNow("pc-save-as", fromPhone, 50)
+        val result = state.runRemoteActionNow("pc-save-as", fromPhone, 5_000)
+        until.complete(Unit)
 
         assertEquals(com.point.core.flow.PC_STILL_WORKING, (result as ActionResult.Done).message)
         waitUntil { slow.finished && outbox.entries().isNotEmpty() }
@@ -207,10 +239,13 @@ class SlowPcActionTest {
     @Test
     fun `очередь не приняла результат — компьютер говорит об этом, а не молчит`() {
         val broken = Outbox(temp.newFile("не-папка"))
-        val slow = Slow("read", temp.newFolder("r4"), delayMs = 200)
+        val until = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val slow = Slow("read", temp.newFolder("r4"), delayMs = 0, holds = until)
         val (state, item) = harness(slow, broken)
+        state.budgetTimer = { }
 
-        state.runRemoteActionNow("read", item, 50)
+        state.runRemoteActionNow("read", item, 5_000)
+        until.complete(Unit)
 
         waitUntil { slow.finished }
         waitUntil {
