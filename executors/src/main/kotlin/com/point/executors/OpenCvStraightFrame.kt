@@ -1,8 +1,11 @@
 package com.point.executors
 
 import android.graphics.Bitmap
+import com.point.core.flow.FrameTransform
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.StraightFrame
+import com.point.core.flow.StraightenedFrame
+import com.point.core.flow.toRaw
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,24 +25,44 @@ import java.io.File
  *
  * Обработчика нет на устройстве, страница не нашлась или кадр не раскрылся — `null`: второго
  * захода не будет, и чтение остаётся тем, каким было.
+ *
+ * Вместе с копией отдаются четыре угла страницы — в координатах файла снимка, а не
+ * развёрнутого кадра (#1332). Во сколько раз кадр мельче файла и на сколько его развернули,
+ * знает декодер, и спрашивается это у него, а не считается здесь заново.
  */
 class OpenCvStraightFrame(private val store: ObjectStore) : StraightFrame {
 
-    override suspend fun of(path: String): String? = withContext(Dispatchers.IO) {
+    override suspend fun of(path: String): StraightenedFrame? = withContext(Dispatchers.IO) {
         if (!OpenCvScan.available) return@withContext null
-        val src = Bitmaps.decodeUpright(path, Bitmaps.SCAN_PLUS_MAX_PX) ?: return@withContext null
-        val straight = runCatching { OpenCvScan.enhance(src) }.getOrNull()
+        val upright = Bitmaps.uprightFrame(path, Bitmaps.SCAN_PLUS_MAX_PX) ?: return@withContext null
+        val src = upright.bitmap
+        val toFile = FrameTransform(
+            sample = upright.shrink,
+            rotationDegrees = upright.degrees.toInt(),
+            uprightWidth = src.width,
+            uprightHeight = src.height,
+        )
+        val straight = runCatching { OpenCvScan.straightened(src) }.getOrNull()
         src.recycle()
         if (straight == null) return@withContext null
 
+        val copy = straight.bitmap
         val saved = runCatching {
             val ref = store.newScratchFile("jpg")
             File(ref.value).outputStream().use {
-                straight.compress(Bitmap.CompressFormat.JPEG, Bitmaps.JPEG_QUALITY, it)
+                copy.compress(Bitmap.CompressFormat.JPEG, Bitmaps.JPEG_QUALITY, it)
             }
             ref.value
         }.getOrNull()
-        straight.recycle()
-        saved
+        val size = copy.width to copy.height
+        copy.recycle()
+        saved?.let {
+            StraightenedFrame(
+                path = it,
+                page = straight.page?.let(toFile::toRaw),
+                width = size.first,
+                height = size.second,
+            )
+        }
     }
 }

@@ -35,6 +35,7 @@ import com.point.core.flow.ReadingBudget
 import com.point.core.flow.READ_PREPARED_STRAIGHTENED
 import com.point.core.flow.READ_PREPARED_WHITENED
 import com.point.core.flow.inSourceFrame
+import com.point.core.flow.onSourceFrame
 import com.point.core.flow.readerFailureIsFatal
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
@@ -178,10 +179,11 @@ class OcrInvestigationRealizer @Inject constructor(
         val won = again?.takeIf { layer !== onFrame }
 
         // Слой слов берётся у того кадра, чья геометрия — геометрия снимка (#1013, #1046). У
-        // выбеленной копии она такая: свет по листу выровняли, слова не двигали, и они
-        // возвращаются на снимок вместе с прочитанным. У выпрямленной — своя: её слова встали
-        // бы мимо строки, а слова проигравшего чтения спорили бы с текстом объекта (#1041), и
-        // слоя не остаётся вовсе (#1332).
+        // выбеленной копии она такая сразу: свет по листу выровняли, слова не двигали. У
+        // выпрямленной — своя, и слова приезжают на снимок по углам страницы, из которых
+        // копия родилась (#1332). Слоя не остаётся только там, где обратного хода нет вовсе;
+        // слова проигравшего чтения не берутся никогда — они спорили бы с текстом объекта
+        // (#1041).
         val words = if (won == null) onFrame else won.words
         val atomsRef = if (words != null && words.atoms.isNotEmpty()) {
             store.newScratchFile("atoms.tsv").also { File(it.value).writeText(AtomCodec.encode(words)) }
@@ -306,8 +308,11 @@ class OcrInvestigationRealizer @Inject constructor(
      * Ступени идут от бережной к решительной, и порядок здесь — часть поведения. Сперва ровный
      * свет: он не двигает слова, поэтому прочитанное возвращается на снимок вместе с
      * координатами и по нему по-прежнему можно подсветить найденное и вырезать ячейку. Не
-     * помогло — снимается перспектива, и за это платят словами: у выпрямленной копии своя
-     * геометрия, знанием остаётся только текст (#1332).
+     * помогло — снимается перспектива. Своя геометрия у выпрямленной копии не отменяет места:
+     * копия родилась из четырёхугольника страницы, и слова возвращаются на снимок тем же
+     * ходом в обратную сторону (#1332). Обратного хода нет только у страницы, расправленной
+     * по линиям разлиновки: тогда углов не существует, и слов у этого чтения не остаётся —
+     * молчание честнее места, показанного мимо строки.
      *
      * Тот же читатель и тот же кадр — новых объектов из этого не рождается: обе копии лежат в
      * scratch и уходят вместе с ним, как вырезка по показанной области.
@@ -331,9 +336,10 @@ class OcrInvestigationRealizer @Inject constructor(
         // копию всё равно некому было бы прочитать.
         if (onWhite?.incomplete == INCOMPLETE_TIMEOUT || budget.leftMs() <= 0) return null
 
-        val path = runCatching { straight.of(frame.uri.value) }.getOrNull() ?: return null
-        val onStraight = readCopy(frame, path, budget)?.takeUnless { poorlyRead(it.text, it) } ?: return null
-        return SecondRead(onStraight, words = null, prep = READ_PREPARED_STRAIGHTENED)
+        val copy = runCatching { straight.of(frame.uri.value) }.getOrNull() ?: return null
+        val onStraight = readCopy(frame, copy.path, budget)?.takeUnless { poorlyRead(it.text, it) } ?: return null
+        val words = copy.page?.let { onStraight.onSourceFrame(it, copy.width, copy.height) }
+        return SecondRead(onStraight, words = words, prep = READ_PREPARED_STRAIGHTENED)
     }
 
     /**

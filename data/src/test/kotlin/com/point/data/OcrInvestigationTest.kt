@@ -27,10 +27,13 @@ import com.point.core.flow.READ_PREPARED_STRAIGHTENED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ReadingMode
+import com.point.core.flow.PageQuad
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OcrClock
 import com.point.core.flow.PaperWhitener
+import com.point.core.flow.Spot
 import com.point.core.flow.StraightFrame
+import com.point.core.flow.StraightenedFrame
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -274,7 +277,7 @@ class OcrInvestigationTest {
             FakeStore(),
             crookedReading(straight),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
-            StraightFrame { straight },
+            StraightFrame { copyOf(straight) },
             noWhitening,
             stoppedClock,
         )
@@ -289,6 +292,51 @@ class OcrInvestigationTest {
         // нет — и слоя у такого чтения нет вовсе (#1013, #1332).
         assertFalse("каша с сырого кадра осталась словами объекта", META_OCR_ATOMS_REF in delta.metadata)
         assertFalse(Feature.HAS_WORD_LAYER in delta.features)
+    }
+
+    /**
+     * Найденное со второго захода знает своё место на снимке (#1332).
+     *
+     * Путь человека: он снял счёт под углом, Point выпрямил кадр и прочитал его как надо. По
+     * прочитанному человек тапает найденный телефон — и подсветка обязана встать на самом
+     * снимке, там, куда он смотрит, а не в координатах копии, которой он никогда не видел.
+     *
+     * Копия родилась из четырёхугольника страницы, растянутого в прямоугольник; тем же ходом
+     * в обратную сторону слова и возвращаются. Углы известны — слой слов у объекта есть, и
+     * места слов лежат внутри страницы на снимке.
+     */
+    @Test
+    fun `слова со второго захода стоят на снимке человека, а не на копии`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val store = FakeStore()
+        val page = PageQuad(Spot(200f, 100f), Spot(600f, 100f), Spot(600f, 900f), Spot(200f, 900f))
+        val enricher = OcrInvestigationRealizer(
+            store,
+            crookedReading(straight),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { StraightenedFrame(straight, page, width = 400, height = 800) },
+            noWhitening,
+            stoppedClock,
+        )
+
+        val delta = enricher.look(image)
+
+        val ref = delta.metadata[META_OCR_ATOMS_REF]
+        assertTrue("слов у чтения не осталось, хотя углы страницы известны", ref != null)
+        assertTrue(Feature.HAS_WORD_LAYER in delta.features)
+        val words = AtomCodec.decode(File(ref!!).readText())
+        assertTrue("слой пуст", words.atoms.isNotEmpty())
+        words.atoms.forEach { atom ->
+            assertTrue(
+                "слово «${atom.text}» встало мимо страницы на снимке: ${atom.box}",
+                atom.box.left >= 199f && atom.box.right <= 601f &&
+                    atom.box.top >= 99f && atom.box.bottom <= 901f,
+            )
+        }
+        assertTrue(
+            "слова остались в координатах копии, а не снимка",
+            words.atoms.any { it.box.left > 200f },
+        )
     }
 
     /**
@@ -311,7 +359,7 @@ class OcrInvestigationTest {
             store,
             crookedReading(straight),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
-            StraightFrame { straight },
+            StraightFrame { copyOf(straight) },
             noWhitening,
             stoppedClock,
         )
@@ -340,7 +388,7 @@ class OcrInvestigationTest {
             FakeStore(),
             crookedReading(straight),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
-            StraightFrame { straight },
+            StraightFrame { copyOf(straight) },
             noWhitening,
             stoppedClock,
         )
@@ -383,7 +431,7 @@ class OcrInvestigationTest {
             FakeStore(),
             recognizer(garbage, atoms = listOf(garbageAtom)),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
-            StraightFrame { "/tmp/straight.jpg" },
+            StraightFrame { copyOf("/tmp/straight.jpg") },
             noWhitening,
             stoppedClock,
         )
@@ -448,7 +496,7 @@ class OcrInvestigationTest {
             FakeStore(),
             reading,
             extractor(Entity(EntityType.PHONE, "+380671234567")),
-            StraightFrame { straight },
+            StraightFrame { copyOf(straight) },
             noWhitening,
             stoppedClock,
         )
@@ -525,7 +573,7 @@ class OcrInvestigationTest {
             FakeStore(),
             crookedReading(straight),
             extractor(),
-            StraightFrame { straight },
+            StraightFrame { copyOf(straight) },
             noWhitening,
             stoppedClock,
         )
@@ -752,4 +800,10 @@ class OcrInvestigationTest {
         assertFalse(declared.label(ObjectState(ObjectKind.IMAGE)).isBlank())
         assertTrue(Feature.HAS_PHONE in declared.meta.mayYield)
     }
+    /**
+     * Выпрямленная копия без обратного хода — как страница, расправленная по линиям
+     * разлиновки: место найденного с неё не возвращается, и слов у чтения не остаётся (#1332).
+     */
+    private fun copyOf(path: String) = StraightenedFrame(path, page = null, width = 0, height = 0)
+
 }

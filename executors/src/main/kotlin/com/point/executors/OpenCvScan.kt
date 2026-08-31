@@ -1,6 +1,8 @@
 package com.point.executors
 
 import android.graphics.Bitmap
+import com.point.core.flow.PageQuad
+import com.point.core.flow.Spot
 import com.point.core.flow.reportStage
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
@@ -46,9 +48,37 @@ object OpenCvScan {
      * молчание: по нему кадр обрабатывается целиком ([enhanceAsIs]) и результат помечается
      * [com.point.core.flow.META_WHOLE_FRAME], а не выдаётся за выпрямленную страницу.
      */
-    suspend fun enhance(src: Bitmap): Bitmap? = prepared(src) { rgba, scratch ->
-        reportStage("Ищу страницу на снимке")
-        dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch)
+    suspend fun enhance(src: Bitmap): Bitmap? = straightened(src)?.bitmap
+
+    /**
+     * То же выпрямление — и четыре угла страницы, из которых копия родилась (#1332).
+     *
+     * Углы нужны тому, кто возвращает прочитанное на снимок человека: копия — это
+     * четырёхугольник страницы, растянутый в прямоугольник, и обратный ход по тем же углам
+     * ставит найденное туда, куда человек смотрит.
+     *
+     * Кривую страницу Point расправляет по линиям разлиновки, а не по четырём углам
+     * ([dewarpByTps]), и обратного хода у неё нет — тогда углов нет: `null` честнее
+     * четырёхугольника, которого не было.
+     */
+    suspend fun straightened(src: Bitmap): Straightened? {
+        var corners: Array<Point>? = null
+        val out = prepared(src) { rgba, scratch ->
+            reportStage("Ищу страницу на снимке")
+            dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch) { corners = it }
+        } ?: return null
+        return Straightened(out, corners?.let(::pageQuadOf))
+    }
+
+    /** Углы, найденные на развёрнутом кадре, — в его же координатах. */
+    internal fun pageQuadOf(corners: Array<Point>): PageQuad {
+        val (tl, tr, br, bl) = corners
+        return PageQuad(
+            topLeft = Spot(tl.x.toFloat(), tl.y.toFloat()),
+            topRight = Spot(tr.x.toFloat(), tr.y.toFloat()),
+            bottomRight = Spot(br.x.toFloat(), br.y.toFloat()),
+            bottomLeft = Spot(bl.x.toFloat(), bl.y.toFloat()),
+        )
     }
 
     /**
@@ -134,7 +164,11 @@ object OpenCvScan {
         return up
     }
 
-    private fun detectDocument(rgba: Mat, scratch: MutableList<Mat>): Mat? {
+    private fun detectDocument(
+        rgba: Mat,
+        scratch: MutableList<Mat>,
+        onPage: (Array<Point>) -> Unit = {},
+    ): Mat? {
         val longSide = maxOf(rgba.rows(), rgba.cols()).toDouble()
         val downscale = if (longSide > DETECT_MAX_PX) DETECT_MAX_PX / longSide else 1.0
         val small = Mat().also { scratch += it }
@@ -172,7 +206,9 @@ object OpenCvScan {
         if (corners == null) return null
 
         val scaledBack = corners.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray()
-        return warp(rgba, orderCorners(scaledBack), scratch)
+        val page = orderCorners(scaledBack)
+        onPage(page)
+        return warp(rgba, page, scratch)
     }
 
     private fun quadFromMask(mask: Mat, frameArea: Double, scratch: MutableList<Mat>): Array<Point>? {
@@ -591,3 +627,11 @@ object OpenCvScan {
 
     private const val MAX_PAGE_FRACTION = 0.97
 }
+
+/**
+ * Выпрямленная страница и четыре её угла на развёрнутом кадре (#1332).
+ *
+ * [page] — `null`, когда обратного хода нет: страницу расправили по линиям разлиновки, а не
+ * по углам.
+ */
+class Straightened(val bitmap: Bitmap, val page: PageQuad?)

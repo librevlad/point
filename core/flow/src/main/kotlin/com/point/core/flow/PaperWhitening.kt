@@ -72,3 +72,25 @@ fun AtomLayer.inSourceFrame(shrink: Int): AtomLayer {
         incomplete = incomplete,
     )
 }
+
+/**
+ * Тот же слой, но в координатах снимка человека, — после выпрямления (#1332).
+ *
+ * Выбеливание слова не двигает, и вернуть их на снимок хватало множителя ([inSourceFrame]).
+ * Выпрямление двигает: копия родилась из четырёхугольника страницы, растянутого в
+ * прямоугольник, — и слова возвращаются тем же ходом в обратную сторону.
+ *
+ * Координаты слов дважды не переводятся: сперва слой отдаёт место в пикселях самой копии
+ * (`transform.toRaw`), и только оттуда место едет на снимок. Дальше перевода нет — слова уже
+ * в координатах файла, поэтому у нового слоя своего [FrameTransform] не остаётся.
+ */
+fun AtomLayer.onSourceFrame(page: PageQuad, copyWidth: Int, copyHeight: Int): AtomLayer =
+    AtomLayer(
+        atoms = atoms.map { atom ->
+            val inCopy = transform?.toRaw(atom.box) ?: atom.box
+            atom.copy(box = page.toSourceFrame(inCopy, copyWidth, copyHeight))
+        },
+        readerText = readerText,
+        transform = null,
+        incomplete = incomplete,
+    )
