@@ -138,7 +138,7 @@ class GraphPipelineIntegrationTest {
         var layer = ""
         var read = 0
 
-        override suspend fun extractText(obj: PointObject): String {
+        override suspend fun extractText(obj: PointObject, atMost: Int?): String {
             read++
             return layer
         }

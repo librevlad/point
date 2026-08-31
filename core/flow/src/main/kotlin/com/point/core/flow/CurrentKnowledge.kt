@@ -63,7 +63,10 @@ class GraphKnowledge(
                     // Единственное место здесь, где работа заметна человеку: текстовый слой PDF
                     // достаётся не мгновенно, и молчать об этом нельзя (#555).
                     reportStage("Читаю текст PDF")
-                    pdfText.extractText(obj).take(limit)
+
+                    // Спрашивается ровно столько, сколько уйдёт в вопрос (#1241): прежде
+                    // разбирался весь документ, а потом обрезался до этого же числа.
+                    pdfText.extractText(obj, atMost = limit).take(limit)
                 }.getOrNull()
             }
             else -> null

@@ -368,7 +368,7 @@ class OcrInvestigationTest {
         val known = com.point.core.flow.GraphKnowledge(
             store,
             object : com.point.core.flow.PdfTextExtractor {
-                override suspend fun extractText(obj: PointObject) = ""
+                override suspend fun extractText(obj: PointObject, atMost: Int?) = ""
             },
         )
         val words = known.layerOf(read)?.text

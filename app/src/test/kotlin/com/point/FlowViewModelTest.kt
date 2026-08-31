@@ -156,7 +156,7 @@ class FlowViewModelTest {
 
     /** Разговору здесь читать нечего: проверяется сам разговор, а не содержимое объекта. */
     private val chatPdfText = object : com.point.core.flow.PdfTextExtractor {
-        override suspend fun extractText(obj: PointObject) = ""
+        override suspend fun extractText(obj: PointObject, atMost: Int?) = ""
     }
     private val pcCaps = FakePcCaps()
     private val pcLinks = FakePcLinks()

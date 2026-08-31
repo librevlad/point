@@ -25,7 +25,7 @@ class PdfImageInvestigationTest {
     private class Pdf(private val layer: String) : PdfTextExtractor {
         var read = 0
 
-        override suspend fun extractText(obj: PointObject): String {
+        override suspend fun extractText(obj: PointObject, atMost: Int?): String {
             read++
             return layer
         }
