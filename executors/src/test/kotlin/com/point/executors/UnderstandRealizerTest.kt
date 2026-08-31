@@ -826,6 +826,64 @@ class UnderstandRealizerTest {
         )
     }
 
+    /**
+     * Накладная на зрячем пути остаётся накладной (#1305).
+     *
+     * Путь человека: он снял бумажную накладную так, что движок не снял с кадра ни одного
+     * слова. Point читает снимок глазами модели, модель называет и номер, и то, что это
+     * накладная, — а «Отследить» у номера не появлялось: слоя слов нет, слово-подпись сверять
+     * было не с чем, и любые 13 цифр оставались «Номером».
+     *
+     * Правило #1032 при этом не слабеет: слово-подпись обязано стоять рядом с числом. Ищется
+     * оно теперь в том, что Point прочитал глазами модели.
+     */
+    @Test
+    fun `накладная, снятая без единого распознанного слова, остаётся накладной`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/ttn.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val answer = """
+            SUMMARY=Експрес-накладна 5900123456789
+            TRACK=5900123456789
+        """.trimIndent()
+
+        val result = realizer(answer).perform(photo)
+
+        val meta = (result as ActionResult.Done).findings!!.metadata
+        assertEquals(
+            "накладная на зрячем пути стала номером без роли",
+            "5900123456789",
+            meta[com.point.core.flow.META_ENTITY_PREFIX + "track"],
+        )
+    }
+
+    /**
+     * И наоборот: число без слова-подписи накладной не становится (#1032, решение владельца
+     * «номер без роли — просто номер»). Иначе зрячий путь стал бы дырой в мерке: тринадцать
+     * цифр из машиночитаемой зоны удостоверения снова получили бы «Отследить».
+     */
+    @Test
+    fun `тринадцать цифр без слова-подписи накладной не становятся`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/id.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val answer = """
+            SUMMARY=посвідчення особи
+            TRACK=8806923102858
+        """.trimIndent()
+
+        val result = realizer(answer).perform(photo)
+
+        val meta = (result as ActionResult.Done).findings!!.metadata
+        assertEquals(
+            "число без подписи объявлено накладной",
+            null,
+            meta[com.point.core.flow.META_ENTITY_PREFIX + "track"],
+        )
+    }
+
     /** #1176: зрячее чтение — такое же исследование; без следа «сильнее» не наступало. */
     @Test
     fun `зрячее чтение оставляет след — вопрос отвечен`() = runTest {
