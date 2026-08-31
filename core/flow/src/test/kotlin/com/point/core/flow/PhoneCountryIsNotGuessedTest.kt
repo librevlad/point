@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -322,26 +323,30 @@ class PhoneCountryIsNotGuessedTest {
      * Принятая цена решения — на пути человека и с открытыми глазами (#1294).
      *
      * Номер с кадра из #932 отбор пропускает, но пропускает **подсказкой** устройства (#936),
-     * а подсказка страной номера не является. Значит группировки у Point для него нет, и
-     * строка знания отдаёт ровно прочитанное — там, где прежде стояло `0612 804 421`,
-     * разобранное подсказкой (замер на коде `main`, 24.08.2026).
+     * а подсказка страной номера не является. Значит группировки у Point для него нет: цифры
+     * стоят там, где их прочитали, и кода страны рядом не появляется.
      *
-     * Тест стоит здесь, чтобы цена падала вместе с решением, а не расходилась молча с текстом
-     * рядом: пока правило живо, покорёженный номер обязан выходить на экран покорёженным.
+     * Следы чтения при этом убираются — скобка без пары, двойной пробел, пробел у тире
+     * (решение владельца 31.08.2026 по #1294): страны они не требуют. Тест стоит здесь, чтобы
+     * цена падала вместе с решением, а не расходилась молча с текстом рядом: пока правило
+     * живо, ни одна цифра не двигается и страна не выдумывается.
      */
     @Test
-    fun `номер с кадра без кода страны выходит на экран как прочитан`() {
+    fun `номер с кадра без кода страны показывается без страны и без перестановки цифр`() {
         val fromFrame = "06 1 ) 2 80-44-2 1"
 
         assertTrue("отбор не пропустил номер с кадра", PhoneNumbers.exists(fromFrame, "UA"))
         devices.forEach { device ->
             val graph = mergeKnowledge(emptyMap(), mapOf(META_ENTITY_PHONE to fromFrame), region = device)
+            val shown = shownKnowledge(META_ENTITY_PHONE, fromFrame, graph, device)
 
             assertEquals(
-                "номер разобран без страны на устройстве-$device",
-                fromFrame,
-                shownKnowledge(META_ENTITY_PHONE, fromFrame, graph, device),
+                "цифры переставлены или потеряны на устройстве-$device",
+                fromFrame.filter(Char::isDigit),
+                shown.filter(Char::isDigit),
             )
+            assertFalse("страна выдумана на устройстве-$device: $shown", shown.contains("+"))
+            assertFalse("след чтения остался на устройстве-$device: $shown", shown.contains(")"))
         }
     }
 
