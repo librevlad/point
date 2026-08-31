@@ -327,7 +327,18 @@ class UnderstandRealizer @Inject constructor(
     private suspend fun readWithEyes(input: PointObject): ActionResult {
         reportStage("Смотрю на снимок")
         val (answer, answeredBy) = ask(input, withBrief(input.metadata, VISUAL_PROMPT), eyes = true)
-        val parsed = parseFieldCandidates(answer)
+
+        // Слово-подпись накладной ищется в том, что Point прочитал глазами модели (#1305).
+        //
+        // Правило #1032 не меняется: 13 цифр без формы перевозчика и без слова рядом — номер
+        // без роли. Менялось место, где слово искали: слоя слов у зрячего чтения нет вовсе,
+        // сверять было не с чем — и настоящая накладная, снятая так, что движок не снял ни
+        // одного слова, теряла «Отследить» всегда.
+        //
+        // Прочитанного при этом не выдумывается: сверяется ровно то, что модель написала
+        // сама. Мерка от этого не слабеет — слово-подпись по-прежнему обязано стоять рядом
+        // с числом, иначе число остаётся номером.
+        val parsed = parseFieldCandidates(answer, readText = answer)
         val judged = judgeFields(parsed.fields, layer = null)
         val fields = judged.won
         if (fields.isEmpty() && parsed.single.isEmpty()) {
