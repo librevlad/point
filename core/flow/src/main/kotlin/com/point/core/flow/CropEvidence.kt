@@ -75,7 +75,7 @@ private fun AtomLayer.locateIn(lines: List<List<Atom>>, fragment: String): Box? 
     val scored = lines
         .map { line -> line to wanted.count { token -> line.any { evidenceToken(it.text) == token } } }
     val best = scored.maxByOrNull { it.second } ?: return null
-    if (best.second == 0) return null
+    if (best.second == 0) return insideAtom(fragment)
     if (scored.count { it.second == best.second } > 1) return null
     if (best.second == 1) {
         val matched = wanted.firstOrNull { token -> best.first.any { evidenceToken(it.text) == token } }
@@ -115,6 +115,44 @@ fun List<DocBlock>.withCropEvidence(
     return blocks + DocBlock(note, DocStyle.NORMAL)
 }
 
+/**
+ * Место значения, которое лежит ВНУТРИ атома (#1292).
+ *
+ * Атомом бывает не слово, а целая строка: так отдаёт свой ответ читатель на устройстве, и
+ * так же приходит текст, снятый чужими глазами. Совпадение с атомом целиком тогда не
+ * находится никогда — почта `tester1@example.com` стоит внутри строки «Іванов Іван
+ * tester1@example.com +380…», — и у ста девятнадцати найденных почт на длинном скриншоте не
+ * было ни одного места: перейти нельзя было ни к одной.
+ *
+ * Область получается приблизительной — доля строки по длине значения, — и это честная цена:
+ * дробность знает только читатель, а перевод отвечает за место, а не за дробность (см.
+ * пояснение к `layerInRawFrame`). Пальцем человек по такой области попадает, и это ровно то,
+ * ради чего место и нужно.
+ *
+ * Ищется по одному атому, а не по строке из нескольких: у собранной строки нет своей
+ * геометрии, из которой можно взять долю, — только у атома, который читатель отдал целиком.
+ */
+private fun AtomLayer.insideAtom(fragment: String): Box? {
+    val wanted = fragment.trim()
+    if (wanted.length < INSIDE_MIN_LENGTH) return null
+    val found = atoms.mapNotNull { atom ->
+        val at = atom.text.indexOf(wanted, ignoreCase = true)
+        if (at < 0) null else atom to at
+    }
+    if (found.size != 1) return null
+    val (atom, at) = found.single()
+    val whole = atom.text.length
+    if (whole <= 0) return null
+
+    val box = transform?.toUpright(atom.box) ?: atom.box
+    val share = box.width / whole
+    val left = box.left + share * at
+    val right = box.left + share * (at + wanted.length)
+    val pad = box.height * PAD_SHARE
+    val padded = Box(left - pad, box.top - pad, right + pad, box.bottom + pad)
+    return transform?.toRaw(padded) ?: padded
+}
+
 private fun evidenceTokens(fragment: String): Set<String> =
     fragment.replace("⚠", " ").replace("~~", " ")
         .split(WHITESPACE)
@@ -132,3 +170,9 @@ private const val MIN_TOKEN = 2
 private const val DISTINCT_TOKEN = 4
 
 private const val PAD_SHARE = 0.35f
+
+/**
+ * Короче этого значение внутри строки не ищется: «12» или «ул» найдутся в половине строк
+ * страницы и покажут человеку случайное место. Молчание честнее места, показанного мимо.
+ */
+private const val INSIDE_MIN_LENGTH = 5
