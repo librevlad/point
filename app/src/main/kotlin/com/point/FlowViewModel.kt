@@ -1182,11 +1182,21 @@ class FlowViewModel @Inject constructor(
             runCatching { resolver.leavesDevice(id) }.getOrDefault(false)
 
     /**
-     * Объект уходит отсюда на компьютер (#650): либо «На компьютер», либо действие,
-     * которое исполняет компьютер, — в обоих случаях объект физически покидает телефон.
+     * Объект уходит отсюда на компьютер (#650) — спрашивается у того, кто работу исполнил.
+     *
+     * Имена способностей для этого не годятся. Умение компьютера, которое телефон знает под
+     * тем же именем, называется «ocr», а не «pc-do:ocr» (`RemotePcCapability.idFor`): список
+     * `pc-do:` его не ловил, и снимок уезжал на компьютер молча. А одно и то же имя бывает и
+     * своим, и соседским — кто из них взялся за работу, знает только Resolver.
+     *
+     * Признак принадлежит исполнителю (`RealizerKind.REMOTE`, #1088), как и в #1235: экран
+     * спрашивает того, кто делает, а не сверяется со списком имён.
      */
-    private fun leavesForPc(id: CapabilityId) =
-        id == com.point.executors.PcCapability.ID || id.value.startsWith("pc-do:")
+    private fun leavesForPc(id: CapabilityId, state: com.point.core.model.ObjectState?) =
+        runCatching {
+            val realizer = state?.let { resolver.realizerFor(id, it) } ?: resolver.realizerFor(id)
+            realizer.meta.kind == com.point.core.flow.RealizerKind.REMOTE
+        }.getOrDefault(false)
 
     private fun isQuietAction(id: CapabilityId) =
         runCatching { quietWork(registry.byId(id).meta) }.getOrDefault(false)
@@ -2502,7 +2512,7 @@ class FlowViewModel @Inject constructor(
             .onSuccess { result ->
                 if (owns(voice)) {
                     runningStep = null
-                    handleResult(result, bubble)
+                    handleResult(result, bubble, top)
                 }
             }
             .onFailure { e ->
@@ -2785,7 +2795,7 @@ class FlowViewModel @Inject constructor(
         return true
     }
 
-    private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
+    private suspend fun handleResult(result: ActionResult, bubble: Bubble, on: PointObject? = null) {
         handOffMessage = null
         when (result) {
             is ActionResult.Success -> {
@@ -2815,7 +2825,7 @@ class FlowViewModel @Inject constructor(
 
                 // Уход объекта на соседнее устройство звучит своим звуком, а не общим
                 // успехом (#650): на той стороне его подхватит парный, того же тембра.
-                runCatching { if (leavesForPc(bubble.capabilityId)) sensory.sent() else sensory.success() }
+                runCatching { if (leavesForPc(bubble.capabilityId, on?.state)) sensory.sent() else sensory.success() }
 
                 // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
                 // merge-путём, что и находки исследований, а не выбрасывается.

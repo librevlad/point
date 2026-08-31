@@ -2247,6 +2247,36 @@ class FlowViewModelTest {
         assertEquals(listOf("tap", "success"), sensory.events)
     }
 
+    /**
+     * Звук ухода спрашивает исполнителя, а не имя способности (#1334).
+     *
+     * Путь человека: он тапает «Распознать текст» над снимком, и работу берёт компьютер —
+     * умение соседа телефон знает под тем же именем, «ocr», а не «pc-do:ocr». Снимок уезжает
+     * с телефона, и рука обязана услышать уход, а не обычный успех: на той стороне его
+     * подхватит парный звук того же тембра (#650).
+     */
+    @Test fun `работу взял компьютер - рука слышит уход, даже если имя способности своё`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Готово")
+        resolver.realizerKind = com.point.core.flow.RealizerKind.REMOTE
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble("ocr")); advanceUntilIdle()
+
+        assertEquals(listOf("tap", "sent"), sensory.events)
+    }
+
+    @Test fun `ту же работу сделал сам телефон - рука слышит успех, а не уход`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Готово")
+        resolver.realizerKind = com.point.core.flow.RealizerKind.LOCAL
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble("ocr")); advanceUntilIdle()
+
+        assertEquals(listOf("tap", "success"), sensory.events)
+    }
+
     @Test fun `a Failure answers with the failure buzz`() = runTest(dispatcher) {
         resolver.result = ActionResult.Failure("не вышло", recoverable = true)
         val vm = vm()
@@ -5939,11 +5969,15 @@ private class FakeResolver : Resolver {
     /** Настоящий исполнитель вместо подставного — когда важно, КТО сделал шаг (#1073). */
     var realizer: Realizer? = null
 
+    /** Кто берётся за работу: свой или сосед (#1088). Звук ухода спрашивает это (#1334). */
+    var realizerKind: com.point.core.flow.RealizerKind = com.point.core.flow.RealizerKind.LOCAL
+
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
         if (noRealizer) error(com.point.core.flow.NO_WAY_HERE_REASON)
         realizer?.let { return it }
         return object : Realizer {
             override val capabilityId = capabilityId
+            override val meta = com.point.core.flow.RealizerMeta(kind = realizerKind)
             override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
                 performed += capabilityId
                 lastInput = input
@@ -6141,6 +6175,7 @@ private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
     val events = mutableListOf<String>()
     override fun tap() { events += "tap" }
     override fun success() { events += "success" }
+    override fun sent() { events += "sent" }
     override fun failure() { events += "failure" }
 }
 
