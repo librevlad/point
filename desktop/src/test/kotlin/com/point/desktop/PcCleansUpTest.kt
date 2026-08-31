@@ -194,7 +194,7 @@ class PcCleansUpTest {
             onPhoneCaps = {},
             clipboardGet = { null },
             clipboardSet = {},
-            onObject = { _, _, _, _, _ -> null },
+            onObject = { _, _, _, _, _, _ -> null },
         ).answer(RelayRpc.OUTBOX, emptyMap(), ByteArray(0))!!
         return decodePcOutbox(String(reply.body, Charsets.UTF_8))
     }
