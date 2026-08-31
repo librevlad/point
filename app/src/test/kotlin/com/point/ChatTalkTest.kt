@@ -52,7 +52,7 @@ class ChatTalkTest {
     /** Читатель документа, который помнит, сколько раз его позвали. */
     private class Pdf(private val text: String) : com.point.core.flow.PdfTextExtractor {
         var asked = 0
-        override suspend fun extractText(obj: PointObject): String {
+        override suspend fun extractText(obj: PointObject, atMost: Int?): String {
             asked++
             return text
         }

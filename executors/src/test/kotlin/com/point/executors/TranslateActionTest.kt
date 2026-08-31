@@ -41,7 +41,7 @@ class TranslateActionTest {
     }
 
     private fun noPdf() = object : PdfTextExtractor {
-        override suspend fun extractText(obj: PointObject) = ""
+        override suspend fun extractText(obj: PointObject, atMost: Int?) = ""
     }
 
     @Test
@@ -60,7 +60,7 @@ class TranslateActionTest {
         val out = File(tmp.root, "ru2.txt").apply { writeText("Привет") }
         val pdf = PointObject("id", "application/pdf", ScratchRef("/tmp/x.pdf"), ObjectState(ObjectKind.PDF))
         val extractor = object : PdfTextExtractor {
-            override suspend fun extractText(obj: PointObject) = "Hello from a long PDF"
+            override suspend fun extractText(obj: PointObject, atMost: Int?) = "Hello from a long PDF"
         }
 
         val heard = stagesHeard { TranslateRealizer(llm(out), testKnowledge(extractor)).perform(pdf, null) }

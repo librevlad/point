@@ -33,7 +33,7 @@ class PdfRealizerTest {
     }
 
     private fun pdfExtractor(text: String) = object : PdfTextExtractor {
-        override suspend fun extractText(obj: PointObject) = text
+        override suspend fun extractText(obj: PointObject, atMost: Int?) = text
     }
 
     private fun pdfObject() = PointObject(

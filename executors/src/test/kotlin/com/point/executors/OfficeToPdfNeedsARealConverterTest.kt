@@ -161,7 +161,7 @@ class OfficeToPdfNeedsARealConverterTest {
         }
 
         val NoPdfText = object : com.point.core.flow.PdfTextExtractor {
-            override suspend fun extractText(obj: com.point.core.model.PointObject) = ""
+            override suspend fun extractText(obj: com.point.core.model.PointObject, atMost: Int?) = ""
         }
 
         val SilentTransport = object : PcTransport {

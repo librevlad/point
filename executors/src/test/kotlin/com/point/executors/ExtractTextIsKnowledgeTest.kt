@@ -52,7 +52,7 @@ class ExtractTextIsKnowledgeTest {
     }
 
     private fun layer(text: String) = object : PdfTextExtractor {
-        override suspend fun extractText(obj: PointObject) = text
+        override suspend fun extractText(obj: PointObject, atMost: Int?) = text
     }
 
     private fun pdf() = PointObject(

@@ -22,12 +22,12 @@ internal fun testKnowledge(
 ): CurrentKnowledge = GraphKnowledge(store, pdf)
 
 internal object PdfSaysNothing : PdfTextExtractor {
-    override suspend fun extractText(obj: PointObject): String = ""
+    override suspend fun extractText(obj: PointObject, atMost: Int?): String = ""
 }
 
 /** Текстовый слой PDF, который отдаёт заранее известное. */
 internal fun pdfSaying(text: String): PdfTextExtractor = object : PdfTextExtractor {
-    override suspend fun extractText(obj: PointObject): String = text
+    override suspend fun extractText(obj: PointObject, atMost: Int?): String = text
 }
 
 /** Текстовый объект — это его файл; остального от хранилища знанию не нужно. */
