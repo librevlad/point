@@ -25,7 +25,7 @@ class PhoneIsJudgedByLibraryTest {
 
     @Test
     fun `набор цифр нужной длины телефоном не становится`() {
-        listOf("1234567890123", "0000000000", "5375411234567890").forEach {
+        listOf("3", "12", "1234567890123", "0000000000", "5375411234567890").forEach {
             assertTrue("выдуман телефон из: $it", !PhoneNumbers.exists(it, "UA"))
         }
     }
