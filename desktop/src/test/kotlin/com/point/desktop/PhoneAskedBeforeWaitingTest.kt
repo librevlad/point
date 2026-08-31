@@ -8,6 +8,7 @@ import com.point.core.model.ScratchRef
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -63,7 +64,7 @@ class PhoneAskedBeforeWaitingTest {
             background = dispatcher,
             io = dispatcher,
         )
-        if (lastContact != null) state.heard()
+        if (lastContact != null) state.heard("устройство-телефон")
         hands.at = now
         return state
     }
@@ -106,11 +107,17 @@ class PhoneAskedBeforeWaitingTest {
         advanceUntilIdle()
 
         state.approvePhone()
-        advanceUntilIdle()
+
+        // Слово «ждёт телефона» проверяется сразу после согласия: дальше по времени
+        // компьютер досматривает, проснулся ли телефон, и через отведённый срок молчания
+        // говорит уже другое — что он не проснулся (#1108).
+        runCurrent()
 
         assertNull(state.phoneAsk.value)
         assertEquals("согласие не положило просьбу", 1, box.entries().size)
         assertTrue("состояние не названо словами", state.message.value.orEmpty().contains("ждёт телефона"))
+
+        advanceUntilIdle()
     }
 
     @Test

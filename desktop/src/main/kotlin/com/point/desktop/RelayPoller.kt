@@ -23,7 +23,11 @@ class RelayPoller(
 
     private val onUnknownSender: () -> Unit = {},
 
-    private val onContact: () -> Unit = {},
+    /**
+     * Кто-то из круга отозвался — и названо, кто именно (#1108): в круге бывает второй
+     * компьютер, и его голос за телефон не выдаётся.
+     */
+    private val onContact: (String) -> Unit = {},
     private val log: (String) -> Unit = {},
 
     private val pollMillis: Long = 2_000,
@@ -138,7 +142,7 @@ class RelayPoller(
             return
         }
         val (peer, key, frame) = opened
-        onContact()
+        onContact(peer.deviceId)
 
         val kind = frame.meta[RelayRpc.KIND] ?: return
         val requestId = frame.meta[RelayRpc.ID].orEmpty()

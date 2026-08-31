@@ -304,7 +304,10 @@ fun CompactApp(
 
             message?.let { text ->
                 LaunchedEffect(text) {
-                    kotlinx.coroutines.delay(15_000)
+                    // Срок жизни плашки назван один раз рядом со сроком досмотра стука
+                    // (#1108): правда про телефон обязана успеть встать на место строки
+                    // «ждёт телефона», пока та ещё на экране.
+                    kotlinx.coroutines.delay(com.point.desktop.MESSAGE_LIVES_MS)
                     state.dismissMessage()
                 }
                 Text(

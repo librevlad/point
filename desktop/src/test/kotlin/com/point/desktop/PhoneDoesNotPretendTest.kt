@@ -45,7 +45,10 @@ class PhoneDoesNotPretendTest {
         resolver = DesktopResolver(emptySet()),
         clipboard = { },
         outbox = box,
-        knockPhone = { knocks.incrementAndGet() },
+        knockPhone = {
+            knocks.incrementAndGet()
+            mapOf("устройство-телефон" to true)
+        },
         background = dispatcher,
         io = dispatcher,
     )
