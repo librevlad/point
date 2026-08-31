@@ -80,23 +80,41 @@ class ScratchObjectStore @Inject constructor(
             logFailure("ingest failed (files=${sources.size})") {
                 val id = UUID.randomUUID().toString()
                 val dir = File(scratchDir, id).apply { mkdirs() }
+
+                // Один негодный файл не отменяет остальных: набор принимается тем, что в нём
+                // открылось (#1304). Прежде такой файл выпадал молча — и здесь, и в счёте.
+                var opened = 0
                 sources.forEachIndexed { index, source ->
-                    val uri = Uri.parse(source)
-                    // Имя даёт чужое приложение — в путь оно не годится (#865).
-                    val name = com.point.core.flow.safeFileName(
-                        displayName(uri).orEmpty(),
-                        ifBlank = "file-${index + 1}",
-                    )
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        uniqueFile(dir, name).outputStream().use { output -> input.copyTo(output) }
-                    }
+                    val took = runCatching {
+                        val uri = Uri.parse(source)
+                        // Имя даёт чужое приложение — в путь оно не годится (#865).
+                        val name = com.point.core.flow.safeFileName(
+                            displayName(uri).orEmpty(),
+                            ifBlank = "file-${index + 1}",
+                        )
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            uniqueFile(dir, name).outputStream().use { output -> input.copyTo(output) }
+                            true
+                        } ?: false
+                    }.getOrDefault(false)
+                    if (took) opened++
                 }
+
+                // Не открылось ничего — набора нет. Пустая папка с подписью «Набор (0)»
+                // была бы объектом, которого человеку не дали.
+                require(opened > 0) { "ни один из ${sources.size} файлов не открылся" }
+
                 PointObject(
                     id = id,
                     mime = "inode/directory",
                     uri = ScratchRef(dir.absolutePath),
                     state = classifier.classify("inode/directory", 0),
-                    metadata = mapOf("name" to "Набор (${sources.size})"),
+
+                    // Набор называется по тому, что в нём есть, а не по тому, сколько файлов
+                    // просили (#1304): подпись «Набор (2)» над одной страницей — обещание, за
+                    // которым ничего нет.
+                    metadata = mapOf("name" to "Набор ($opened)") +
+                        com.point.core.flow.ingestLoss(asked = sources.size, opened = opened),
                 )
             }
         }
