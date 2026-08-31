@@ -402,13 +402,15 @@ class GraphPipelineIntegrationTest {
         object : com.point.core.flow.AiKeyCheck {
             override suspend fun check(config: UserAiConfig) = KeyProbe(status = 200, reply = "ok")
         },
-        FakeAccountStore(TEST_ACCOUNT),
-        com.point.core.flow.InMemoryCircleStore(),
-        FakeCircleClient(),
-        com.point.core.flow.InMemoryPendingLogins(),
-        object : com.point.core.flow.DeviceKeyStore {
-            override fun keys() = TEST_KEYS
-        },
+        AccountParts(
+            FakeAccountStore(TEST_ACCOUNT),
+            FakeCircleClient(),
+            com.point.core.flow.InMemoryCircleStore(),
+            com.point.core.flow.InMemoryPendingLogins(),
+            object : com.point.core.flow.DeviceKeyStore {
+                override fun keys() = TEST_KEYS
+            },
+        ),
         com.point.core.flow.BrowserOpener { },
         object : SharedTexts {
             override fun create(text: String): String = ""
