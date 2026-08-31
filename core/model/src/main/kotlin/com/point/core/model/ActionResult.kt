@@ -16,5 +16,13 @@ sealed interface ActionResult {
 
     data class NeedsInput(val prompt: String, val suggestions: List<String> = emptyList()) : ActionResult
 
-    data class NeedsImage(val prompt: String) : ActionResult
+    /**
+     * Шагу нужно изображение от человека.
+     *
+     * [from] — каким источником его взять, если шагу важно именно это: «Снять ещё страницу»
+     * ждёт нового снимка листа, а не готовой картинки из галереи (#1042). Имя источника —
+     * то же, каким он зовётся у входных дверей Point (`sourceOrder`); `null` — шагу всё
+     * равно, и человек выбирает изображение сам, как выбирал всегда.
+     */
+    data class NeedsImage(val prompt: String, val from: String? = null) : ActionResult
 }

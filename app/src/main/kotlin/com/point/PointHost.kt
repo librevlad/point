@@ -61,6 +61,7 @@ import com.point.core.ui.livingBackground
 import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun PointHost(
@@ -166,9 +167,40 @@ fun PointHost(
     val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onSubmitInput(uri.toString()) else onCancelInput()
     }
+
+    // Камера у Point одна (#1042): шаг, которому нужен снимок, открывает ту же дверь
+    // рождения объекта, что и «Снять камерой» на экране «с чего начать», — со своим файлом
+    // и своим FileProvider. Второго входа для камеры не заводится.
+    //
+    // Куда снимает камера, переживает поворот экрана: пока человек снимает следующий лист,
+    // экран под камерой может быть пересобран, и без этого только что сделанный снимок
+    // некому было бы забрать. Тем же способом это помнит и `SourcePickerActivity`.
+    val camera = remember { com.point.source.CameraSource() }
+    var shotTarget by androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableStateOf<String?>(null)
+    }
+    val cameraScope = androidx.compose.runtime.rememberCoroutineScope()
+    val shootPage = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        cameraScope.launch {
+            camera.restoreState(shotTarget)
+            shotTarget = null
+            val shot = runCatching { camera.read(context, result.data) }.getOrNull()
+
+            // Человек передумал снимать — это не ошибка (#1131): шаг просто не состоялся.
+            if (shot != null) onSubmitInput(shot.uri) else onCancelInput()
+        }
+    }
     LaunchedEffect(state.needsImage) {
-        if (state.needsImage != null) {
-            pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        when {
+            state.needsImage == null -> Unit
+            state.needsImageFrom == com.point.core.flow.SOURCE_CAMERA ->
+                runCatching {
+                    val request = camera.request(context)
+                    shotTarget = camera.saveState()
+                    shootPage.launch(request)
+                }.onFailure { onCancelInput() }
+
+            else -> pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
     }
     Box(

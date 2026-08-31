@@ -101,6 +101,8 @@ import com.point.executors.ScanPlusCapability
 import com.point.executors.PageScanRealizer
 import com.point.executors.ScanPdfCapability
 import com.point.executors.ScanPdfRealizer
+import com.point.executors.ShootMoreCapability
+import com.point.executors.ShootMoreRealizer
 import com.point.executors.SaveAllCapability
 import com.point.executors.SaveAllRealizer
 import com.point.executors.SaveCapability
@@ -153,6 +155,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun shareAllCap(c: ShareAllCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun mergePdfCap(c: MergePdfCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanPdfCap(c: ScanPdfCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun shootMoreCap(c: ShootMoreCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openCap(c: OpenCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun extractAllCap(c: ExtractAllCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openInCap(c: OpenInCapability): Capability
@@ -227,6 +230,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun shareAllR(r: ShareAllRealizer): Realizer
     @Binds @IntoSet abstract fun mergePdfR(r: MergePdfRealizer): Realizer
     @Binds @IntoSet abstract fun scanPdfR(r: ScanPdfRealizer): Realizer
+    @Binds @IntoSet abstract fun shootMoreR(r: ShootMoreRealizer): Realizer
     @Binds @IntoSet abstract fun openR(r: OpenRealizer): Realizer
     @Binds @IntoSet abstract fun openInR(r: OpenInRealizer): Realizer
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer

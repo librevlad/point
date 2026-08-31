@@ -162,6 +162,13 @@ data class FlowUiState(
 
     val needsImage: String? = null,
 
+    /**
+     * Чем взять ожидаемое изображение (#1042): `"camera"` — снять его прямо сейчас, `null` —
+     * выбрать готовое, как выбирали всегда. Шаг просит не устройство, а вид объекта: «Снять
+     * ещё страницу» ждёт следующего листа, и картинка из галереи листом не является.
+     */
+    val needsImageFrom: String? = null,
+
     val cloudConsent: Boolean = false,
 
     val cloudDestination: String = "",

@@ -9,7 +9,7 @@ import javax.inject.Inject
 
 class CameraSource @Inject constructor() : ObjectSource {
 
-    override val id = "camera"
+    override val id = com.point.core.flow.SOURCE_CAMERA
     override val label = "Снять камерой"
 
     override val what = "документ или вещь прямо сейчас"
