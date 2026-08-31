@@ -51,6 +51,9 @@ class PcTranscribeRealizer(
 
     /** Поход к сервису — за швом: что он ответил, проверяется тестом без сети (как в OcrActions). */
     private val askOutside: ((SpeechConfig, File, String) -> String)? = null,
+
+    /** Компьютер слушает запись сам — тем же правилом, что и телефон (#1053, #1312). */
+    private val level: com.point.core.flow.AudioLevel = JvmAudioLevel(),
 ) : Realizer {
     override val capabilityId = TRANSCRIBE
 
@@ -69,6 +72,24 @@ class PcTranscribeRealizer(
                 }
                 val file = File(input.uri.value).takeIf(File::isFile)
                     ?: return@withContext ActionResult.Failure("Файла записи нет на диске", recoverable = false)
+
+                // Слушаем сами — прежде сервиса (#1053, #1312). Правило одно на оба
+                // устройства: на пустой записи движок не молчит, а выдумывает фразу, и
+                // выдумка ложится знанием об объекте. Пустоту компьютер слышит сам и
+                // бесплатно. Не измерили — не «тихо»: незнакомый формат идёт дальше обычным
+                // путём, и расшифровку у человека не отнимает.
+                if (com.point.core.flow.nothingToHear(runCatching { level.peak(input) }.getOrNull())) {
+                    return@withContext ActionResult.Done(
+                        com.point.core.flow.NO_SPEECH_HEARD,
+                        com.point.core.model.Findings(
+                            metadata = mapOf(
+                                com.point.core.flow.investigationKey(capabilityId) to
+                                    com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+                                com.point.core.flow.META_AUDIO_SILENT to "true",
+                            ),
+                        ),
+                    )
+                }
 
                 val mime = modelReadableAudio(input.mime, input.metadata["name"])
                     ?: return@withContext ActionResult.Failure(
