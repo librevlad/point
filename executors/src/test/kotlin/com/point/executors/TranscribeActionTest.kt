@@ -83,6 +83,12 @@ class TranscribeActionTest {
         )
     }
 
+    /** Движок, дошедший до сети и не нашедший её: так отвечает тот, кто пошёл наружу. */
+    private val offline = object : SpeechToText {
+        override suspend fun transcribe(obj: PointObject): Transcription =
+            error(com.point.core.flow.NO_NETWORK_TEXT)
+    }
+
     private val forbidden = object : SpeechToText {
         override suspend fun transcribe(obj: PointObject): Transcription =
             error("движок спросили, хотя ключей нет")
@@ -229,6 +235,40 @@ class TranscribeActionTest {
                 result.findings!!.metadata,
                 TranscribeCapability.ID,
             ),
+        )
+    }
+
+    /**
+     * Отказ по сети называет тот, кто в сеть и собрался (#1311).
+     *
+     * Путь человека: интернета нет, и он тапает «Расшифровать» над пустой записью. Ответ про
+     * неё телефон знает сам и бесплатно — он разбирает запись до сэмплов и меряет самый
+     * громкий. Сказать здесь «На телефоне нет интернета» значило бы спрятать готовое знание
+     * за сетью, ровно как прежде его прятали за ключами (#1053).
+     *
+     * Отказ по сети принадлежит исполнителю, который действительно пошёл наружу, а не
+     * способности целиком: сетевым бывает не каждый её исход.
+     */
+    @Test
+    fun `без интернета пустая запись всё равно получает свой ответ`() = runTest {
+        val result = realizer(offline, ready, silent).perform(recording(1024))
+
+        assertTrue("отказ по сети встал вместо готового ответа: $result", result is ActionResult.Done)
+        assertEquals(NO_SPEECH_HEARD, (result as ActionResult.Done).message)
+    }
+
+    /**
+     * И наоборот: запись со звуком без интернета получает честное «сети нет», а не молчание
+     * и не выдуманную тишину.
+     */
+    @Test
+    fun `без интернета запись со звуком слышит про сеть`() = runTest {
+        val result = realizer(offline, ready, audible).perform(recording(1024))
+
+        assertTrue(result is ActionResult.Failure)
+        assertEquals(
+            com.point.core.flow.NO_NETWORK_TEXT,
+            (result as ActionResult.Failure).reason,
         )
     }
 
