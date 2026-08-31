@@ -140,8 +140,46 @@ class DesktopState(
         _working.value?.job?.cancel()
     }
 
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
+    private val _messageFlow = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _messageFlow.asStateFlow()
+
+    /**
+     * О каком объекте сказано то, что стоит на плашке сейчас (#1337).
+     *
+     * Плашка одна на всё окно, а объектов в окне много. Пока слово не знало своего объекта,
+     * поздний вердикт про отправленный первым вставал над только что отправленным вторым — и
+     * человек читал слово про A как слово про B. В «ПУТИ» записи разведены по объектам и
+     * верны; плашке для того же нужен адресат.
+     *
+     * `null` — слово не про объект вовсе: причина отказа настройки, «В буфере: …», отмена.
+     */
+    @Volatile
+    private var messageAbout: String? = null
+
+    /**
+     * Слово на плашке — и о каком оно объекте (#1337).
+     *
+     * Обычная запись адресата не называет и потому его сбрасывает: слово, не назвавшее
+     * объект, ни о каком. Иначе адресат пережил бы своё слово, и следующая поправка про
+     * телефон встала бы поверх чужой строки, приняв её за свою.
+     */
+    private inner class Plaque {
+
+        var value: String?
+            get() = _messageFlow.value
+            set(text) {
+                messageAbout = null
+                _messageFlow.value = text
+            }
+
+        /** Слово про названный объект. */
+        fun about(objectId: String?, text: String) {
+            messageAbout = objectId
+            _messageFlow.value = text
+        }
+    }
+
+    private val _message = Plaque()
 
     private val _clipboardText = MutableStateFlow<String?>(null)
 
@@ -228,7 +266,7 @@ class DesktopState(
         // Плашке правится то же самое, что и «ПУТЬ»: сказанный исход стука. Строка «ждёт
         // телефона» исходом не является — она правда и сейчас, и заменять её приходом
         // телефона значило бы отнять у человека единственное, что ему делать.
-        sayAboutPhone(PHONE_SPOKE_LATE) { shown -> shown in KNOCK_VERDICTS }
+        sayAboutPhone(PHONE_SPOKE_LATE, about = null) { shown -> shown in KNOCK_VERDICTS }
     }
 
     /**
@@ -244,10 +282,24 @@ class DesktopState(
      * уточняет ожидание («ждёт телефона»), а поздний приход телефона — сказанный исход.
      * Одно правило на оба слова было бы шире правды: тогда приход телефона объявлялся бы
      * опозданием и там, где компьютер ещё ничего про сон не говорил.
+     *
+     * [about] — объект, о котором слово. Поправляется только слово про тот же объект: два
+     * объекта, отправленных подряд, ждут телефона одной и той же строкой, и поздний вердикт
+     * про первый молча вставал над вторым (#1337). Чужую строку он не трогает — правда про
+     * первый лежит в «ПУТИ» у первого и дожидается там вопроса «где мой файл» (PC3).
+     *
+     * `null` — слово не про один объект, а про всякий сказанный вердикт: телефон,
+     * заговоривший позже срока, отменяет сказанное про свой сон везде, где оно стоит.
+     *
+     * Слово без адресата чужим не считается: причина отказа или «В буфере: …» ни о каком
+     * объекте не говорит, и вставать над ней вердикт вправе, как и раньше. Молчит он ровно
+     * там, где на плашке слово про другой объект.
      */
-    private fun sayAboutPhone(text: String, insteadOf: (shown: String) -> Boolean) {
+    private fun sayAboutPhone(text: String, about: String?, insteadOf: (shown: String) -> Boolean) {
         val shown = _message.value ?: return
-        if (insteadOf(shown)) _message.value = text
+        if (!insteadOf(shown)) return
+        if (about != null && messageAbout != null && messageAbout != about) return
+        _message.about(about ?: messageAbout, text)
     }
 
     fun bubblesFor(item: InboxItem): List<Bubble> {
@@ -653,7 +705,7 @@ class DesktopState(
             onReceived(born.copy(obj = lineage), ObjectSource.PHONE_RELAY)
         }
         val detail = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "$label — готово"
-        _message.value = detail
+        _message.about(item.obj.id, detail)
         note(item, action, "$label · на телефоне", ActionResult.Done(detail))
         return ActionResult.Done(detail)
     }
@@ -860,11 +912,14 @@ class DesktopState(
                     )
                 )
             }.onSuccess {
-                _message.value = if (silent) {
-                    "${action.label} — ждёт телефона: выполнится, когда вы его откроете"
-                } else {
-                    "${action.label} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект"
-                }
+                _message.about(
+                    item.obj.id,
+                    if (silent) {
+                        "${action.label} — ждёт телефона: выполнится, когда вы его откроете"
+                    } else {
+                        "${action.label} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект"
+                    },
+                )
 
                 // Шаг поставлен в очередь, а не выполнен (#1112): исхода у него ещё нет, и
                 // галочка «получилось» здесь была неправдой — на компьютере ничего не появилось.
@@ -876,6 +931,7 @@ class DesktopState(
                 // заменяет предыдущую, пока та ждёт (#1269). Последним ляжет исход работы,
                 // вернувшийся с телефона ([onExecutionResult]), — просьба тем и кончается.
                 knockPhoneAndWatch(
+                    about = item.obj.id,
                     told = { why -> noteAwaiting(item, action.id, "${action.label} · ждёт телефона", why) },
                 )
             }.onFailure {
@@ -923,7 +979,7 @@ class DesktopState(
      * ожидания, которое он уточняет, и не поверх того, что человек читает сейчас. [told]
      * кладёт ту же правду в «ПУТЬ» той дороги, по которой шёл стук: она у каждой своя.
      */
-    internal fun knockPhoneAndWatch(told: (note: String) -> Unit) {
+    internal fun knockPhoneAndWatch(about: String?, told: (note: String) -> Unit) {
         scope.launch(io) {
             val knockedAt = clock.now()
             val knocked = runCatching { knockPhone() }.getOrDefault(emptyMap())
@@ -939,7 +995,7 @@ class DesktopState(
 
             // Исход уточняет ожидание — на его место и встаёт, а не поверх того, что человек
             // читает сейчас.
-            sayAboutPhone(say) { shown -> shown.contains(WAITS_FOR_PHONE, ignoreCase = true) }
+            sayAboutPhone(say, about) { shown -> shown.contains(WAITS_FOR_PHONE, ignoreCase = true) }
             told(note)
         }
     }
@@ -967,7 +1023,7 @@ class DesktopState(
      * сменить её больше нечем — телефон забирает его молча.
      */
     fun knockAfterSending(sent: com.point.core.model.PointObject) {
-        knockPhoneAndWatch { why ->
+        knockPhoneAndWatch(about = sent.id) { why ->
             // Строка «ПУТЬ» у самого уехавшего объекта — если он ещё в ленте окна.
             _items.value.firstOrNull { it.obj.id == sent.id }
                 ?.let { item -> noteAwaiting(item, PC_TO_PHONE, titleOf(PC_TO_PHONE, item), why) }
