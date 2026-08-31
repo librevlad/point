@@ -47,6 +47,18 @@ data class JournalStep(
     val at: Long,
     val outcome: StepOutcome,
     val note: String,
+
+    /**
+     * Какой записи очереди ПК→телефон ждёт этот шаг (#1336, #1344).
+     *
+     * Ждущий шаг переживает перезапуск, а поправить его умела ровно одна дорога — правда про
+     * стук. Ни забор телефоном, ни уборка очереди по сроку журнала не касались, и «ждёт
+     * телефона» звало человека за объектом, которого у Point уже нет. Номер и связывает
+     * шаг с тем, чего он ждёт: без него после перезапуска сопоставить нечем.
+     *
+     * `null` — шаг ничего из очереди не ждёт: так выглядят все остальные шаги.
+     */
+    val awaiting: Int? = null,
 ) {
 
     /** Совместимость с прежним журналом- галочка достаётся только состоявшемуся шагу. */
@@ -147,8 +159,13 @@ fun stepOf(capabilityId: String, title: String, at: Long, result: ActionResult):
 }
 
 /** Шаг ждёт продолжения на другом устройстве: исхода у него пока нет (#1112). */
-fun awaitingStep(capabilityId: String, title: String, at: Long, note: String): JournalStep =
-    JournalStep(capabilityId, title, at, StepOutcome.AWAITING, note)
+fun awaitingStep(
+    capabilityId: String,
+    title: String,
+    at: Long,
+    note: String,
+    awaiting: Int? = null,
+): JournalStep = JournalStep(capabilityId, title, at, StepOutcome.AWAITING, note, awaiting)
 
 fun sourceLabel(source: ObjectSource): String = when (source) {
     ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> "с телефона"
@@ -219,6 +236,7 @@ fun encodeJournal(entries: List<JournalEntry>): String =
                 put("step.$i.ok", if (step.ok) "1" else "0")
                 put("step.$i.outcome", step.outcome.wire)
                 put("step.$i.note", step.note)
+                step.awaiting?.let { put("step.$i.awaiting", it.toString()) }
             }
             entry.meta.forEach { (key, value) ->
                 if (value.length <= JOURNAL_META_VALUE_LIMIT) {
@@ -273,6 +291,7 @@ private fun decodeSteps(meta: Map<String, String>): List<JournalStep> =
                 ?.let { wire -> StepOutcome.entries.firstOrNull { it.wire == wire } }
                 ?: if (meta["step.$i.ok"] != "0") StepOutcome.DONE else StepOutcome.FAILED,
             note = meta["step.$i.note"].orEmpty(),
+            awaiting = meta["step.$i.awaiting"]?.toIntOrNull(),
         )
     }
 

@@ -911,7 +911,7 @@ class DesktopState(
                             (com.point.core.flow.PcExecFields.HOME to item.obj.id),
                     )
                 )
-            }.onSuccess {
+            }.onSuccess { queued ->
                 _message.about(
                     item.obj.id,
                     if (silent) {
@@ -923,7 +923,7 @@ class DesktopState(
 
                 // Шаг поставлен в очередь, а не выполнен (#1112): исхода у него ещё нет, и
                 // галочка «получилось» здесь была неправдой — на компьютере ничего не появилось.
-                noteAwaiting(item, action.id, "${action.label} · ждёт телефона", WAITS_FOR_PHONE)
+                noteAwaiting(item, action.id, "${action.label} · ждёт телефона", WAITS_FOR_PHONE, queued)
 
                 // Сказанное про сон телефона стареет и здесь: телефон, заговоривший позже
                 // срока, отменяет его сам ([phoneSpokeLate]) — обеим дорогам одинаково.
@@ -932,7 +932,9 @@ class DesktopState(
                 // вернувшийся с телефона ([onExecutionResult]), — просьба тем и кончается.
                 knockPhoneAndWatch(
                     about = item.obj.id,
-                    told = { why -> noteAwaiting(item, action.id, "${action.label} · ждёт телефона", why) },
+                    told = { why ->
+                        noteAwaiting(item, action.id, "${action.label} · ждёт телефона", why, queued)
+                    },
                 )
             }.onFailure {
                 _message.value = "Не удалось положить в очередь"
@@ -1263,10 +1265,67 @@ class DesktopState(
         }
     }
 
-    /** Шаг ушёл на телефон и ждёт его: исхода нет, и журнал говорит именно это (#1112). */
-    private fun noteAwaiting(item: InboxItem, capabilityId: String, title: String, note: String) {
+    /**
+     * Шаг ушёл на телефон и ждёт его: исхода нет, и журнал говорит именно это (#1112).
+     *
+     * [awaiting] — номер записи очереди, которой шаг ждёт (#1336, #1344). По нему шаг и
+     * узнаёт, чем всё кончилось: телефон забрал или очередь забыла по сроку.
+     */
+    private fun noteAwaiting(
+        item: InboxItem,
+        capabilityId: String,
+        title: String,
+        note: String,
+        awaiting: Int? = null,
+    ) {
         updateJournal {
-            recordStep(it, item.obj.uri.value, awaitingStep(capabilityId, title, clock.now(), note))
+            recordStep(
+                it,
+                item.obj.uri.value,
+                awaitingStep(capabilityId, title, clock.now(), note, awaiting),
+            )
+        }
+    }
+
+    /**
+     * Запись очереди ушла — и ждущий её шаг узнаёт, чем всё кончилось (#1336, #1344).
+     *
+     * Ждущий шаг «‹действие› · ждёт телефона» ложится на диск и переживает перезапуск, а
+     * поправить его умела ровно одна дорога — правда про стук. Ни забор телефоном, ни уборка
+     * очереди по сроку журнала не касались: через двое суток человек читал «ждёт телефона»,
+     * шёл на телефон и находил пустоту, а почему — не сказано нигде (PC3).
+     *
+     * Шов один на обе дороги, потому что вопрос у человека один: «что стало с моей просьбой».
+     * Отличается ответ: телефон забрал — просьба уехала; очередь забыла — она никуда не
+     * уедет, и об этом честнее сказать, чем звать за тем, чего нет.
+     *
+     * Исход, вернувшийся с телефона, кладётся поверх обычным порядком ([onExecutionResult]):
+     * забор — не конец работы, а её начало на той стороне.
+     */
+    fun outboxEntryGone(id: Int, taken: Boolean) {
+        updateJournal { entries ->
+            entries.fold(entries) { sofar, entry ->
+                val last = entry.steps.lastOrNull()
+                if (last == null || last.outcome != StepOutcome.AWAITING || last.awaiting != id) {
+                    sofar
+                } else {
+                    recordStep(
+                        sofar,
+                        entry.path,
+                        if (taken) {
+                            awaitingStep(last.capabilityId, last.title, clock.now(), PHONE_TOOK_IT, id)
+                        } else {
+                            JournalStep(
+                                last.capabilityId,
+                                last.title,
+                                clock.now(),
+                                StepOutcome.FAILED,
+                                QUEUE_FORGOT_IT,
+                            )
+                        },
+                    )
+                }
+            }
         }
     }
 
@@ -1393,6 +1452,22 @@ const val PHONE_WAKES_WITHIN_MS = 12_000L
  * одну, а не вторую рядом.
  */
 const val WAITS_FOR_PHONE = "ждёт телефона"
+
+/**
+ * Телефон пришёл и забрал просьбу (#1336).
+ *
+ * Шаг всё ещё ждёт — исхода работы у него нет, и он придёт с телефона ([onExecutionResult]).
+ * Но ждёт он уже другого: не того, что человек откроет Point, а того, что телефон доделает.
+ */
+const val PHONE_TOOK_IT = "телефон забрал"
+
+/**
+ * Очередь забыла просьбу по сроку (#1344, #1317).
+ *
+ * Это исход, а не ожидание: объекта в очереди больше нет, и звать за ним человека нельзя.
+ * Сказать, что просьба не уехала, честнее, чем оставить «ждёт телефона» звать за пустотой.
+ */
+const val QUEUE_FORGOT_IT = "не уехало — просьба пролежала сутки и убрана"
 
 /** Телефон не проснулся: сказать это честно лучше, чем ждать за человека (#1108). */
 const val PHONE_DID_NOT_WAKE = "Телефон не проснулся — откройте Point на телефоне и заберите объект"
