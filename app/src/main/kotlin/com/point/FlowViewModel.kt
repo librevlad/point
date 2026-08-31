@@ -123,12 +123,10 @@ class FlowViewModel @Inject constructor(
     private val crashLog: CrashLog,
     private val ioDispatcher: CoroutineDispatcher,
     private val appIcons: AppIconResolver,
-    private val pcLinks: com.point.core.flow.PcLinks,
-    private val pcTransport: com.point.core.flow.PcTransport,
-    private val pcCaps: com.point.core.flow.PcCapsStore,
+    // Связка с компьютером живёт своим держателем (#833): пять зависимостей ядру
+    // поодиночке не нужны.
+    private val pcParts: PcParts,
 
-    private val linkMonitor: com.point.core.flow.LinkMonitor,
-    private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
 
     // Страна для разбора номеров — вход, а не изменяемая глобаль (#1129).
@@ -545,13 +543,19 @@ class FlowViewModel @Inject constructor(
         syncCircle()
     }
 
+    /**
+     * Связка с компьютером живёт своим держателем (#833): здесь остаются приём объекта и
+     * выполнение — их карточка резать запрещает, они и есть один поток ядра.
+     */
+    private val pcFlow by lazy { PcFlow(pcParts) }
+
     private fun refreshFromPc(force: Boolean = false) {
-        val pc = pcLinks.current() ?: return
+        val pc = pcFlow.current() ?: return
         val now = System.currentTimeMillis()
         if (!force && now - lastOutboxFetchMs < OUTBOX_THROTTLE_MS) return
         lastOutboxFetchMs = now
         viewModelScope.launch {
-            runCatching { pcTransport.fetchOutbox(pc) }.getOrNull()?.let { entries ->
+            runCatching { pcFlow.transport.fetchOutbox(pc) }.getOrNull()?.let { entries ->
                 val things = takeOutcomesHome(pc, entries)
                 fromPcEntries = things
                 _fromPcCount.value = things.size
@@ -560,14 +564,14 @@ class FlowViewModel @Inject constructor(
     }
 
     fun pullFromPc() {
-        val pc = pcLinks.current() ?: return
+        val pc = pcFlow.current() ?: return
         val voice = claimVoice()
 
         raiseBusy("Забираю с компьютера…", cancelable = true)
         trackWork {
 
             // Исходы без объекта уходят домой до забора вещей (#1073): скачивать с них нечего.
-            val entries = takeOutcomesHome(pc, runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty())
+            val entries = takeOutcomesHome(pc, runCatching { pcFlow.transport.fetchOutbox(pc) }.getOrNull().orEmpty())
             if (!owns(voice)) return@trackWork
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
@@ -577,8 +581,8 @@ class FlowViewModel @Inject constructor(
             }
             val pulled = entries.map { entry ->
                 val name = entry.meta["name"] ?: "объект"
-                val path = pulledFiles.create("${entry.id}-$name")
-                val ok = runCatching { pcTransport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
+                val path = pcFlow.pulledFiles.create("${entry.id}-$name")
+                val ok = runCatching { pcFlow.transport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
                 Triple(entry, path, ok)
             }
             if (!owns(voice)) return@trackWork
@@ -639,8 +643,8 @@ class FlowViewModel @Inject constructor(
             // Подтверждается только то, что и правда разобрано: неподтверждённое остаётся
             // в очереди компьютера и приезжает следующим заходом.
             taken.forEach { (entry, _, _) ->
-                runCatching { pcTransport.ackOutbox(pc, entry.id) }
-                    .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
+                runCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
+                    .recoverCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
             }
             val waiting = pulled.filterNot { left -> taken.any { it.first.id == left.first.id } }
             fromPcEntries = waiting.map { it.first }
@@ -1601,10 +1605,8 @@ class FlowViewModel @Inject constructor(
             onForgotten = {
 
                 // Связка с компьютером принадлежит аккаунту и уходит вместе с ним (#1076).
-                // Тема связки — не аккаунт, поэтому её уборка живёт здесь, а не в держателе.
-                runCatching { pcLinks.clear() }
-                runCatching { pcCaps.clear() }
-                runCatching { linkMonitor.forget() }
+                // Тема связки — не аккаунт: убирает её свой держатель, а зовёт — этот шов.
+                pcFlow.forget()
             },
         )
     }
@@ -1625,9 +1627,9 @@ class FlowViewModel @Inject constructor(
         accountFlow.openDevices()
 
         // Объявление компьютера освежается при заходе в «Устройства»: тема связки — не аккаунт.
-        pcLinks.current()?.let { pc ->
+        pcFlow.current()?.let { pc ->
             viewModelScope.launch {
-                runCatching { pcTransport.fetchCaps(pc)?.let { caps -> pcCaps.save(caps) } }
+                runCatching { pcFlow.transport.fetchCaps(pc)?.let { caps -> pcFlow.caps().save(caps) } }
             }
         }
     }
@@ -1645,36 +1647,19 @@ class FlowViewModel @Inject constructor(
 
     private fun syncCircle() = accountFlow.syncCircle()
 
+    /**
+     * Компьютер круга запоминается своим держателем (#833, #1076): связка — его тема.
+     *
+     * Ядро остаётся при своём: обмен общим ключом трогает ключи человека, а сходить за
+     * объектами после смены связки — это приём, а не связка.
+     */
     private suspend fun rememberPc(devices: List<com.point.core.flow.CircleDevice>) {
-        val pc = devices
-            .filter { !it.self && it.kind == com.point.core.flow.DeviceKind.PC }
-            .maxByOrNull { it.lastSeenMillis ?: 0L }
-
-        // Когда компьютер отзывался в последний раз, знает сервер — здесь это знание и
-        // записывается (#545). Живость видит тот, кто её видел: по ней продолжение на
-        // компьютере ведёт список, пока машина рядом, и уступает, когда она давно молчит.
-        pc?.lastSeenMillis
-            ?.takeIf { System.currentTimeMillis() - it in 0..com.point.core.flow.PC_AWAKE_WITHIN_MS }
-            ?.let { runCatching { linkMonitor.heard() } }
-        if (pc == null) {
-
-            runCatching { pcLinks.clear() }
-            runCatching { pcCaps.clear() }
-            return
-        }
-        val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
-
-        runCatching { syncSecrets(known) }
-
-        // Объявления обеих сторон освежаются и для давно известного ПК: он мог
-        // обновиться, пока связь жила, — «На телефон на ПК» держалось у телефона
-        // кэшем вечно, до захода в «Устройства» (#627, скрин владельца 2026-08-09).
-        runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
-        runCatching { pcTransport.pushPhoneCaps(known, phoneAdvertised()) }
-
-        if (pcLinks.current() == known) return
-        runCatching { pcLinks.save(known) }
-        refreshFromPc(force = true)
+        val changed = pcFlow.remember(
+            devices = devices,
+            exchangeSecrets = ::syncSecrets,
+            advertised = ::phoneAdvertised,
+        )
+        if (changed) refreshFromPc(force = true)
     }
 
     private val settingsSync by lazy {
@@ -1735,7 +1720,7 @@ class FlowViewModel @Inject constructor(
             aiKey = saved?.apiKey.orEmpty(),
             at = saved?.savedAt ?: 0L,
         )
-        val merged = pcTransport.exchangeSecrets(pc, mine) ?: return
+        val merged = pcFlow.transport.exchangeSecrets(pc, mine) ?: return
         if (merged.aiKey.isBlank() || merged.aiKey == mine.aiKey) return
 
         // Ключ с компьютера ложится к тому же сервису, что и здешний:
@@ -2120,7 +2105,7 @@ class FlowViewModel @Inject constructor(
         // компьютеру он приезжает как знание своего объекта, а не как вещь.
         val nameForFile = (meta[f.NAME] ?: "$label.txt")
         val letter = if (result is ActionResult.Success && body != null) body else emptyBody(body, home)
-        return pcTransport.send(pc, letter, nameForFile, meta)
+        return pcFlow.transport.send(pc, letter, nameForFile, meta)
     }
 
     /** Прочитанное здесь едет компьютеру содержимым: ссылка на scratch телефона там мертва (#811). */
@@ -2454,8 +2439,8 @@ class FlowViewModel @Inject constructor(
 
                 // Связи с компьютером сейчас нет — взгляд пропущен, но ожидание всё равно
                 // кончится словом, а не обещанием, оставленным навсегда.
-                val pc = pcLinks.current() ?: return@repeat
-                val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull() ?: return@repeat
+                val pc = pcFlow.current() ?: return@repeat
+                val entries = runCatching { pcFlow.transport.fetchOutbox(pc) }.getOrNull() ?: return@repeat
                 val things = takeOutcomesHome(pc, entries)
                 fromPcEntries = things
                 _fromPcCount.value = things.size
@@ -2509,8 +2494,8 @@ class FlowViewModel @Inject constructor(
         val (outcomes, things) = entries.partition { com.point.core.flow.PcResultFields.outcomeOnly(it.meta) }
         outcomes.forEach { entry ->
             if (!landNeighbourOutcome(entry.meta)) return@forEach
-            runCatching { pcTransport.ackOutbox(pc, entry.id) }
-                .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
+            runCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
+                .recoverCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
         }
         return things
     }
@@ -2766,12 +2751,7 @@ class FlowViewModel @Inject constructor(
      * состояние недельной давности как нынешнее.
      */
     private fun refreshPcCapsInBackground() {
-        val pc = runCatching { pcLinks.current() }.getOrNull() ?: return
-        if (com.point.core.flow.capsFresh(pcCaps.savedAt(), System.currentTimeMillis())) return
-        viewModelScope.launch(ioDispatcher) {
-            val fresh = runCatching { pcTransport.fetchCaps(pc) }.getOrNull() ?: return@launch
-            runCatching { pcCaps.save(fresh) }
-        }
+        viewModelScope.launch(ioDispatcher) { pcFlow.refreshCapsIfStale() }
     }
 
     /**

@@ -375,33 +375,35 @@ class GraphPipelineIntegrationTest {
         },
         dispatcher as CoroutineDispatcher,
         AppIconResolver { null },
-        object : PcLinks {
-            override fun current(): com.point.core.flow.LinkedPc? = null
-            override suspend fun save(pc: com.point.core.flow.LinkedPc) = Unit
-            override suspend fun clear() = Unit
-        },
-        object : PcTransport {
-            override suspend fun send(
-                pc: com.point.core.flow.LinkedPc,
-                obj: PointObject,
-                fileName: String,
-                meta: Map<String, String>,
-                action: String?,
-            ): PcSendOutcome = PcSendOutcome.Sent()
-            override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<PcRemoteAction>? = null
-            override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<PcOutboxEntry>? = null
-            override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String) = false
-            override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) = Unit
-            override suspend fun pushPhoneCaps(pc: com.point.core.flow.LinkedPc, caps: List<PcRemoteAction>) = false
-            override suspend fun exchangeSecrets(pc: com.point.core.flow.LinkedPc, mine: SharedSecrets): SharedSecrets? = null
-        },
-        object : PcCapsStore {
-            override fun all(): List<PcRemoteAction> = emptyList()
-            override suspend fun save(caps: List<PcRemoteAction>) = Unit
-            override suspend fun clear() = Unit
-        },
-        com.point.core.flow.RememberingLinkMonitor(),
-        PulledFileFactory { name -> File(File(System.getProperty("java.io.tmpdir")), "pull-$name").absolutePath },
+        PcParts(
+            object : PcLinks {
+                override fun current(): com.point.core.flow.LinkedPc? = null
+                override suspend fun save(pc: com.point.core.flow.LinkedPc) = Unit
+                override suspend fun clear() = Unit
+            },
+            object : PcTransport {
+                override suspend fun send(
+                    pc: com.point.core.flow.LinkedPc,
+                    obj: PointObject,
+                    fileName: String,
+                    meta: Map<String, String>,
+                    action: String?,
+                ): PcSendOutcome = PcSendOutcome.Sent()
+                override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<PcRemoteAction>? = null
+                override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<PcOutboxEntry>? = null
+                override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String) = false
+                override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) = Unit
+                override suspend fun pushPhoneCaps(pc: com.point.core.flow.LinkedPc, caps: List<PcRemoteAction>) = false
+                override suspend fun exchangeSecrets(pc: com.point.core.flow.LinkedPc, mine: SharedSecrets): SharedSecrets? = null
+            },
+            object : PcCapsStore {
+                override fun all(): List<PcRemoteAction> = emptyList()
+                override suspend fun save(caps: List<PcRemoteAction>) = Unit
+                override suspend fun clear() = Unit
+            },
+            com.point.core.flow.RememberingLinkMonitor(),
+            PulledFileFactory { name -> File(File(System.getProperty("java.io.tmpdir")), "pull-$name").absolutePath },
+        ),
         object : SelectionFrames {
             override fun frame(path: String, maxPx: Int) = null
         },
