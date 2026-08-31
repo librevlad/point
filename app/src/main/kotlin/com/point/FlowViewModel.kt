@@ -1690,6 +1690,13 @@ class FlowViewModel @Inject constructor(
         val pc = devices
             .filter { !it.self && it.kind == com.point.core.flow.DeviceKind.PC }
             .maxByOrNull { it.lastSeenMillis ?: 0L }
+
+        // Когда компьютер отзывался в последний раз, знает сервер — здесь это знание и
+        // записывается (#545). Живость видит тот, кто её видел: по ней продолжение на
+        // компьютере ведёт список, пока машина рядом, и уступает, когда она давно молчит.
+        pc?.lastSeenMillis
+            ?.takeIf { System.currentTimeMillis() - it in 0..com.point.core.flow.PC_AWAKE_WITHIN_MS }
+            ?.let { runCatching { linkMonitor.heard() } }
         if (pc == null) {
 
             runCatching { pcLinks.clear() }

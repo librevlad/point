@@ -33,7 +33,9 @@ class RankingSeesKnowledgeTest {
             override val configured = true
             override suspend fun run(obj: PointObject, prompt: String) = error("не нужно")
         },
-    )
+    
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
 
     private class Simple(
         id: String,

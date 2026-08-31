@@ -65,6 +65,8 @@ class SourceIsAlreadyHereTest {
                 override val configured = true
                 override suspend fun run(obj: PointObject, prompt: String) = error("не зовут")
             },
+        
+            com.point.core.flow.RememberingLinkMonitor(),
         ),
     ).bubblesFor(graph)
 

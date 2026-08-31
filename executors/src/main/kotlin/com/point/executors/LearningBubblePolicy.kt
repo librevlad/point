@@ -11,6 +11,9 @@ import kotlin.math.min
 class LearningBubblePolicy @Inject constructor(
     private val usage: CapabilityUsage,
     private val llm: com.point.core.flow.LlmClient,
+
+    /** Рядом ли компьютер: продолжение на нём ведёт список, пока он отзывается (#545). */
+    private val neighbour: com.point.core.flow.LinkMonitor,
 ) : BubblePolicy {
 
     override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> =
@@ -39,6 +42,21 @@ class LearningBubblePolicy @Inject constructor(
             .mapTo(mutableSetOf()) { it.id }
     }
 
+    /**
+     * Ведёт ли «На компьютер» список сейчас (#545, решение владельца 31.08.2026).
+     *
+     * Компьютер отозвался недавно — он рядом, и продолжение на нём главное: ради этого
+     * человек связку и заводил. Про компьютер известно, что он давно молчит, — действие
+     * возвращается на своё обычное место: оно по-прежнему работает (просьба подождёт в
+     * очереди и уедет, когда человек откроет Point на компьютере), но обещать продолжение
+     * прямо сейчас на выключенной машине незачем.
+     *
+     * Молчание и незнание — разное. Пока про компьютер не слышали ничего, действие ведёт
+     * список, как и прежде (#644): незнание не превращается в «выключен».
+     */
+    private fun neighbourIsNotSilent(): Boolean =
+        neighbour.last.value == null || com.point.core.flow.awake(neighbour)
+
     private fun order(
         state: ObjectState,
         candidates: List<Capability>,
@@ -66,7 +84,7 @@ class LearningBubblePolicy @Inject constructor(
 
                 // Shape #644: главная граница Point видима всегда — при живой паре
                 // (без неё accepts «pc» не пропускает) «На компьютер» не тонет в фолде.
-                { if (it.id == PcCapability.ID) 0 else 1 },
+                { if (it.id == PcCapability.ID && neighbourIsNotSilent()) 0 else 1 },
 
                 // Shape #642: облачное чтение — главное только когда локально не вышло.
                 // Богато прочитанное фото (HAS_TEXT) опускает его ниже локальных путей;
