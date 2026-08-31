@@ -130,7 +130,7 @@ fun main(args: Array<String>) {
     val capabilities = desktopCapabilities { accountStore.current() != null }
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
-    var knockPhoneLate: suspend () -> Unit = {}
+    var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
     val resolver = DesktopResolver(
         realizers = setOf(
             PcOpenRealizer(opener, browse),
@@ -138,7 +138,7 @@ fun main(args: Array<String>) {
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
             PcDownloadRealizer(downloader),
-            PcToPhoneRealizer(outbox, knockPhone = { knockPhoneLate() }),
+            PcToPhoneRealizer(outbox, knockPhone = { obj -> knockPhoneLate(obj) }),
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf),
             PcPdfTextRealizer(PdfBoxText()),
@@ -234,7 +234,11 @@ fun main(args: Array<String>) {
             if (source == ObjectSource.PHONE_RELAY) portalSound.arrived()
         },
     )
-    knockPhoneLate = account::knockPhones
+    // Оба стука — за просьбой и за уехавшим объектом — идут одной дорогой, одинаково
+    // досматриваются и одинаково рассказывают: почта письмо взяла, а телефон мог и не
+    // проснуться (#1108). Связку держит сторож `KnockIsWatchedTest`: возврат её к голому
+    // `account::knockPhones` вернул бы то самое молчание при зелёном прогоне.
+    knockPhoneLate = { obj -> state.knockAfterSending(obj) }
 
     val shellMenu = RegistryShellMenu()
     val sendTo = ShortcutSendToMenu()

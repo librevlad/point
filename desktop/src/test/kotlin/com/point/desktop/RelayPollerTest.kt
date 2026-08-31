@@ -85,7 +85,7 @@ class RelayPollerTest {
         ),
     )
 
-    private fun poller(box: Box, onContact: () -> Unit): RelayPoller = RelayPoller(
+    private fun poller(box: Box, onContact: (String) -> Unit): RelayPoller = RelayPoller(
         serverUrl = box.base(),
         account = { me },
         peers = { listOf(phone) },
@@ -122,6 +122,26 @@ class RelayPollerTest {
             poller(box) { }.once()
 
             assertEquals("объект пропал вместе с падением", listOf("чек.txt"), received)
+        } finally {
+            box.stop()
+        }
+    }
+
+    /**
+     * Кто отозвался, названо по имени (#1108): по этому голосу компьютер решает, проснулся
+     * ли телефон, в который он стучал. Безымянное «кто-то из круга» поднимал и второй
+     * компьютер — и досмотр стука замолкал, ничего про телефон не узнав.
+     */
+    @Test
+    fun `отозвавшееся устройство названо по имени`() {
+        lettersDir = tmp.newFolder()
+        val box = Box(sealedObject())
+        box.start()
+        try {
+            val spoke = mutableListOf<String>()
+            poller(box) { spoke += it }.once()
+
+            assertEquals("компьютер не знает, кто именно к нему пришёл", listOf(phone.deviceId), spoke)
         } finally {
             box.stop()
         }

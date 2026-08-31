@@ -82,8 +82,8 @@ def test_address_is_told_only_about_itself(knocking: Harness):
     assert stolen.status_code == 403, stolen.text
 
 
-def test_knock_carries_one_word_only(knocking: Harness, knocker: FakeKnocker):
-    """Через Google уходит слово «зайди» — ни объекта, ни действия, ни имени файла."""
+def letter_to_google() -> dict:
+    """Само письмо, которое ушло бы в Google: сеть подменена, наружу ничего не летит."""
     account = push.ServiceAccount("point-test", "server@point.test", "key")
     sent: dict = {}
 
@@ -107,8 +107,26 @@ def test_knock_carries_one_word_only(knocking: Harness, knocker: FakeKnocker):
 
     import json
 
-    message = json.loads(sent["body"])["message"]
+    return json.loads(sent["body"])["message"]
+
+
+def test_knock_carries_one_word_only():
+    """Через Google уходит слово «зайди» — ни объекта, ни действия, ни имени файла."""
+    message = letter_to_google()
+
     assert message["data"] == {"knock": "outbox"}
+    assert "notification" not in message
+
+
+def test_knock_is_a_waking_letter():
+    """Письмо будящее (#1108): только `data` и высокий приоритет.
+
+    Письмо с заголовком показал бы сам Android — человек увидел бы строку, а закрытый
+    Point не проснулся бы и за просьбой не сходил.
+    """
+    message = letter_to_google()
+
+    assert message["android"]["priority"] == "high"
     assert "notification" not in message
 
 

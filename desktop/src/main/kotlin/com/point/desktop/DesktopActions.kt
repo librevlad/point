@@ -253,8 +253,16 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
     }
 }
 
+/**
+ * Имя способности «На телефон» — одно на дверь, исполнителя и журнал (#1108).
+ *
+ * Компьютер дописывает в «ПУТЬ» правду про непроснувшийся телефон уже после того, как шаг
+ * записан, и находит шаг по этому имени. Набранное третьей строкой, оно разъехалось бы молча.
+ */
+const val PC_TO_PHONE = "pc-to-phone"
+
 class PcToPhoneCapability : Capability {
-    override val id = CapabilityId("pc-to-phone")
+    override val id = CapabilityId(PC_TO_PHONE)
 
     // Знак показывает, куда уйдёт объект, а не где нажали (#1094): телефон, не компьютер.
     override val icon = "phone"
@@ -270,15 +278,20 @@ class PcToPhoneCapability : Capability {
 class PcToPhoneRealizer(
     private val outbox: Outbox,
 
-    /** Стук телефону: пусть узнает о ждущем сейчас, а не при следующем открытии (#1079). */
-    private val knockPhone: suspend () -> Unit = {},
+    /**
+     * Стук телефону: пусть узнает о ждущем сейчас, а не при следующем открытии (#1079).
+     *
+     * Стук зовёт за конкретным объектом (#1108): не пришёл телефон — правда о нём ложится
+     * в «ПУТЬ» этого объекта, а не гаснет вместе с плашкой на экране.
+     */
+    private val knockPhone: suspend (PointObject) -> Unit = {},
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-to-phone")
+    override val capabilityId = CapabilityId(PC_TO_PHONE)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
             outbox.add(input)
-            runCatching { knockPhone() }
+            runCatching { knockPhone(input) }
 
             // Слова не опережают сделанное (#1079): письмо легло в очередь, плашка на
             // телефоне появится, когда он за ним придёт, — а не в момент этого тапа.

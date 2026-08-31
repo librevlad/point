@@ -62,13 +62,21 @@ class DesktopAccount(
      *
      * Стучим во все телефоны, а не в один: у человека их может быть два, и угадывать, за
      * каким он сейчас сидит, неоткуда. Молчание сервера не ошибка — просьба дождётся.
+     *
+     * Отвечаем по каждому телефону круга: взяла ли почта письмо для него (#1108). Прежде
+     * исход стука здесь пропадал, и компьютер называл человеку причину, которой не знал:
+     * «телефон не проснулся» звучало и тогда, когда письмо вообще никуда не ушло.
+     *
+     * Пустой ответ — не провал, а «стучать было не во что»: на компьютере нет аккаунта
+     * или в круге нет ни одного телефона. Тогда стука не было вовсе, и исхода у него нет:
+     * «не удалось постучать» тут было бы утверждением о телефоне, которого не существует.
      */
-    suspend fun knockPhones() {
-        val account = store.current() ?: return
-        _circle.value
+    suspend fun knockPhones(): Map<String, Boolean> {
+        val account = store.current() ?: return emptyMap()
+        return _circle.value
             .filterNot { it.self }
             .filter { it.kind == DeviceKind.PHONE }
-            .forEach { runCatching { client.knock(account, it.id) } }
+            .associate { it.id to runCatching { client.knock(account, it.id) }.getOrDefault(false) }
     }
 
     fun signIn() {
