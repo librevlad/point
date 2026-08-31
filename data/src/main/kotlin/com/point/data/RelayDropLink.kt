@@ -2,6 +2,7 @@ package com.point.data
 
 import android.util.Base64
 import com.point.core.flow.DropLink
+import com.point.core.flow.DropOutcome
 import com.point.core.flow.NetworkAvailability
 import java.io.File
 import java.net.URL
@@ -17,14 +18,32 @@ class RelayDropLink(
     private val network: NetworkAvailability,
 ) : DropLink {
 
-    override suspend fun give(path: String, fileName: String, mime: String): String? =
+    /**
+     * Отказ называет то, что произошло на самом деле (#1284).
+     *
+     * Пять разных причин уходили одним `null`, и человек читал перечисление догадок вместо
+     * причины: «войдите в аккаунт, проверьте интернет — и учтите, что файл больше 50 МБ» при
+     * живом аккаунте, живом интернете и файле в 880 раз меньше предела. Правда известна
+     * здесь — здесь отказ и рождается.
+     *
+     * Предел проверяется до отправки: пятьдесят пять мегабайт не уезжают на сервер ради того,
+     * чтобы он ответил «полно».
+     */
+    override suspend fun give(path: String, fileName: String, mime: String): DropOutcome =
         withContext(Dispatchers.IO) {
             // Перед выходом наружу — спросить телефон, есть ли сеть вообще (#690, #691).
-            if (!network.isAvailable()) return@withContext null
-            val base = relayUrl.trimEnd('/').takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
-                ?: return@withContext null
-            val file = File(path).takeIf { it.isFile } ?: return@withContext null
-            if (file.length() > MAX_DROP_BYTES) return@withContext null
+            if (!network.isAvailable()) {
+                return@withContext DropOutcome.Refused(com.point.core.flow.NO_NETWORK_TEXT)
+            }
+            if (relayUrl.isBlank() || pass().isNullOrBlank()) {
+                return@withContext DropOutcome.Refused(com.point.core.flow.capabilities.NEEDS_ACCOUNT_FOR_LINK)
+            }
+            val base = relayUrl.trimEnd('/')
+            val file = File(path).takeIf { it.isFile }
+                ?: return@withContext DropOutcome.Refused(com.point.core.flow.NO_FILE_FOR_LINK)
+            if (file.length() > MAX_DROP_BYTES) {
+                return@withContext DropOutcome.Refused(com.point.core.flow.tooHeavyForLink(file.length()))
+            }
 
             runCatching {
                 val c = (URL("$base/d").openConnection() as HttpsURLConnection).apply {
@@ -39,10 +58,22 @@ class RelayDropLink(
                     setFixedLengthStreamingMode(file.length())
                 }
                 file.inputStream().use { input -> c.outputStream.use { out -> input.copyTo(out) } }
-                val id = if (c.responseCode in 200..299) c.inputStream.readBytes().decodeToString().trim() else null
+                val code = c.responseCode
+                val answer = if (code in 200..299) {
+                    c.inputStream.readBytes().decodeToString().trim()
+                } else {
+                    runCatching { c.errorStream?.readBytes()?.decodeToString()?.trim() }.getOrNull().orEmpty()
+                }
                 c.disconnect()
-                id?.takeIf { it.isNotBlank() }?.let { "$base/d/$it" }
-            }.getOrNull()
+                when {
+                    code !in 200..299 -> DropOutcome.Refused(com.point.core.flow.serverRefusedDrop(answer))
+                    answer.isBlank() -> DropOutcome.Refused(com.point.core.flow.serverRefusedDrop(""))
+                    else -> DropOutcome.Given("$base/d/$answer")
+                }
+
+                // Сорвалось по дороге — это видно по чужому отказу и не больше (#1237):
+                // сеть телефон подтвердил живой, значит утверждать про неё нечего.
+            }.getOrElse { DropOutcome.Refused(com.point.core.flow.CONNECTION_LOST_TEXT) }
         }
 
     private companion object {

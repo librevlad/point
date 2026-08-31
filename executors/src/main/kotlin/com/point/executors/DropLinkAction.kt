@@ -33,11 +33,14 @@ class DropLinkRealizer @Inject constructor(
         val name = com.point.core.flow.outboundFileName(input.metadata["name"], input.mime)
 
         reportStage("Загружаю файл")
-        val link = drop.give(file.absolutePath, name, input.mime)
-            ?: return ActionResult.Failure(
-                "Ссылку выдать не удалось — нет связи с сервером или файл слишком большой",
-                recoverable = true,
-            )
+        // Отказ называет то, что произошло, и ровно одно (#1284): список «либо это, либо
+        // то» — не причина, а перечисление догадок, из которых человеку нечего выбрать.
+        // Правда известна тому, кто ходил наружу, — оттуда она и приходит.
+        val link = when (val outcome = drop.give(file.absolutePath, name, input.mime)) {
+            is com.point.core.flow.DropOutcome.Given -> outcome.link
+            is com.point.core.flow.DropOutcome.Refused ->
+                return ActionResult.Failure(outcome.why, recoverable = true)
+        }
 
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(link)

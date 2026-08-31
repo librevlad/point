@@ -3,6 +3,7 @@ package com.point.desktop
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.DropLink
+import com.point.core.flow.DropOutcome
 import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
@@ -22,12 +23,29 @@ class DesktopDropLink(
     private val pass: () -> String?,
 ) : DropLink {
 
-    override suspend fun give(path: String, fileName: String, mime: String): String? =
+    /**
+     * Отказ называет то, что произошло на самом деле (#1284) — как и на телефоне.
+     *
+     * Прежде пять разных причин уходили одним `null`, и компьютер отвечал перечислением
+     * догадок: «войдите в аккаунт на компьютере, проверьте интернет — и учтите, что файл
+     * больше 50 МБ». Живой прогон 17.08.2026: вошёл, интернет есть, файл в 880 раз меньше
+     * предела, а сервер просто не ответил — и этого сказано не было.
+     */
+    override suspend fun give(path: String, fileName: String, mime: String): DropOutcome =
         withContext(Dispatchers.IO) {
-            val base = serverUrl.trimEnd('/').takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
-                ?: return@withContext null
-            val file = File(path).takeIf { it.isFile } ?: return@withContext null
-            if (file.length() > MAX_DROP_BYTES) return@withContext null
+            if (serverUrl.isBlank() || pass().isNullOrBlank()) {
+                return@withContext DropOutcome.Refused(
+                    com.point.core.flow.capabilities.NEEDS_ACCOUNT_FOR_LINK,
+                )
+            }
+            val base = serverUrl.trimEnd('/')
+            val file = File(path).takeIf { it.isFile }
+                ?: return@withContext DropOutcome.Refused(com.point.core.flow.NO_FILE_FOR_LINK)
+            if (file.length() > MAX_DROP_BYTES) {
+                return@withContext DropOutcome.Refused(
+                    com.point.core.flow.tooHeavyForLink(file.length()),
+                )
+            }
 
             runCatching {
                 val connection = (URL("$base/d").openConnection() as HttpURLConnection).apply {
@@ -45,14 +63,22 @@ class DesktopDropLink(
                     setFixedLengthStreamingMode(file.length())
                 }
                 file.inputStream().use { input -> connection.outputStream.use { out -> input.copyTo(out) } }
-                val id = if (connection.responseCode in 200..299) {
+                val code = connection.responseCode
+                val answer = if (code in 200..299) {
                     connection.inputStream.readBytes().decodeToString().trim()
                 } else {
-                    null
+                    runCatching { connection.errorStream?.readBytes()?.decodeToString()?.trim() }
+                        .getOrNull().orEmpty()
                 }
                 connection.disconnect()
-                id?.takeIf { it.isNotBlank() }?.let { "$base/d/$it" }
-            }.getOrNull()
+                when {
+                    code !in 200..299 -> DropOutcome.Refused(com.point.core.flow.serverRefusedDrop(answer))
+                    answer.isBlank() -> DropOutcome.Refused(com.point.core.flow.serverRefusedDrop(""))
+                    else -> DropOutcome.Given("$base/d/$answer")
+                }
+
+                // Сорвалось по дороге — это видно по чужому отказу и не больше (#1237).
+            }.getOrElse { DropOutcome.Refused(com.point.core.flow.CONNECTION_LOST_TEXT) }
         }
 
     private companion object {
@@ -74,13 +100,10 @@ class PcDropRealizer(
         val file = File(input.uri.value).takeIf(File::isFile)
             ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
         val name = input.metadata["name"] ?: file.name
-        val link = drop.give(file.absolutePath, name, input.mime)
-            ?: return ActionResult.Failure(
-
-                "Ссылку выдать не вышло: войдите в аккаунт на компьютере, проверьте интернет — " +
-                    "и учтите, что файл больше 50 МБ ссылкой не отдаётся",
-                recoverable = true,
-            )
+        val link = when (val outcome = drop.give(file.absolutePath, name, input.mime)) {
+            is DropOutcome.Given -> outcome.link
+            is DropOutcome.Refused -> return ActionResult.Failure(outcome.why, recoverable = true)
+        }
         clipboard.copy(link)
         ActionResult.Done("Ссылка в буфере — живёт сутки")
     }.getOrElse { ActionResult.Failure("Ссылка не выдалась — проверьте интернет и повторите", recoverable = true) }

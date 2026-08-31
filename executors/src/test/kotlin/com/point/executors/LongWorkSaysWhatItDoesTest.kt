@@ -36,7 +36,8 @@ class LongWorkSaysWhatItDoesTest {
         val file = tmp.newFile("report.pdf").apply { writeText("страница") }
         val obj = PointObject("id", "application/pdf", ScratchRef(file.absolutePath), ObjectState(ObjectKind.PDF))
         val drop = object : DropLink {
-            override suspend fun give(path: String, fileName: String, mime: String) = "https://p.nt/abc"
+            override suspend fun give(path: String, fileName: String, mime: String) =
+                com.point.core.flow.DropOutcome.Given("https://p.nt/abc")
         }
 
         val heard = stagesHeard { DropLinkRealizer(store(), drop).perform(obj, null) }
