@@ -492,6 +492,13 @@ class FlowViewModel @Inject constructor(
             }
             runCatching { history.record(obj) }
             pushFrame(obj)
+
+            // Потерянное при приёме называется сразу и здесь (#1304): человек передал два
+            // фото, а страница вышла одна — узнавать об этом страницей, которой нет, ему
+            // незачем. Набор при этом принят и работает: слово о потере — не отказ.
+            com.point.core.flow.ingestLossNote(obj.metadata)?.let { note ->
+                _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
+            }
             tellInterrupted(interrupted)
 
             autoAction?.let { id ->
@@ -526,6 +533,13 @@ class FlowViewModel @Inject constructor(
             }
 
             pushFrame(obj)
+
+            // Потерянное при приёме называется сразу и здесь (#1304): человек передал два
+            // фото, а страница вышла одна — узнавать об этом страницей, которой нет, ему
+            // незачем. Набор при этом принят и работает: слово о потере — не отказ.
+            com.point.core.flow.ingestLossNote(obj.metadata)?.let { note ->
+                _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
+            }
             tellInterrupted(interrupted)
         }
     }
