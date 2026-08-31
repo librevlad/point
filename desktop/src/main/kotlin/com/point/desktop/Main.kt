@@ -113,7 +113,14 @@ fun main(args: Array<String>) {
             files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.LOCAL) }
         }
     }
-    val outbox = Outbox(File(System.getProperty("user.home"), "Point/outbox"))
+    // Запись, ушедшая из очереди, доходит до «ПУТИ» — забрал ли её телефон или убрал срок
+    // (#1336, #1344). Журнал рождается ниже очереди, поэтому шов подключается, как только он
+    // есть, — тем же приёмом, что и стук (#1079).
+    var outboxEntryGoneLate: (Int, Boolean) -> Unit = { _, _ -> }
+    val outbox = Outbox(
+        File(System.getProperty("user.home"), "Point/outbox"),
+        onGone = { id, taken -> outboxEntryGoneLate(id, taken) },
+    )
 
     val officeToPdf = LocalOfficeToPdf()
 
@@ -239,6 +246,7 @@ fun main(args: Array<String>) {
     // проснуться (#1108). Связку держит сторож `KnockIsWatchedTest`: возврат её к голому
     // `account::knockPhones` вернул бы то самое молчание при зелёном прогоне.
     knockPhoneLate = { obj -> state.knockAfterSending(obj) }
+    outboxEntryGoneLate = { id, taken -> state.outboxEntryGone(id, taken) }
 
     val shellMenu = RegistryShellMenu()
     val sendTo = ShortcutSendToMenu()

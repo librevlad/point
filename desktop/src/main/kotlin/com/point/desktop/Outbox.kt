@@ -6,7 +6,17 @@ import com.point.core.flow.encodePcMeta
 import com.point.core.model.PointObject
 import java.io.File
 
-class Outbox(private val dir: File) {
+class Outbox(
+    private val dir: File,
+
+    /**
+     * Кому сказать, что запись ушла из очереди (#1336, #1344).
+     *
+     * Шов один на обе дороги — забор телефоном и уборку по сроку, — потому что вопрос у
+     * человека один: «что стало с моей просьбой». Отличается ответ, и его называет [taken].
+     */
+    private val onGone: (id: Int, taken: Boolean) -> Unit = { _, _ -> },
+) {
 
     @Synchronized
     fun add(obj: PointObject): Int {
@@ -75,11 +85,19 @@ class Outbox(private val dir: File) {
     fun forgetOlderThan(before: Long) {
         numbered()
             .filterValues { files -> files.all { it.lastModified() < before } }
-            .keys.forEach(::remove)
+            .keys.forEach { id ->
+                drop(id)
+                runCatching { onGone(id, false) }
+            }
     }
 
     @Synchronized
     fun remove(id: Int) {
+        drop(id)
+        runCatching { onGone(id, true) }
+    }
+
+    private fun drop(id: Int) {
         File(dir, "$id.meta").delete()
         File(dir, "$id.bin").delete()
     }
