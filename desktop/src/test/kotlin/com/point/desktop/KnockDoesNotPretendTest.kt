@@ -7,6 +7,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -87,11 +88,11 @@ class KnockDoesNotPretendTest {
         return pc
     }
 
-    private fun item() = InboxItem(
+    private fun item(id: String = "id", name: String = "объект") = InboxItem(
         PointObject(
-            "id",
+            id,
             "text/plain",
-            ScratchRef(temp.newFile("объект.txt").apply { writeText("+380671234567") }.absolutePath),
+            ScratchRef(temp.newFile("$name.txt").apply { writeText("+380671234567") }.absolutePath),
             ObjectState(ObjectKind.TEXT),
         ),
     )
@@ -415,6 +416,77 @@ class KnockDoesNotPretendTest {
 
         assertEquals("исход стука затёр то, что человек читал", reading, pc.message.value)
         assertEquals("правда о телефоне пропала и из «ПУТЬ»", PHONE_DID_NOT_WAKE_NOTE, lastStep(pc, obj).note)
+    }
+
+    /**
+     * Слово про телефон знает свой объект (#1337).
+     *
+     * Путь человека: он отправил на телефон A, через несколько секунд — B, и на плашке стоит
+     * «ждёт телефона» про B. Досмотр стука по A кончается позже и говорит «телефон не
+     * проснулся» — но это правда про A, а не про B. Пока слово не знало своего объекта, оно
+     * вставало над строкой про B, и человек читал вердикт про A как слово про B.
+     *
+     * Правда про A при этом не теряется: она лежит в «ПУТИ» у A, где записи разведены по
+     * объектам, и дожидается там вопроса «где мой файл» (PC3).
+     */
+    @Test
+    fun `вердикт про один объект не встаёт над словом про другой`() = runTest(dispatcher) {
+        val box = Outbox(temp.newFolder("outbox"))
+        val pc = state(box)
+        val first = item("a", "первый")
+        val second = item("b", "второй")
+        pc.onReceived(first)
+        pc.onReceived(second)
+
+        pc.sendToPhone(first, call)
+        pc.approvePhone()
+        runCurrent()
+
+        // Второй объект уехал следом, на середине досмотра первого: теперь на плашке слово
+        // про него, а вердикт по первому ещё в пути.
+        advanceTimeBy(PHONE_WAKES_WITHIN_MS / 2)
+        pc.sendToPhone(second, call)
+        pc.approvePhone()
+        runCurrent()
+        val aboutSecond = pc.message.value
+        assertTrue("на плашке не слово про второй объект: $aboutSecond", aboutSecond!!.contains(WAITS_FOR_PHONE))
+
+        // Досмотр первого кончился; досмотр второго ещё идёт.
+        advanceTimeBy(PHONE_WAKES_WITHIN_MS / 2 + 1)
+        runCurrent()
+
+        assertEquals(
+            "вердикт про первый объект встал над словом про второй",
+            aboutSecond,
+            pc.message.value,
+        )
+        assertEquals(
+            "правда про первый объект пропала из «ПУТЬ»",
+            PHONE_DID_NOT_WAKE_NOTE,
+            lastStep(pc, first).note,
+        )
+    }
+
+    /**
+     * И наоборот: вердикт про тот же объект встаёт на место своего же ожидания (#1108).
+     *
+     * Иначе адресат превратился бы в глушилку: человек, отправивший один объект, перестал бы
+     * узнавать о непроснувшемся телефоне вовсе.
+     */
+    @Test
+    fun `вердикт про свой объект встаёт на место его же ожидания`() = runTest(dispatcher) {
+        val box = Outbox(temp.newFolder("outbox"))
+        val pc = state(box)
+        val obj = item()
+        pc.onReceived(obj)
+
+        pc.sendToPhone(obj, call)
+        pc.approvePhone()
+        runCurrent()
+
+        advanceUntilIdle()
+
+        assertEquals("человек не узнал о непроснувшемся телефоне", PHONE_DID_NOT_WAKE, pc.message.value)
     }
 
     /**
