@@ -186,6 +186,8 @@ class GraphPipelineIntegrationTest {
                 override suspend fun run(obj: PointObject, prompt: String) =
                     ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/none"))
             },
+        
+            com.point.core.flow.RememberingLinkMonitor(),
         ),
     )
 

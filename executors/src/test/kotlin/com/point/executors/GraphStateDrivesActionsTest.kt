@@ -59,6 +59,8 @@ class GraphStateDrivesActionsTest {
                 override suspend fun run(input: PointObject, prompt: String) =
                     com.point.core.model.ResultObject(ObjectKind.TEXT, "text/plain", ValueRef(""))
             },
+        
+            com.point.core.flow.RememberingLinkMonitor(),
         ),
     )
 

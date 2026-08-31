@@ -42,21 +42,27 @@ class LearningBubblePolicyTest {
 
     @Test
     fun `with no usage it is priority then id — the default order`() {
-        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true))
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cap("b", 50), cap("a", 50), cap("save", 70))
         assertEquals(listOf("a", "b", "save"), order(policy, caps))
     }
 
     @Test
     fun `a frequently-used capability rises above a same-priority peer`() {
-        val policy = LearningBubblePolicy(usage(mapOf("b" to 10)), llm(true))
+        val policy = LearningBubblePolicy(usage(mapOf("b" to 10)), llm(true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cap("a", 50), cap("b", 50))
         assertEquals(listOf("b", "a"), order(policy, caps))
     }
 
     @Test
     fun `без ключа действие, которому нужен ключ, не встаёт главным`() {
-        val policy = LearningBubblePolicy(usage(emptyMap()), llm(configured = false))
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(configured = false),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
 
         val caps = listOf(cap("understand", 31, auth = true), cap("ocr", 50))
         assertEquals(listOf("ocr", "understand"), order(policy, caps))
@@ -64,7 +70,9 @@ class LearningBubblePolicyTest {
 
     @Test
     fun `с ключом порядок прежний — приоритет решает`() {
-        val policy = LearningBubblePolicy(usage(emptyMap()), llm(configured = true))
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(configured = true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cap("understand", 31, auth = true), cap("ocr", 50))
         assertEquals(listOf("understand", "ocr"), order(policy, caps))
     }
@@ -72,7 +80,9 @@ class LearningBubblePolicyTest {
 
     @Test
     fun `heavy usage can outrank a higher-priority capability`() {
-        val policy = LearningBubblePolicy(usage(mapOf("save" to 30)), llm(true))
+        val policy = LearningBubblePolicy(usage(mapOf("save" to 30)), llm(true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cap("transform", 50), cap("save", 70))
 
         assertEquals(listOf("save", "transform"), order(policy, caps))
@@ -84,7 +94,9 @@ class LearningBubblePolicyTest {
     fun `при живой паре «На компьютер» встаёт выше прочих отправок`() {
 
         // pc в кандидатах уже означает живую пару: без неё accepts его не пропускает.
-        val policy = LearningBubblePolicy(usage(mapOf("call" to 20)), llm(true))
+        val policy = LearningBubblePolicy(usage(mapOf("call" to 20)), llm(true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cap("call", 10), cap("save", 20), cap("pc", 75))
 
         assertEquals(listOf("pc", "call", "save"), order(policy, caps))
@@ -111,7 +123,9 @@ class LearningBubblePolicyTest {
 
     @Test
     fun `богато прочитанное фото опускает облачное чтение ниже локальных`() {
-        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true))
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cloudRead("ocr-cloud", 10), cap("ocr", 50), cap("save", 60))
 
         val read = image(com.point.core.model.Feature.HAS_TEXT)
@@ -123,7 +137,9 @@ class LearningBubblePolicyTest {
 
     @Test
     fun `слабое чтение — рукопись, мусор — оставляет облако главным`() {
-        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true))
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true),
+            com.point.core.flow.RememberingLinkMonitor(),
+        )
         val caps = listOf(cloudRead("ocr-cloud", 10), cap("ocr", 50))
 
         val weak = image(com.point.core.model.Feature.HAS_WORD_LAYER)
@@ -132,4 +148,40 @@ class LearningBubblePolicyTest {
             policy.rank(weak, caps).map { it.id.value },
         )
     }
+    /**
+     * Продолжение на компьютере ведёт список, пока компьютер рядом (#545).
+     *
+     * Решение владельца 31.08.2026: компьютер на связи — «На компьютер» поднимается первым;
+     * выключен — стоит там, где стояло. Действие при этом никуда не девается и по-прежнему
+     * работает: просьба подождёт в очереди и уедет, когда человек откроет Point на компьютере.
+     */
+    @Test
+    fun `компьютер отозвался недавно — продолжение на нём ведёт список`() {
+        val heard = com.point.core.flow.RememberingLinkMonitor().apply { heard() }
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true), heard)
+        val caps = listOf(cap("a", 10), cap(PcCapability.ID.value, 75))
+
+        assertEquals(listOf(PcCapability.ID.value, "a"), order(policy, caps))
+    }
+
+    @Test
+    fun `компьютер давно молчит — продолжение на нём стоит там, где стояло`() {
+        val longAgo = com.point.core.flow.RememberingLinkMonitor(
+            clock = { System.currentTimeMillis() - com.point.core.flow.PC_AWAKE_WITHIN_MS - 1 },
+        ).apply { heard() }
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true), longAgo)
+        val caps = listOf(cap("a", 10), cap(PcCapability.ID.value, 75))
+
+        assertEquals(listOf("a", PcCapability.ID.value), order(policy, caps))
+    }
+
+    /** Незнание — не «выключен»: пока о компьютере не слышали, порядок прежний (#644). */
+    @Test
+    fun `о компьютере ничего не известно — продолжение на нём ведёт список, как и прежде`() {
+        val policy = LearningBubblePolicy(usage(emptyMap()), llm(true), com.point.core.flow.RememberingLinkMonitor())
+        val caps = listOf(cap("a", 10), cap(PcCapability.ID.value, 75))
+
+        assertEquals(listOf(PcCapability.ID.value, "a"), order(policy, caps))
+    }
+
 }
