@@ -106,14 +106,17 @@ class OpenAiCompatibleClient(
             if (res.code !in 200..299) {
                 throw com.point.core.flow.AiServiceRefusal(provider.id, res.code, refusal(res.code))
             }
-            val answer = parseAnswer(res.body)
+            val answer = answerOnly(parseAnswer(res.body))
 
-            if (isImage(obj) && answer.trimStart().startsWith(NO_IMAGE_MARKER)) {
+            // Слово о невидимой картинке ищется в самом ответе, а не в рассуждении перед ним
+            // (#1320): думающая модель писала «NO_IMAGE» после хода мысли, и признание не
+            // узнавалось — Point брал её сочинение за чтение снимка.
+            if (isImage(obj) && answer.startsWith(NO_IMAGE_MARKER)) {
                 error("${provider.label}: модель не увидела изображение")
             }
             val ref = store.newScratchFile("md")
 
-            File(ref.value).writeText(withoutPreamble(answer))
+            File(ref.value).writeText(answer)
             ResultObject(
                 type = ObjectKind.TEXT,
                 mime = "text/markdown",
