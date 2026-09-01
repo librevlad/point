@@ -27,6 +27,9 @@ object KnownCapabilities {
     /** Прочитать речь словами. */
     val TRANSCRIBE = CapabilityId("transcribe")
 
+    /** Собрать документ Word из объекта — одна работа на обоих устройствах (#1379). */
+    val WORD_PLUS = CapabilityId("word-plus")
+
     /** Прочитать слова с кадра. */
     val OCR = CapabilityId("ocr")
 

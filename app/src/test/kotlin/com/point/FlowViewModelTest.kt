@@ -4744,7 +4744,7 @@ class FlowViewModelTest {
 
     /** Настоящее «Понять»: признак «судит по знанию» объявляет оно само, а не экран (#1060). */
     private val understand =
-        com.point.executors.UnderstandCapability(com.point.core.flow.AiReadiness { true })
+        com.point.core.flow.UnderstandCapability(com.point.core.flow.AiReadiness { true })
 
     private fun understandBubble() = bubble(id = understand.id.value, title = "Понять")
 

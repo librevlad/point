@@ -1,30 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AtomAddress
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.CLASSIFIER_ROLES
-import com.point.core.flow.EvidenceClass
-import com.point.core.flow.FieldCandidate
-import com.point.core.flow.LayoutElement
-import com.point.core.flow.META_GRAPH_ROLE_PREFIX
-import com.point.core.flow.PartyReading
-import com.point.core.flow.bareIndexId
-import com.point.core.flow.chosenByAddressee
-import com.point.core.flow.fieldEvidence
-import com.point.core.flow.formEvidence
-import com.point.core.flow.foundLiterally
-import com.point.core.flow.isRepairOf
-import com.point.core.flow.isRoleLabel
-import com.point.core.flow.mainFact
-import com.point.core.flow.normConsensus
-import com.point.core.flow.parseClassification
-import com.point.core.flow.plausiblePartyName
-import com.point.core.flow.resolve
-import com.point.core.flow.ruleEvidence
-import com.point.core.flow.s10CheckDigitValid
-import com.point.core.flow.semanticFits
-import com.point.core.flow.splitCandidate
-import com.point.core.flow.standsInReadText
 
 /**
  * Рассудить: что из названного моделью становится знанием (#835).

@@ -26,6 +26,16 @@ class ExcelOnPcTest {
 
     private val keySet = AiReadiness { true }
 
+    private val noAnswer = object : com.point.core.flow.LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): com.point.core.model.ResultObject =
+            error("тестовый клиент не отвечает")
+    }
+
+    private val knowsNothing = object : com.point.core.flow.CurrentKnowledge {
+        override suspend fun textOf(obj: PointObject, limit: Int): String? = null
+        override suspend fun layerOf(obj: PointObject): com.point.core.flow.AtomLayer? = null
+    }
+
     private fun excelRealizer() = PcExcelRealizer(object : Realizer {
         override val capabilityId = ExcelCapability.ID
         override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -124,20 +134,30 @@ class ExcelOnPcTest {
     }
 
     /**
-     * Решение #701 остаётся в силе (#1369 его не отменяет): действия, чей результат —
-     * знание, на компьютере не появляются. Файловое исключение — только «В Excel».
+     * «ПК должен всё уметь не хуже телефона» (#1379, решение владельца 01.09.2026,
+     * отменяет #701): «Понять» и «Перевести» на компьютере — те же действия из ядра.
      */
     @Test
-    fun `Понять и Перевести на компьютере не появляются`() {
-        val (registry, _) = registryWithExcel()
+    fun `Понять и Перевести на компьютере есть — теми же действиями, что на телефоне`() {
+        val resolver = DesktopResolver(
+            setOf(
+                excelRealizer(),
+                com.point.core.flow.UnderstandRealizer(noAnswer),
+                com.point.core.flow.TranslateRealizer(noAnswer, knowsNothing),
+            ),
+        )
+        val registry = DesktopRegistry(
+            desktopCapabilities { true } +
+                ExcelCapability(keySet) +
+                com.point.core.flow.UnderstandCapability(keySet) +
+                com.point.core.flow.TranslateCapability(keySet),
+            runnable = resolver::canRun,
+        )
 
-        val everywhere = listOf(ObjectKind.IMAGE, ObjectKind.PDF, ObjectKind.TEXT)
-            .flatMap { registry.bubblesFor(ObjectState(it)) }
-            .map { it.title }
+        val doors = registry.bubblesFor(ObjectState(ObjectKind.TEXT)).map { it.title }
 
-        assertFalse("среди дверей: $everywhere", everywhere.any { it.startsWith("Понять") })
-        assertFalse("среди дверей: $everywhere", everywhere.any { it.startsWith("Перевести") })
-        assertFalse("среди дверей: $everywhere", everywhere.any { it.startsWith("Спросить") })
+        assertTrue("среди дверей: $doors", doors.any { it.startsWith("Понять") })
+        assertTrue("среди дверей: $doors", doors.any { it.startsWith("Перевести") })
     }
 
     @Test

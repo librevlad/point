@@ -1,12 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.Atom
-import com.point.core.flow.AtomCodec
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.Box
-import com.point.core.flow.META_ENTITY_AMOUNT
-import com.point.core.flow.amountFacts
-import com.point.core.flow.parseFieldCandidates
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

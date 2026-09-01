@@ -1,11 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.FallbackLlmClient
-import com.point.core.flow.GraphState
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.LlmClient
-import com.point.core.flow.withInvestigation
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -73,9 +67,9 @@ class UnderstandGrowsForeverTest {
 
     private fun chain(vararg providers: LlmClient) = FallbackLlmClient(
         providers.toList(),
-        facts = object : com.point.core.flow.AiFacts {
-            override fun all(): Map<String, com.point.core.flow.AiFact> = emptyMap()
-            override fun remember(providerId: String, outcome: com.point.core.flow.AiOutcome) = Unit
+        facts = object : AiFacts {
+            override fun all(): Map<String, AiFact> = emptyMap()
+            override fun remember(providerId: String, outcome: AiOutcome) = Unit
         },
         network = { true },
     )

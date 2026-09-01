@@ -1,7 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.ExcelCapability
-import com.point.core.flow.capabilities.PdfCapability
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -10,17 +8,17 @@ class AiTransformTargetTest {
 
     @Test
     fun `produce-word requests route to the Word producer`() {
-        assertEquals(WordPlusCapability.ID, aiTransformTarget("сделай ворд"))
-        assertEquals(WordPlusCapability.ID, aiTransformTarget("В Word"))
-        assertEquals(WordPlusCapability.ID, aiTransformTarget("конвертируй в docx"))
+        assertEquals(KnownCapabilities.WORD_PLUS, aiTransformTarget("сделай ворд"))
+        assertEquals(KnownCapabilities.WORD_PLUS, aiTransformTarget("В Word"))
+        assertEquals(KnownCapabilities.WORD_PLUS, aiTransformTarget("конвертируй в docx"))
     }
 
     @Test
     fun `produce-excel and produce-pdf route to their producers`() {
         assertEquals(ExcelCapability.ID, aiTransformTarget("сделай таблицу в excel"))
         assertEquals(ExcelCapability.ID, aiTransformTarget("выгрузи в эксель"))
-        assertEquals(PdfCapability.ID, aiTransformTarget("сделай pdf"))
-        assertEquals(PdfCapability.ID, aiTransformTarget("оформи в пдф"))
+        assertEquals(com.point.core.flow.capabilities.PdfCapability.ID, aiTransformTarget("сделай pdf"))
+        assertEquals(com.point.core.flow.capabilities.PdfCapability.ID, aiTransformTarget("оформи в пдф"))
     }
 
     @Test

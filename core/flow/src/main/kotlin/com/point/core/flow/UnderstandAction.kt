@@ -1,57 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.AtomCodec
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.CONTACT_ROLE
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Cost
-import com.point.core.flow.EvidenceClass
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.KIND_PERSON
-import com.point.core.flow.Latency
-import com.point.core.flow.LayoutElement
-import com.point.core.flow.LlmClient
-import com.point.core.flow.MAX_FIELD_CANDIDATES
-import com.point.core.flow.META_ALT_SUFFIX
-import com.point.core.flow.META_BLOCKED_SUFFIX
-import com.point.core.flow.META_ENTITY_PREFIX
-import com.point.core.flow.META_EVIDENCE_SUFFIX
-import com.point.core.flow.META_GRAPH_ROLE_PREFIX
-import com.point.core.flow.META_OCR_ATOMS_REF
-import com.point.core.flow.META_READING_MODE
-import com.point.core.flow.META_READ_CHARS
-import com.point.core.flow.META_READ_TOTAL_CHARS
-import com.point.core.flow.META_ANSWERED_BY
-import com.point.core.flow.META_SEMANTIC_PREFIX
-import com.point.core.flow.META_SOURCE_SUFFIX
-import com.point.core.flow.META_UNUSABLE_REASON
-import com.point.core.flow.addActor
-import com.point.core.flow.isAnnotationKey
-import com.point.core.flow.isKnowledgeKey
-import com.point.core.flow.ReadingMode
-import com.point.core.flow.Realizer
-import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
-import com.point.core.flow.altValue
-import com.point.core.flow.alternativesOf
-import com.point.core.flow.answerLanguageRule
-import com.point.core.flow.belongings
-import com.point.core.flow.investigationOutcome
-import com.point.core.flow.labelNeedingKey
-import com.point.core.flow.layoutOf
-import com.point.core.flow.mergeFacts
-import com.point.core.flow.namedParties
-import com.point.core.flow.normConsensus
-import com.point.core.flow.parseFieldCandidates
-import com.point.core.flow.partialReadMessage
-import com.point.core.flow.partyNodeId
-import com.point.core.flow.promptIndex
-import com.point.core.flow.provenanceOf
-import com.point.core.flow.readProgressOf
-import com.point.core.flow.readWindowOf
-import com.point.core.flow.reportStage
-import com.point.core.flow.withInvestigation
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -66,11 +14,10 @@ import com.point.core.model.Relation
 import com.point.core.model.RelationType
 import com.point.core.model.ValueRef
 import java.io.File
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class UnderstandCapability @Inject constructor(
+class UnderstandCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -113,7 +60,7 @@ class UnderstandCapability @Inject constructor(
         val ID = CapabilityId("understand") }
 }
 
-class UnderstandRealizer @Inject constructor(
+class UnderstandRealizer(
     private val llm: LlmClient,
 ) : Realizer {
     override val capabilityId = UnderstandCapability.ID

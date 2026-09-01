@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.AiCapability
+
 import com.point.core.flow.Clipboard
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE

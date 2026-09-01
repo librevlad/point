@@ -68,7 +68,7 @@ class ExtractAllRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = entitySourceText(input)
+                val text = com.point.core.flow.entitySourceText(input)
                 val list = formatEntities(extractor.extract(text))
                 if (list.isBlank()) {
                     ActionResult.Failure("Не удалось собрать данные", recoverable = true)

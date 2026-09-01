@@ -1,6 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
 import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
 import com.point.core.model.ObjectKind

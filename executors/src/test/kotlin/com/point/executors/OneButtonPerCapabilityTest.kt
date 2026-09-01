@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.TranslateCapability
+
 import com.point.core.flow.Capability
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.PcLinks

@@ -12,9 +12,9 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.Provenance
-import com.point.executors.AiCapability
-import com.point.executors.aiSuggestions
-import com.point.executors.aiTransformTarget
+import com.point.core.flow.AiCapability
+import com.point.core.flow.aiSuggestions
+import com.point.core.flow.aiTransformTarget
 import java.io.File
 
 /**

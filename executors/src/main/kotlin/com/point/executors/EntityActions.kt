@@ -25,44 +25,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
-internal fun entitySourceText(input: PointObject): String {
-    val sidecar = input.metadata[META_OCR_TEXT_REF]
-        ?.let { path -> runCatching { File(path).takeIf(File::isFile)?.readText() }.getOrNull() }
-    if (sidecar != null) return sidecar
-
-    // Уже добытое знание — источник наравне с сидекаром OCR: текст, который QR уже
-    // отдал, «Понять»/«Перевести»/«AI» читают напрямую, а не молчат на пустых байтах
-    // картинки. Та же логика, что уже вела «Открыть ссылку» на HAS_URL из QR (#693).
-    // Ссылка в коде хранится ссылкой объекта, а не вторым фактом (#1119) — источник текста
-    // тот же самый: что код отдал, то и читаем.
-    input.metadata[META_ENTITY_PREFIX + "qr"]?.takeIf { it.isNotBlank() }?.let { return it }
-    if (input.state.has(Feature.HAS_QR)) {
-        input.metadata[META_ENTITY_PREFIX + "url"]?.takeIf { it.isNotBlank() }?.let { return it }
-    }
-
-    if (!input.state.kind.isFileBacked) return input.uri.value
-
-    // Файл читается как текст только у текстового вида: сырые байты JPEG уходили
-    // в облако «текстом страницы» вместе с EXIF (модель телефона, дата съёмки) —
-    // и запирали визуальный путь понимания (охота 2026-08-09, HUNT2-F1).
-    if (input.state.kind != com.point.core.model.ObjectKind.TEXT) return ""
-    return File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
-}
-
-internal suspend fun firstEntity(extractor: EntityExtractor, input: PointObject, type: EntityType): String? {
-
-    // Уже добытое знание — первый источник: узел ссылки из QR — не файл, и «Открыть
-    // ссылку» отвечало «Ссылка не найдена» рядом с «Нашёл ссылку» (скрин 2026-08-09).
-    type.asMetaKey()?.let { key ->
-        input.metadata[key]?.takeIf { it.isNotBlank() }?.let { return it }
-    }
-
-    if (type.asExtractedKind() == input.state.kind) return input.uri.value.takeIf { it.isNotBlank() }
-    val text = entitySourceText(input)
-    if (text.isBlank()) return null
-    return extractor.extract(text).firstOrNull { it.type == type }?.value
-}
-
 private fun dialable(phone: String) = phone.filter { it.isDigit() || it == '+' }
 
 class CallCapability @Inject constructor() : Capability {
@@ -89,7 +51,7 @@ class CallRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val phone = firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
+                val phone = com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
                 opener.open("tel:" + dialable(phone))
                 ActionResult.Done("Открыл набор: $phone")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось позвонить", recoverable = true) }
@@ -116,7 +78,7 @@ class SmsRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val phone = firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
+                val phone = com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
                 opener.open("smsto:" + dialable(phone))
                 ActionResult.Done("Открыл сообщение: $phone")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть сообщения", recoverable = true) }
@@ -143,7 +105,7 @@ class EmailRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val email = firstEntity(extractor, input, EntityType.EMAIL) ?: error("Email не найден")
+                val email = com.point.core.flow.firstEntity(extractor, input, EntityType.EMAIL) ?: error("Email не найден")
                 opener.open("mailto:$email")
                 ActionResult.Done("Открыл письмо: $email")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть почту", recoverable = true) }
@@ -169,13 +131,13 @@ class MapRealizer @Inject constructor(
     override val capabilityId = MapCapability.ID
 
     override suspend fun preview(input: PointObject): Preview? =
-        firstEntity(extractor, input, EntityType.ADDRESS)
+        com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS)
             ?.let { Preview("Открыть на карте", listOf(it), confirmLabel = "Открыть") }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val address = firstEntity(extractor, input, EntityType.ADDRESS) ?: error("Адрес не найден")
+                val address = com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS) ?: error("Адрес не найден")
                 opener.open("geo:0,0?q=" + URLEncoder.encode(address, "UTF-8"))
                 ActionResult.Done("Открыл на карте: $address")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть карту", recoverable = true) }
@@ -244,7 +206,7 @@ class EventRealizer @Inject constructor(
      */
     private fun eventDay(input: PointObject): java.time.LocalDate? {
         val today = java.time.LocalDate.now()
-        val hint = com.point.core.flow.dayOrderOf(entitySourceText(input))
+        val hint = com.point.core.flow.dayOrderOf(com.point.core.flow.entitySourceText(input))
         return com.point.core.flow.datesKnown(input.metadata)
             .mapNotNull { com.point.core.flow.humanDayOf(it, hint) }
             .filterNot { it.isBefore(today) }
@@ -252,6 +214,6 @@ class EventRealizer @Inject constructor(
     }
 
     private fun eventTitle(input: PointObject): String =
-        entitySourceText(input).lineSequence().map { it.trim() }
+        com.point.core.flow.entitySourceText(input).lineSequence().map { it.trim() }
             .firstOrNull { it.isNotBlank() }?.take(100) ?: "Событие"
 }

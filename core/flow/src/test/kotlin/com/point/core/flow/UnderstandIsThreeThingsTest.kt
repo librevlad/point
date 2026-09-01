@@ -1,4 +1,4 @@
-package com.point.executors
+package com.point.core.flow
 
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -14,7 +14,7 @@ import org.junit.Test
  */
 class UnderstandIsThreeThingsTest {
 
-    private val dir = File("src/main/kotlin/com/point/executors")
+    private val dir = File("src/main/kotlin/com/point/core/flow")
 
     @Test
     fun `у каждой части своё имя`() {

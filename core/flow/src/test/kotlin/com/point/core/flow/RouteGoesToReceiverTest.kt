@@ -1,14 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.Atom
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.Box
-import com.point.core.flow.FieldCandidate
-import com.point.core.flow.META_ENTITY_PLACE
-import com.point.core.flow.META_ENTITY_TRACK
-import com.point.core.flow.META_GRAPH_ROLE_PREFIX
-import com.point.core.flow.belongings
-import com.point.core.flow.findOnPage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

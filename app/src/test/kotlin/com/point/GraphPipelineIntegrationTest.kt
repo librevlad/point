@@ -1,5 +1,6 @@
 package com.point
 
+
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
@@ -76,7 +77,7 @@ import com.point.executors.LearningBubblePolicy
 import com.point.executors.ReadDocumentCapability
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
-import com.point.executors.UnderstandCapability
+import com.point.core.flow.UnderstandCapability
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

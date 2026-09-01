@@ -50,7 +50,7 @@ class JobReplyRealizer @Inject constructor(
         }
         return withContext(Dispatchers.IO) {
             runCatching {
-                val vacancy = entitySourceText(input).take(MAX_CHARS)
+                val vacancy = com.point.core.flow.entitySourceText(input).take(MAX_CHARS)
                 if (vacancy.isBlank()) return@withContext ActionResult.Failure("Нет текста вакансии", recoverable = true)
                 val about = amendment.takeIf { it.isNotBlank() }
                     ?.let { "\n\nО кандидате: $it" }.orEmpty()
@@ -58,7 +58,7 @@ class JobReplyRealizer @Inject constructor(
 
                 // Вакансия уже в запросе — снимок объявления модели не нужен (#1244).
                 ActionResult.Success(
-                    llm.run(textStandIn(input), JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy),
+                    llm.run(com.point.core.flow.textStandIn(input), JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy),
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось написать отклик", recoverable = true) }
         }

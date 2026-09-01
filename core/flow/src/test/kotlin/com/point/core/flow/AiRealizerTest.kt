@@ -1,8 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
-import com.point.core.flow.Realizer
-import com.point.core.flow.Resolver
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -22,15 +19,11 @@ class AiRealizerTest {
         override suspend fun run(obj: PointObject, prompt: String) = error("LLM must not be called")
     }
 
-    private val noResolver = object : dagger.Lazy<Resolver> {
-        override fun get(): Resolver = error("resolver must not be used")
-    }
+    private val noResolver: Lazy<Resolver> = lazy { error("resolver must not be used") }
 
-    private fun lazyOf(resolver: Resolver) = object : dagger.Lazy<Resolver> {
-        override fun get() = resolver
-    }
+    private fun lazyOf(resolver: Resolver): Lazy<Resolver> = lazyOf@ lazy { resolver }
 
-    private fun ai(llm: LlmClient = failingLlm, resolver: dagger.Lazy<Resolver> = noResolver) =
+    private fun ai(llm: LlmClient = failingLlm, resolver: Lazy<Resolver> = noResolver) =
         AiRealizer(llm, resolver)
 
     private val text = PointObject("id", "text/plain", ScratchRef("/tmp/x.txt"), ObjectState(ObjectKind.TEXT))
@@ -69,7 +62,7 @@ class AiRealizerTest {
         }
 
         val result = ai(resolver = lazyOf(resolver)).perform(text, amendment = "сделай ворд")
-        assertEquals(WordPlusCapability.ID, delegatedTo)
+        assertEquals(KnownCapabilities.WORD_PLUS, delegatedTo)
         assertEquals(docx, (result as ActionResult.Success).result)
     }
 

@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.TranslateRealizer
+
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.Atom

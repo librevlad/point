@@ -109,7 +109,7 @@
 2 desktop/src/test/kotlin/com/point/desktop/SmartActionsTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/UnifiedActionsTest.kt
 10 executors/src/test/kotlin/com/point/executors/ActionsSayTheirPriceTest.kt
-1 executors/src/test/kotlin/com/point/executors/AiChatResponderImplTest.kt
+1 core/flow/src/test/kotlin/com/point/core/flow/AiChatResponderImplTest.kt
 1 executors/src/test/kotlin/com/point/executors/CopyActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/CorrectValueActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/CutoutActionTest.kt
@@ -137,11 +137,11 @@
 7 executors/src/test/kotlin/com/point/executors/RemotePcActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/RenewPeriodRealizerTest.kt
 3 executors/src/test/kotlin/com/point/executors/ResultComesBackTest.kt
-1 executors/src/test/kotlin/com/point/executors/RoleNamePlausibilityTest.kt
+1 core/flow/src/test/kotlin/com/point/core/flow/RoleNamePlausibilityTest.kt
 1 executors/src/test/kotlin/com/point/executors/SaveAllActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/ScanActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/StaleReasonStaysSilentTest.kt
 4 executors/src/test/kotlin/com/point/executors/TranscribeActionTest.kt
-3 executors/src/test/kotlin/com/point/executors/TranslateActionTest.kt
-13 executors/src/test/kotlin/com/point/executors/UnderstandRealizerTest.kt
+3 core/flow/src/test/kotlin/com/point/core/flow/TranslateActionTest.kt
+13 core/flow/src/test/kotlin/com/point/core/flow/UnderstandRealizerTest.kt
 3 executors/src/test/kotlin/com/point/executors/WordPlusTest.kt

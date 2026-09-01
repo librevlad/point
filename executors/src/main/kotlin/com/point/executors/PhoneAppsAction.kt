@@ -80,5 +80,5 @@ class PhoneAppsRealizer @Inject constructor(
 
     private suspend fun phoneOf(input: PointObject): String? =
         input.metadata[META_ENTITY_PREFIX + "phone"]?.takeIf { it.isNotBlank() }
-            ?: firstEntity(extractor, input, EntityType.PHONE)
+            ?: com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE)
 }

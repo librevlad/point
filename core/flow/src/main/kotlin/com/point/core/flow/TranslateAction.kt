@@ -1,13 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.LlmClient
-import com.point.core.flow.Latency
-import com.point.core.flow.Realizer
-import com.point.core.flow.reportStage
-import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -16,7 +8,6 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 internal fun translateDefaultTarget(text: String): String {
     val cyrillic = text.count { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
@@ -24,7 +15,7 @@ internal fun translateDefaultTarget(text: String): String {
     return if (cyrillic > latin) "английский" else "русский"
 }
 
-class TranslateCapability @Inject constructor(
+class TranslateCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -52,7 +43,7 @@ class TranslateCapability @Inject constructor(
     companion object { val ID = CapabilityId("translate") }
 }
 
-class TranslateRealizer @Inject constructor(
+class TranslateRealizer(
     private val llm: LlmClient,
     private val known: com.point.core.flow.CurrentKnowledge,
 ) : Realizer {

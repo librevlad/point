@@ -1,10 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.CLASSIFIER_ROLES
-import com.point.core.flow.ClassifierRole
-import com.point.core.flow.LayoutElement
-import com.point.core.flow.MAX_FIELD_CANDIDATES
-import com.point.core.flow.answerLanguageRule
 
 /**
  * Спросить: что уходит модели и в каком виде (#835).

@@ -1,7 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
-import com.point.core.flow.parseFieldCandidates
 import org.junit.Test
 import org.junit.Assert.assertTrue
 
@@ -52,7 +50,7 @@ class PaidAnswerIsNotThrownAwayTest {
     fun `названное моделью значение доходит до знания`() {
         val lost = said.filter { (key, value) ->
             val judged = judgeFields(parseFieldCandidates("$key=$value").fields, layer = null, readText = page)
-            judged.won[com.point.core.flow.META_ENTITY_PREFIX + UNDERSTAND_CONTRACT_KEYS.getValue(key)] == null
+            judged.won[META_ENTITY_PREFIX + UNDERSTAND_CONTRACT_KEYS.getValue(key)] == null
         }.keys
 
         assertTrue("модель назвала, текст подтвердил, а знания нет: $lost", lost.isEmpty())

@@ -1,7 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.layoutOf
-import com.point.core.flow.layoutOfBlocks
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

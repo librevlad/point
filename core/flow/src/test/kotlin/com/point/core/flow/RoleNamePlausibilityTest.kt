@@ -1,7 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.LayoutElement
-import com.point.core.flow.plausiblePartyName
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,7 +51,7 @@ class RoleNamePlausibilityTest {
     @Test
     fun `голое время из ответа модели не становится датой`() {
         // #651: «11:09» из чата становилось «Нашёл дату».
-        val parsed = com.point.core.flow.parseFieldCandidates("DATE=11:09\nDATE=15.08.2026")
+        val parsed = parseFieldCandidates("DATE=11:09\nDATE=15.08.2026")
 
         val dates = parsed.fields["entity.date"]!!.map { it.text }
         org.junit.Assert.assertEquals(listOf("15.08.2026"), dates)
