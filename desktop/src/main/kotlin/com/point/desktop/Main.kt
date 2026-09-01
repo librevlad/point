@@ -134,7 +134,14 @@ fun main(args: Array<String>) {
     // Сетевая ли способность — знание живёт у самой способности (#855): исполнители
     // «Понять», «Перевести», «Дать ссылку» называют себя местными, хотя отдают байты наружу.
     var pcCloudReader: PcCloudOcrRealizer? = null
-    val capabilities = desktopCapabilities { accountStore.current() != null }
+    // «В Excel» — общее действие из :core:flow, у компьютера свои органы (#1369):
+    // файлы, кадр для модели, ключи из конфига — те же, что человек вписал на телефоне.
+    val excelStore = PcScratchStore(java.io.File(pointDir, "scratch"))
+    val excelKeys = com.point.core.flow.AiReadiness {
+        FilePcConfig(pointDir).load().aiKeys.mine.isNotEmpty()
+    }
+    val capabilities = desktopCapabilities { accountStore.current() != null } +
+        com.point.core.flow.ExcelCapability(excelKeys)
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
@@ -165,6 +172,24 @@ fun main(args: Array<String>) {
             },
             PcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
+            PcExcelRealizer(
+                com.point.core.flow.ExcelRealizer(
+                    providers = listOf(
+                        com.point.core.flow.UserKeyLlmClient(
+                            userKeys = PcUserKeys(pointDir),
+                            http = com.point.core.flow.UrlConnectionHttpJson(),
+                            store = excelStore,
+                            facts = PcAiFacts(),
+                            privacy = PcCloudPrivacy(pointDir),
+                            frames = PcModelFrames,
+                        ),
+                    ),
+                    writer = com.point.core.flow.OoxmlSpreadsheetWriter(excelStore),
+                    cropper = PcEvidenceCrops(),
+                    store = excelStore,
+                    known = com.point.core.flow.GraphKnowledge(excelStore, PcPdfTextKnowledge()),
+                ),
+            ),
         ),
         capabilityIsNetwork = { id -> capabilities.any { it.id == id && it.meta.network } },
     )
@@ -482,7 +507,14 @@ fun main(args: Array<String>) {
                             )
                         }
                     },
-                    onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
+                    onClipboardTaken = { brought ->
+                        val item = if (brought.isText) {
+                            inbox.addText(brought.text())
+                        } else {
+                            inbox.receive(brought.name, brought.mime, emptyMap(), brought.bytes.inputStream())
+                        }
+                        state.onReceived(item, ObjectSource.CLIPBOARD)
+                    },
                     onReceiveFile = { receiver.start { why -> state.say(why) } },
                     onCancelReceive = { receiver.cancel() },
                     onWipe = { inbox.wipe() },

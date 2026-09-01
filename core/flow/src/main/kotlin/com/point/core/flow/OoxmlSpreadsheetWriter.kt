@@ -1,19 +1,13 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.SheetPlan
-import com.point.core.flow.SpreadsheetWriter
-import com.point.core.flow.sheetPlanOf
-import com.point.core.flow.styleCell
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-import javax.inject.Inject
 
-class OoxmlSpreadsheetWriter @Inject constructor(
+class OoxmlSpreadsheetWriter(
     private val store: ObjectStore,
 ) : SpreadsheetWriter {
 

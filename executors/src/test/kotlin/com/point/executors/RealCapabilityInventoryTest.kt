@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ExcelCapability
 import com.point.core.flow.capabilities.PdfCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.LinkedPc
@@ -49,7 +50,7 @@ class RealCapabilityInventoryTest {
         CorrectValueCapability(),
         FixErrorsCapability(aiKeysReady), FixErrorsStrongerCapability(aiKeysReady),
         CutoutCapability(), EmailCapability(), EventCapability(),
-        ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(),
+        ExcelCapabilityOnPhone(aiKeysReady), ExtractAllCapability(), FindCapability(),
         JobReplyCapability(aiKeysReady), MapCapability(), MergePdfCapability(),
         OpenCapability(), OpenInCapability(), OpenUrlCapability(),
         PagesCapability(), PcCapability(pairedPc), PhoneAppsCapability(),

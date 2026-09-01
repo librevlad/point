@@ -775,7 +775,12 @@ class DesktopState(
     }
 
     fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> {
-        val mine = registry.all().map { it.id.value }.toSet()
+
+        // Своим считается не «умение с таким id есть», а «компьютер предложит его ЭТОМУ
+        // объекту сам» (#1369): «В Excel» здесь читает одиночную страницу, но не набор —
+        // и телефонная дверь для набора обязана остаться, иначе частичное умение
+        // компьютера молча съедает целое умение соседа.
+        val mine = registry.bubblesFor(item.obj.state).map { it.capabilityId.value }.toSet()
         return _phoneCaps.value.filter { action ->
 
             // Одно правило применимости на обе стороны (#1092): вид × признаки.

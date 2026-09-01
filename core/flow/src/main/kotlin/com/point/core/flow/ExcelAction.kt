@@ -1,75 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.ActionProgress
-import com.point.core.flow.AtomCodec
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.BlockAnswer
-import com.point.core.flow.BlockContent
-import com.point.core.flow.BlockRole
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.CellAnswer
-import com.point.core.flow.KEY_SETTINGS_CALL
-import com.point.core.flow.Consensus
-import com.point.core.flow.Cost
-import com.point.core.flow.CropEvidence
-import com.point.core.flow.CropPurpose
-import com.point.core.flow.DocScope
-import com.point.core.flow.DocumentLayout
-import com.point.core.flow.EvidenceCropper
-import com.point.core.flow.GroundedTable
-import com.point.core.flow.Latency
-import com.point.core.flow.LayoutAnswer
-import com.point.core.flow.LlmClient
-import com.point.core.flow.MAX_TABLE_PAGES
-import com.point.core.flow.META_OCR_ATOMS_REF
-import com.point.core.flow.META_READING_MODE
-import com.point.core.flow.META_TABLE_CHROME
-import com.point.core.flow.META_TABLE_COVERED
-import com.point.core.flow.META_TABLE_FLAGGED
-import com.point.core.flow.META_TABLE_GRID
-import com.point.core.flow.META_TABLE_HEADER
-import com.point.core.flow.META_TABLE_PAGES
-import com.point.core.flow.META_TABLE_PAGES_UNREAD
-import com.point.core.flow.META_TABLE_SCOPE
-import com.point.core.flow.META_TABLE_UNREAD
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.PAGE_KINDS
-import com.point.core.flow.refusalNeedsKey
-import com.point.core.flow.RECROP_TIMEOUT_MS
-import com.point.core.flow.ReadingMode
-import com.point.core.flow.Realizer
-import com.point.core.flow.RecropQuestion
-import com.point.core.flow.SheetPlan
-import com.point.core.flow.SpreadsheetWriter
-import com.point.core.flow.TABLE_READ_BUDGET_MS
-import com.point.core.flow.collectionOrder
-import com.point.core.flow.coveredClaim
-import com.point.core.flow.inCollectionOrder
-import com.point.core.flow.recropDisputed
-import com.point.core.flow.stitchSheets
-import com.point.core.flow.bareIndexId
-import com.point.core.flow.grid
-import com.point.core.flow.gridHeaderRows
-import com.point.core.flow.headerLabel
-import com.point.core.flow.layoutSheet
-import com.point.core.flow.literalLayout
-import com.point.core.flow.normConsensus
-import com.point.core.flow.promptIndex
-import com.point.core.flow.readingModeOf
-import com.point.core.flow.reportStage
-import com.point.core.flow.reconcile
-import com.point.core.flow.resolveLayout
-import com.point.core.flow.scopeLabel
-import com.point.core.flow.styleCell
-import com.point.core.flow.survivedHeaderRows
-import com.point.core.flow.chromeWords
-import com.point.core.flow.unfitTable
-import com.point.core.flow.unreadWords
-import com.point.core.flow.validateTable
-import com.point.core.flow.withGrid
-import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -91,10 +21,9 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
-class ExcelCapability @Inject constructor(
+class ExcelCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -117,7 +46,7 @@ class ExcelRealizer(
     private val writer: SpreadsheetWriter,
     private val cropper: EvidenceCropper,
     private val store: ObjectStore,
-    private val known: com.point.core.flow.CurrentKnowledge,
+    private val known: CurrentKnowledge,
     private val recropTimeoutMs: Long,
 
     /** Сколько времени заход читает страницы набора и когда он их читает (#1243). */
@@ -125,12 +54,12 @@ class ExcelRealizer(
     private val clock: () -> Long = System::currentTimeMillis,
 ) : Realizer {
 
-    @Inject constructor(
+    constructor(
         providers: List<@JvmSuppressWildcards LlmClient>,
         writer: SpreadsheetWriter,
         cropper: EvidenceCropper,
         store: ObjectStore,
-        known: com.point.core.flow.CurrentKnowledge,
+        known: CurrentKnowledge,
     ) : this(providers, writer, cropper, store, known, RECROP_TIMEOUT_MS)
 
     override val capabilityId = ExcelCapability.ID
@@ -702,7 +631,7 @@ internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
     // владельца, 2026-08-09): транспортная ошибка — не слова для человека. Признаки разбирает
     // общая сводка (#1237) — своя ветка здесь рассказывала человеку про ту же оборвавшуюся
     // связь отдельную историю, а до глагола этой дороги очередь не доходила никогда.
-    return com.point.core.flow.summariseCloudErrors(listOf(chosen), WHAT_FAILED)
+    return summariseCloudErrors(listOf(chosen), WHAT_FAILED)
 }
 
 internal fun parseTable(raw: String): List<List<String>> {

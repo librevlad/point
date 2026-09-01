@@ -251,7 +251,7 @@ internal fun CompactList(
         if (items.isEmpty() && remembered.isEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Point ждёт объект.\nПоделитесь с телефона, бросьте файл сюда или возьмите буфер.",
+                "Point ждёт объект.\nПоделитесь с телефона, бросьте файл сюда или нажмите Ctrl+V.",
                 style = PointType.small,
             )
         }
@@ -294,7 +294,8 @@ internal fun CompactList(
             "Взять из буфера",
             bubbleColor("copy"),
             icon = "copy",
-            note = "то, что вы скопировали, станет объектом",
+            // Область экрана, снятая Win+Shift+S, — тоже буфер (#1370): дверь берёт и её.
+            note = "Ctrl+V · скопированное — и снимок области экрана — станет объектом",
         ) { onTakeClipboard() }
         Station(
             "Снять экран целиком",
