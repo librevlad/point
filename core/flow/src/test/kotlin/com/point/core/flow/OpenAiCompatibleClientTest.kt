@@ -50,6 +50,30 @@ class OpenAiCompatibleClientTest {
     private fun client(http: HttpJson) = OpenAiCompatibleClient(http, store, provider)
 
     @Test
+    fun `отказ несёт слова сервиса, а не безликое «сервис отказал»`() = runTest {
+        // Живой прогон владельца 01.09.2026: за «Google Gemini: сервис отказал» прятался
+        // мёртвый ключ — сервис называл причину, а Point её съедал.
+        val body = """{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}"""
+        val thrown = runCatching { client(http(400, body)).run(textObj, "hi") }.exceptionOrNull()
+
+        assertTrue("слова сервиса дошли: ${thrown?.message}", thrown!!.message!!.contains("API key not valid"))
+    }
+
+    @Test
+    fun `отказ 400 без слов сервиса остаётся общим`() = runTest {
+        val thrown = runCatching { client(http(400, "мусор не-JSON")).run(textObj, "hi") }.exceptionOrNull()
+
+        assertTrue(thrown!!.message!!.contains("сервис отказал"))
+    }
+
+    @Test
+    fun `404 называет модель, которой сервис не знает`() = runTest {
+        val thrown = runCatching { client(http(404, "{}")).run(textObj, "hi") }.exceptionOrNull()
+
+        assertTrue("модель названа: ${thrown?.message}", thrown!!.message!!.contains("some-model"))
+    }
+
+    @Test
     fun `parses the assistant content on 200 and tags the source`() = runTest {
         val res = client(http(200, okBody)).run(textObj, "hi")
         assertEquals("openrouter", res.metadata["source"])

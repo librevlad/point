@@ -69,9 +69,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         what = "самый быстрый ответ из бесплатных; им же Point расшифровывает голосовые",
         keyUrl = "https://console.groq.com/keys",
         baseUrl = "https://api.groq.com/openai/v1",
-        models = "llama-3.3-70b-versatile,llama-3.1-8b-instant",
+        // Живой список спрошен у самого сервиса (GET /models, 01.09.2026): все llama
+        // сняты, глаз (vision) у Groq не осталось вовсе — он читает текст и речь.
+        models = "openai/gpt-oss-120b,qwen/qwen3.6-27b",
         freeNote = "бесплатный уровень с лимитом в минуту",
-        checkedAt = "08.2026",
+        checkedAt = "09.2026",
 
         // «Groq is not permitted to use Inputs or Outputs for training or fine-tuning»:
         // сказано в соглашении и не делится на бесплатный и платный уровни.
