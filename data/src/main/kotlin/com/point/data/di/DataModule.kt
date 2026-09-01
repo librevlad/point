@@ -114,7 +114,6 @@ import com.point.data.OcrInvestigationRealizer
 import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetReader
-import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.BuildConfig
 import com.point.core.flow.OpenAiCompatibleClient
 import com.point.core.flow.OpenAiProvider
@@ -202,8 +201,6 @@ abstract class DataModule {
     @Binds
     abstract fun pdfRasterizer(impl: PdfRendererRasterizer): PdfRasterizer
 
-    @Binds
-    abstract fun spreadsheetWriter(impl: OoxmlSpreadsheetWriter): SpreadsheetWriter
 
     @Binds
     abstract fun spreadsheetReader(impl: OoxmlSpreadsheetReader): SpreadsheetReader
@@ -414,6 +411,11 @@ abstract class DataModule {
          * @Provides, а не @Binds: класс тянет нативную библиотеку вывода, и @Binds роняет
          * разрешение типов во всём модуле KSP — тот же урок, что с OpenCV.
          */
+        // Писатель листа переехал в :core:flow — тот же файл пишет и компьютер (#1369).
+        @Provides
+        fun spreadsheetWriter(store: com.point.core.flow.ObjectStore): SpreadsheetWriter =
+            com.point.core.flow.OoxmlSpreadsheetWriter(store)
+
         @Provides
         @Singleton
         fun atomRecognizer(

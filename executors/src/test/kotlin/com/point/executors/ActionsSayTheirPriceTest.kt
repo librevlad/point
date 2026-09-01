@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ExcelCapability
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.KEY_NOTE

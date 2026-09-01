@@ -75,7 +75,7 @@ fun CompactApp(
     onFilesDropped: (List<File>) -> Unit = {},
     onTextDropped: (String) -> Unit = {},
     onImageDropped: (java.awt.image.BufferedImage) -> Unit = {},
-    onClipboardTaken: (String) -> Unit = onTextDropped,
+    onClipboardTaken: (com.point.core.flow.ClipboardPayload) -> Unit = { onTextDropped(it.text()) },
 
     /** Человек попросил окно не прятаться: пока просьба в силе, флайаут стоит. */
 
@@ -162,12 +162,12 @@ fun CompactApp(
         }
     }
 
+    // Буфер берётся целиком, а не только текстом (#1370): область экрана, снятая
+    // Win+Shift+S, лежит в нём картинкой, и до сих пор дверь отвечала ей «В буфере пусто» —
+    // хотя по просьбе телефона тот же буфер читался полностью (`readSystemClipboard`).
     val takeClipboard = {
-        val text = runCatching {
-            java.awt.Toolkit.getDefaultToolkit().systemClipboard
-                .getData(DataFlavor.stringFlavor) as? String
-        }.getOrNull()
-        if (text.isNullOrBlank()) state.say("В буфере пусто") else onClipboardTaken(text)
+        val brought = runCatching { com.point.desktop.readSystemClipboard() }.getOrNull()
+        if (com.point.desktop.worthTaking(brought)) onClipboardTaken(brought!!) else state.say("В буфере пусто")
     }
     val grabScreen = {
         val file = onGrabScreen?.invoke()
@@ -219,7 +219,10 @@ fun CompactApp(
             // курсор из поля, в которое человек печатает (#1025).
             .windowKeys { event ->
                 val down = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
-                val paste = down && event.isCtrlPressed && event.isShiftPressed &&
+                // Ctrl+V — как везде на компьютере; корень не слышит его, когда человек
+                // печатает в поле (#1025), поэтому Shift здесь не страховка, а лишний палец.
+                // Старое сочетание остаётся: рука, выучившая его, не должна промахнуться.
+                val paste = down && event.isCtrlPressed &&
                     event.key == androidx.compose.ui.input.key.Key.V
                 val grab = down && event.isCtrlPressed && event.isShiftPressed &&
                     event.key == androidx.compose.ui.input.key.Key.S

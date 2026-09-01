@@ -74,3 +74,11 @@ private class FileListTransferable(private val files: List<File>) : Transferable
     override fun getTransferData(flavor: DataFlavor): Any =
         if (isDataFlavorSupported(flavor)) files else throw UnsupportedFlavorException(flavor)
 }
+
+/**
+ * Стоит ли брать принесённое буфером (#1370): пустота и пустой текст — не объект.
+ * Картинка и файл — объект всегда: область экрана, снятая Win+Shift+S, лежит в буфере
+ * картинкой, и дверь обязана брать её, а не отвечать «В буфере пусто».
+ */
+fun worthTaking(payload: ClipboardPayload?): Boolean =
+    payload != null && !(payload.isText && payload.text().isBlank())

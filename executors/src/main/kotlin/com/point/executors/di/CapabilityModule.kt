@@ -55,8 +55,8 @@ import com.point.executors.BlurBgRealizer
 import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
-import com.point.executors.ExcelCapability
-import com.point.executors.ExcelRealizer
+import com.point.executors.ExcelCapabilityOnPhone
+import com.point.executors.ExcelRealizerOnPhone
 import com.point.executors.ExtractAllRealizer
 import com.point.executors.FindCapability
 import com.point.executors.FindRealizer
@@ -190,8 +190,8 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun speakCap(c: com.point.executors.SpeakCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapability): Capability
 
+    @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun wordCap(c: WordCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun readQrCap(c: ReadQrCapability): Capability
@@ -254,7 +254,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
     @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizer): Realizer
     @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizer): Realizer
-    @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
+    @Binds @IntoSet abstract fun excelR(r: ExcelRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
     @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer

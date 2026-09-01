@@ -47,7 +47,7 @@ fun aiTransformTarget(prompt: String): CapabilityId? {
     if (QUESTION_STARTERS.any { p.startsWith(it) }) return null
     return when {
         WORD_HINTS.any { it in p } -> WordPlusCapability.ID
-        EXCEL_HINTS.any { it in p } -> ExcelCapability.ID
+        EXCEL_HINTS.any { it in p } -> com.point.core.flow.ExcelCapability.ID
         PDF_HINTS.any { it in p } -> PdfCapability.ID
         else -> null
     }
