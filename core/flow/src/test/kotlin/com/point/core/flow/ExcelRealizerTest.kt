@@ -56,7 +56,8 @@ class ExcelRealizerTest {
     }
 
     private fun gridRows(): List<List<String>> =
-        lastRows!!.takeWhile { it.firstOrNull() != UNREAD_CAPTION }
+        lastPlan!!.unreadFrom?.let { from -> lastRows!!.take(from).dropLastWhile { it == listOf("") } }
+            ?: lastRows!!
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))
 

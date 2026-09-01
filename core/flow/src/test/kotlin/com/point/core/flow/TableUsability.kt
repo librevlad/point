@@ -74,12 +74,10 @@ fun looksNoisy(cell: String): Boolean {
     return text.split(WORDS).any(::mixedScript)
 }
 
-fun scoreUsable(frame: String, sheet: List<List<String>>): UsabilityScore {
-    val caption = sheet.indexOfFirst { row ->
-        row.firstOrNull()?.trimStart()?.startsWith(UNREAD_CAPTION) == true
-    }
-    val document = if (caption < 0) sheet else sheet.take(caption)
-    val dump = if (caption < 0) emptyList() else sheet.drop(caption + 1)
+fun scoreUsable(frame: String, sheet: List<List<String>>, unreadFrom: Int? = null): UsabilityScore {
+    // Границу хвоста несёт план листа, а не служебная строка в нём (#1368).
+    val document = if (unreadFrom == null) sheet else sheet.take(unreadFrom)
+    val dump = if (unreadFrom == null) emptyList() else sheet.drop(unreadFrom)
 
     fun cellsOf(rows: List<List<String>>) = rows.flatten().filter { it.isNotBlank() }
     val documentCells = cellsOf(document)

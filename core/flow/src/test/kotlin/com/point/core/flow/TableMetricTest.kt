@@ -185,7 +185,6 @@ class TableMetricTest {
                 listOf(listOf("Клиент", "Терминал Пр. 117")) +
                 grid +
                 listOf(listOf("Кладовщик не имеет права отпускать товар")) +
-                listOf(listOf(UNREAD_CAPTION)) +
                 listOf(listOf("‚ Be:"), listOf("MPs"), listOf("си")),
         )
 
@@ -198,10 +197,12 @@ class TableMetricTest {
 
     @Test
     fun `хвост непрочитанного в счёт таблицы не идёт`() {
+        // Служебной строки-маркера в листе больше нет (#1368): узкие строки хвоста
+        // отсеивает мерка ширины — как и остальной документ вокруг сетки.
         val score = scoreTable(
             ledger(2, named = listOf(row("11004", 2 to "120"), row("11006", 2 to "40"))),
             listOf(head, listOf("11004", "Гречка", "120"), listOf("11006", "Рис", "40")) +
-                listOf(listOf(UNREAD_CAPTION), listOf("Кладовщик", "не", "имеет")),
+                listOf(listOf("Кладовщик не имеет права"), listOf("підпис печатка")),
         )
 
         assertEquals(2, score.tableRows)

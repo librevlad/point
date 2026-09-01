@@ -142,7 +142,9 @@ class ExcelLayoutTest {
         val result = realizer(onlyTable).perform(invoice())
 
         val rows = plan!!.rows
-        assertEquals(UNREAD_CAPTION, rows[2].single())
+        // #1368: хвост отделён пустой строкой и границей плана, а не подписью Point.
+        assertEquals(listOf(""), rows[2])
+        assertEquals(3, plan!!.unreadFrom)
         assertEquals(
             listOf(listOf("Рахунок №7"), listOf("Клієнт Термінал"), listOf("Відпуск заборонено")),
             rows.drop(3),

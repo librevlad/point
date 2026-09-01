@@ -161,11 +161,10 @@ private fun tableRowsOf(
     keys: Set<String>,
     keyOf: (List<String>) -> String?,
 ): List<List<String>> {
-    val cut = sheet.takeWhile { row ->
-        row.firstOrNull()?.trimStart()?.startsWith(UNREAD_CAPTION) != true
-    }
-    val narrowest = cut.filter { keyOf(it) in keys }.minOfOrNull { it.size } ?: return cut
-    return cut.filter { it.size >= narrowest }
+    // Хвост непрочитанного больше не помечен служебной строкой (#1368): узкие строки
+    // хвоста отсеивает мерка ширины — строка таблицы не бывает уже строк с ключами.
+    val narrowest = sheet.filter { keyOf(it) in keys }.minOfOrNull { it.size } ?: return sheet
+    return sheet.filter { it.size >= narrowest }
 }
 
 fun parseTableExpectation(frame: String, text: String): TableExpectation {

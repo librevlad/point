@@ -75,7 +75,9 @@ class SheetPlanTest {
     }
 
     @Test
-    fun `непрочитанное едет на лист со своей подписью`() {
+    fun `непрочитанное едет на лист без слов Point — пустая строка и граница в плане`() {
+        // #1368: подпись «Непрочитанное — …» уезжала внутрь файла, который человек отдаст
+        // дальше. Слова страницы остаются, граница хвоста — знание плана, а не текст.
         val plan = layoutSheet(
             layout(
                 block(BlockRole.TABLE, grid = table, headerRows = 1),
@@ -83,8 +85,26 @@ class SheetPlanTest {
             ),
         )
 
-        assertEquals(UNREAD_CAPTION, plan.rows[2].single())
+        assertEquals(listOf(""), plan.rows[2])
         assertEquals(listOf("Клієнт Термінал"), plan.rows[3])
+        assertEquals(3, plan.unreadFrom)
+        assertFalse(
+            "служебных слов Point в листе не бывает",
+            plan.rows.flatten().any { it.contains("Непрочитанное") },
+        )
+    }
+
+    @Test
+    fun `непрочитанное вперемешку с документом границей не объявляется`() {
+        val plan = layoutSheet(
+            layout(
+                block(BlockRole.UNREAD, grid = GroundedTable(listOf(listOf("шапка бланка")))),
+                block(BlockRole.TABLE, grid = table, headerRows = 1),
+            ),
+        )
+
+        assertEquals("после хвоста идёт документ — одна граница была бы враньём", null, plan.unreadFrom)
+        assertEquals(listOf("шапка бланка"), plan.rows[0])
     }
 
     @Test
