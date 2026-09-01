@@ -1,6 +1,9 @@
 package com.point.desktop.ui
 
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,6 +16,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
 
 /**
@@ -47,5 +52,18 @@ fun Modifier.windowKeys(onKey: (KeyEvent) -> Boolean): Modifier {
         .onFocusChanged { held = it.hasFocus }
         .focusRequester(root)
         .focusable()
+
+        // Клик мышью не должен хоронить клавиши (#1372, живой прогон 01.09.2026: после
+        // клика по списку Esc и Ctrl+V умирали до смены окна ОС — кликнутая строка
+        // исчезала вместе с фокусом, и подсказка «нажмите Ctrl+V» ломалась первым же
+        // кликом). Жест дожидается конца в финальной фазе — детям он не мешает, — и
+        // если после него фокус внутри окна никто не держит, корень берёт его назад.
+        .pointerInput(root) {
+            awaitEachGesture {
+                awaitFirstDown(pass = PointerEventPass.Final)
+                waitForUpOrCancellation(pass = PointerEventPass.Final)
+                if (!held) root.requestFocus()
+            }
+        }
         .onPreviewKeyEvent(onKey)
 }
