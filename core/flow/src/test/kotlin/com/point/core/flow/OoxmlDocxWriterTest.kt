@@ -1,13 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.Box
-import com.point.core.flow.CropEvidence
-import com.point.core.flow.DocBlock
-import com.point.core.flow.DocStyle
-import com.point.core.flow.EvidenceCropper
-import com.point.core.flow.EvidenceImage
-import com.point.core.flow.MAX_EVIDENCE_CROPS
-import com.point.core.flow.ObjectStore
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef

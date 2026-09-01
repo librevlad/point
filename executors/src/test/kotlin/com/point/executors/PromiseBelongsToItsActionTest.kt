@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.FixErrorsCapability
+import com.point.core.flow.FixErrorsStrongerCapability
+
 import com.point.core.flow.UnderstandCapability
 
 import com.point.core.flow.yieldLabel

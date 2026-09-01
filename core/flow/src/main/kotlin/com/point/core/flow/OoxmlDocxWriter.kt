@@ -1,21 +1,13 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.DocBlock
-import com.point.core.flow.DocStyle
-import com.point.core.flow.DocxWriter
-import com.point.core.flow.EvidenceCropper
-import com.point.core.flow.EvidenceImage
-import com.point.core.flow.MAX_EVIDENCE_CROPS
-import com.point.core.flow.ObjectStore
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-import javax.inject.Inject
 
-class OoxmlDocxWriter @Inject constructor(
+class OoxmlDocxWriter(
     private val store: ObjectStore,
     private val cropper: EvidenceCropper,
 ) : DocxWriter {

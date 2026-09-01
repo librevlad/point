@@ -1,15 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.FIX_FACTS_NOT_APPLIED
-import com.point.core.flow.FIX_TEXT_NOT_APPLIED
-import com.point.core.flow.GraphState
-import com.point.core.flow.LlmClient
-import com.point.core.flow.META_ALT_SUFFIX
-import com.point.core.flow.META_ENTITY_PREFIX
-import com.point.core.flow.META_GRAPH_ROLE_PREFIX
-import com.point.core.flow.META_ENTITY_TRACK
-import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -203,7 +193,7 @@ class FixErrorsRealizerTest {
     @Test
     fun `подтверждённое человеком в модель не уходит`() = runTest {
         val confirmed = photo(
-            mapOf(sender to "Паринкн", sender + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.HUMAN.wire),
+            mapOf(sender to "Паринкн", sender + META_SOURCE_SUFFIX to Provenance.HUMAN.wire),
         )
 
         val result = fixer("1 = Паринкін").perform(confirmed, null)
@@ -235,7 +225,7 @@ class FixErrorsRealizerTest {
         listOf(FixErrorsCapability(ready).meta, FixErrorsStrongerCapability(ready).meta).forEach { meta ->
             assertTrue(meta.network)
             assertTrue(meta.auth)
-            assertEquals(com.point.core.flow.Cost.PAID, meta.cost)
+            assertEquals(Cost.PAID, meta.cost)
         }
     }
 

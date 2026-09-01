@@ -1,5 +1,10 @@
 package com.point.executors
 
+import com.point.core.flow.JobReplyCapability
+import com.point.core.flow.ShoppingListCapability
+import com.point.core.flow.WordCapability
+import com.point.core.flow.WordPlusCapability
+
 import com.point.core.flow.AiCapability
 import com.point.core.flow.TranslateCapability
 import com.point.core.flow.UnderstandCapability

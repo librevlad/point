@@ -111,7 +111,6 @@ import com.point.data.MlKitBackgroundRemover
 import com.point.data.MlKitQrReader
 import com.point.data.OcrInvestigation
 import com.point.data.OcrInvestigationRealizer
-import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetReader
 import com.point.data.BuildConfig
@@ -205,8 +204,6 @@ abstract class DataModule {
     @Binds
     abstract fun spreadsheetReader(impl: OoxmlSpreadsheetReader): SpreadsheetReader
 
-    @Binds
-    abstract fun docxWriter(impl: OoxmlDocxWriter): DocxWriter
 
     @Binds
     abstract fun evidenceCropper(impl: BitmapEvidenceCropper): EvidenceCropper
@@ -415,6 +412,13 @@ abstract class DataModule {
         @Provides
         fun spreadsheetWriter(store: com.point.core.flow.ObjectStore): SpreadsheetWriter =
             com.point.core.flow.OoxmlSpreadsheetWriter(store)
+
+        // Писатель Word переехал туда же (#1379): один документ на телефон и компьютер.
+        @Provides
+        fun docxWriter(
+            store: com.point.core.flow.ObjectStore,
+            cropper: com.point.core.flow.EvidenceCropper,
+        ): DocxWriter = com.point.core.flow.OoxmlDocxWriter(store, cropper)
 
         @Provides
         @Singleton

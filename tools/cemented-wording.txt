@@ -121,7 +121,7 @@
 1 executors/src/test/kotlin/com/point/executors/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
 6 executors/src/test/kotlin/com/point/executors/FindActionTest.kt
-3 executors/src/test/kotlin/com/point/executors/FixErrorsRealizerTest.kt
+3 core/flow/src/test/kotlin/com/point/core/flow/FixErrorsRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/HumanSendNameTest.kt
 1 executors/src/test/kotlin/com/point/executors/LongWorkSaysWhatItDoesTest.kt
 1 executors/src/test/kotlin/com/point/executors/OfficeActionTest.kt
@@ -144,4 +144,4 @@
 4 executors/src/test/kotlin/com/point/executors/TranscribeActionTest.kt
 3 core/flow/src/test/kotlin/com/point/core/flow/TranslateActionTest.kt
 13 core/flow/src/test/kotlin/com/point/core/flow/UnderstandRealizerTest.kt
-3 executors/src/test/kotlin/com/point/executors/WordPlusTest.kt
+3 core/flow/src/test/kotlin/com/point/core/flow/WordPlusTest.kt

@@ -1,6 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind

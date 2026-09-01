@@ -15,17 +15,7 @@ import com.point.executors.PcCapability
 import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
 import com.point.executors.remotePcCapabilities
-import com.point.executors.WordPlusCapability
-import com.point.executors.WordPlusRealizer
 import com.point.executors.remotePcRealizers
-import com.point.executors.JobReplyCapability
-import com.point.executors.JobReplyRealizer
-import com.point.executors.FixErrorsCapability
-import com.point.executors.FixErrorsRealizer
-import com.point.executors.FixErrorsStrongerCapability
-import com.point.executors.FixErrorsStrongerRealizer
-import com.point.executors.ShoppingListCapability
-import com.point.executors.ShoppingListRealizer
 import com.point.executors.CallCapability
 import com.point.executors.CallRealizer
 import com.point.executors.EmailCapability
@@ -51,6 +41,18 @@ import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.ExcelCapabilityOnPhone
+import com.point.executors.WordCapabilityOnPhone
+import com.point.executors.WordRealizerOnPhone
+import com.point.executors.WordPlusCapabilityOnPhone
+import com.point.executors.WordPlusRealizerOnPhone
+import com.point.executors.FixErrorsCapabilityOnPhone
+import com.point.executors.FixErrorsStrongerCapabilityOnPhone
+import com.point.executors.FixErrorsRealizerOnPhone
+import com.point.executors.FixErrorsStrongerRealizerOnPhone
+import com.point.executors.ShoppingListCapabilityOnPhone
+import com.point.executors.ShoppingListRealizerOnPhone
+import com.point.executors.JobReplyCapabilityOnPhone
+import com.point.executors.JobReplyRealizerOnPhone
 import com.point.executors.AiCapabilityOnPhone
 import com.point.executors.AiRealizerOnPhone
 import com.point.executors.TranslateCapabilityOnPhone
@@ -114,8 +116,6 @@ import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
 import com.point.executors.TranscribeCapability
 import com.point.executors.TranscribeRealizer
-import com.point.executors.WordCapability
-import com.point.executors.WordRealizer
 import com.point.executors.SaveContactCapability
 import com.point.executors.SaveContactRealizer
 import com.point.executors.VCardCapability
@@ -192,7 +192,7 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun wordCap(c: WordCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun wordCap(c: WordCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun readQrCap(c: ReadQrCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapability): Capability
@@ -206,14 +206,14 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun aiCap(c: AiCapabilityOnPhone): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun shoppingListCap(c: ShoppingListCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun shoppingListCap(c: ShoppingListCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun understandCap(c: UnderstandCapabilityOnPhone): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsCap(c: FixErrorsCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsStrongerCap(c: FixErrorsStrongerCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun wordPlusCap(c: WordPlusCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun jobReplyCap(c: JobReplyCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsCap(c: FixErrorsCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsStrongerCap(c: FixErrorsStrongerCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun wordPlusCap(c: WordPlusCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun jobReplyCap(c: JobReplyCapabilityOnPhone): Capability
 
     // «Очистить метаданные» — такое же своё умение, как остальные (#1256): без квалификатора
     // оно не попадало в набор для сверки с компьютером, и в день, когда компьютер объявит
@@ -255,7 +255,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
-    @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer
+    @Binds @IntoSet abstract fun wordR(r: WordRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun readQrR(r: ReadQrRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
@@ -274,14 +274,14 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun externalEyeCloudOcrR(r: ExternalEyeCloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizerOnPhone): Realizer
-    @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
+    @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun phoneAppsR(r: PhoneAppsRealizer): Realizer
 
-    @Binds @IntoSet abstract fun fixErrorsR(r: FixErrorsRealizer): Realizer
-    @Binds @IntoSet abstract fun fixErrorsStrongerR(r: FixErrorsStrongerRealizer): Realizer
-    @Binds @IntoSet abstract fun wordPlusR(r: WordPlusRealizer): Realizer
-    @Binds @IntoSet abstract fun jobReplyR(r: JobReplyRealizer): Realizer
+    @Binds @IntoSet abstract fun fixErrorsR(r: FixErrorsRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun fixErrorsStrongerR(r: FixErrorsStrongerRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun wordPlusR(r: WordPlusRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun jobReplyR(r: JobReplyRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer
 
     companion object {

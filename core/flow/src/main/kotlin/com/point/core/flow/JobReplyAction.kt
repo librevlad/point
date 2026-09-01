@@ -1,21 +1,11 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Cost
-import com.point.core.flow.Latency
-import com.point.core.flow.LlmClient
-import com.point.core.flow.Realizer
-import com.point.core.flow.reportStage
-import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -23,7 +13,7 @@ internal const val JOB_REPLY_PROMPT =
     "Напиши короткий отклик на эту вакансию: 3-5 предложений, по-деловому и без воды, " +
         "на языке вакансии. Только текст отклика, без пояснений."
 
-class JobReplyCapability @Inject constructor(
+class JobReplyCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -36,7 +26,7 @@ class JobReplyCapability @Inject constructor(
     companion object { val ID = CapabilityId("job-reply") }
 }
 
-class JobReplyRealizer @Inject constructor(
+class JobReplyRealizer(
     private val llm: LlmClient,
 ) : Realizer {
     override val capabilityId = JobReplyCapability.ID
@@ -50,7 +40,7 @@ class JobReplyRealizer @Inject constructor(
         }
         return withContext(Dispatchers.IO) {
             runCatching {
-                val vacancy = com.point.core.flow.entitySourceText(input).take(MAX_CHARS)
+                val vacancy = entitySourceText(input).take(MAX_CHARS)
                 if (vacancy.isBlank()) return@withContext ActionResult.Failure("Нет текста вакансии", recoverable = true)
                 val about = amendment.takeIf { it.isNotBlank() }
                     ?.let { "\n\nО кандидате: $it" }.orEmpty()
@@ -58,7 +48,7 @@ class JobReplyRealizer @Inject constructor(
 
                 // Вакансия уже в запросе — снимок объявления модели не нужен (#1244).
                 ActionResult.Success(
-                    llm.run(com.point.core.flow.textStandIn(input), JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy),
+                    llm.run(textStandIn(input), JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy),
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось написать отклик", recoverable = true) }
         }

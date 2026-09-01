@@ -1,26 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.AtomRecognizer
-import com.point.core.flow.Capability
-import com.point.core.flow.labelNeedingKey
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Cost
-import com.point.core.flow.DocBlock
-import com.point.core.flow.uncertainInExport
-import com.point.core.flow.withCropEvidence
-import com.point.core.flow.withReadingNote
-import com.point.core.flow.readingModeOf
-import com.point.core.flow.readingModeOfFrame
-import com.point.core.flow.ReadingMode
-import com.point.core.flow.DocStyle
-import com.point.core.flow.DocxWriter
-import com.point.core.flow.Latency
-import com.point.core.flow.LlmClient
-import com.point.core.flow.Realizer
-import com.point.core.flow.TextRecognizer
-import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -29,7 +8,6 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import java.io.File
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -72,7 +50,7 @@ internal fun parseDocBlocks(
         if (text.isEmpty()) null else DocBlock(text, style, uncertainInExport(text, mode))
     }.toList()
 
-class WordPlusCapability @Inject constructor(
+class WordPlusCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -89,12 +67,12 @@ class WordPlusCapability @Inject constructor(
         "документ Word · ${if (state.kind == ObjectKind.IMAGE) "снимок" else "текст"} уйдёт в сервис",
     )
 
-    companion object { val ID = com.point.core.flow.KnownCapabilities.WORD_PLUS }
+    companion object { val ID = KnownCapabilities.WORD_PLUS }
 }
 
-class WordPlusRealizer @Inject constructor(
+class WordPlusRealizer(
     private val llm: LlmClient,
-    private val known: com.point.core.flow.CurrentKnowledge,
+    private val known: CurrentKnowledge,
     private val docx: DocxWriter,
     private val recognizer: TextRecognizer,
 ) : Realizer {
@@ -132,7 +110,7 @@ class WordPlusRealizer @Inject constructor(
                 reportStage(if (modelReads) "Читаю страницу" else "Размечаю документ")
                 val answer =
                     if (modelReads) llm.run(input, WORD_PLUS_HANDWRITING_PROMPT)
-                    else llm.run(com.point.core.flow.textStandIn(input), WORD_PLUS_PROMPT + text)
+                    else llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)
                 val read = parseDocBlocks(File(answer.uri.value).readText(), mode)
                 if (read.isEmpty()) {
                     ActionResult.Failure(
