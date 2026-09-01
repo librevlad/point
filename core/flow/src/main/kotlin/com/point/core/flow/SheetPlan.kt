@@ -6,6 +6,19 @@ data class SheetPlan(
     val headerRows: Set<Int>,
 
     val candidates: Map<Pair<Int, Int>, List<String>> = emptyMap(),
+
+    /**
+     * С какой строки идут слова, не попавшие ни в одну часть документа (#1368).
+     *
+     * Это знание плана, а не текст: прежде границу объявляла служебная строка
+     * «Непрочитанное — …» прямо в листе, и Point рассказывал о своём чтении внутри
+     * документа, который человек отдаст дальше. В лист не попадает ничего, чего не было
+     * на странице; границу хвоста несёт план — для писателя и измерителей.
+     *
+     * `null` — хвоста нет, либо непрочитанное перемешано с документом и назвать одну
+     * границу значило бы соврать.
+     */
+    val unreadFrom: Int? = null,
 )
 
 fun sheetPlanOf(
@@ -13,19 +26,23 @@ fun sheetPlanOf(
     candidates: Map<Pair<Int, Int>, List<String>> = emptyMap(),
 ): SheetPlan = SheetPlan(rows, if (rows.isEmpty()) emptySet() else setOf(0), candidates)
 
-const val UNREAD_CAPTION = "Непрочитанное — эти слова есть на странице, но не попали ни в одну часть документа"
-
 fun layoutSheet(layout: DocumentLayout, mode: ReadingMode = ReadingMode.UNKNOWN): SheetPlan {
     val rows = ArrayList<List<String>>()
     val headerRows = LinkedHashSet<Int>()
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
-    var captioned = false
+    var unreadFrom: Int? = null
+    var mixed = false
     for (block in layout.blocks) {
         if (block.role == BlockRole.CHROME) continue
-        if (block.role == BlockRole.UNREAD && !captioned) {
-            captioned = true
-            rows += listOf(UNREAD_CAPTION)
+        if (block.role == BlockRole.UNREAD && unreadFrom == null) {
+
+            // Слова страницы, не попавшие ни в одну часть документа, остаются словами
+            // страницы — но отделяются пустой строкой, а не подписью Point (#1368):
+            // служебных слов в файле человека не бывает.
+            if (rows.isNotEmpty()) rows += listOf("")
+            unreadFrom = rows.size
         }
+        if (block.role != BlockRole.UNREAD && unreadFrom != null) mixed = true
         val grid = block.grid
         if (grid != null) {
             val from = rows.size
@@ -43,7 +60,7 @@ fun layoutSheet(layout: DocumentLayout, mode: ReadingMode = ReadingMode.UNKNOWN)
             if (line.any { it.isNotEmpty() }) rows += line
         }
     }
-    return SheetPlan(rows, headerRows, candidates)
+    return SheetPlan(rows, headerRows, candidates, if (mixed) null else unreadFrom)
 }
 
 /**
@@ -53,6 +70,9 @@ fun layoutSheet(layout: DocumentLayout, mode: ReadingMode = ReadingMode.UNKNOWN)
  * заголовков и спорных ячеек сдвигаются на длину предыдущих страниц. Шапка, которую
  * следующая страница повторяет слово в слово за первой прочитанной, второй раз не кладётся —
  * это та же таблица, а не новая. Другая шапка остаётся: значит, на странице другая таблица.
+ *
+ * Хвосты непрочитанного у страниц свои и остаются на своих местах; одной границы у сшитого
+ * листа нет (#1368) — назвать её значило бы объявить середину документа свалкой.
  */
 fun stitchSheets(pages: List<SheetPlan>): SheetPlan {
     if (pages.size == 1) return pages.single()
@@ -66,6 +86,7 @@ fun stitchSheets(pages: List<SheetPlan>): SheetPlan {
         ?.let { lead -> lead.headerRows.mapNotNull { lead.rows.getOrNull(it) }.map(::rowKey) }
         .orEmpty()
         .toSet()
+    var tail: Int? = null
     pages.forEachIndexed { p, page ->
         val placed = IntArray(page.rows.size) { -1 }
         page.rows.forEachIndexed { r, row ->
@@ -79,8 +100,13 @@ fun stitchSheets(pages: List<SheetPlan>): SheetPlan {
             val at = placed.getOrElse(cell.first) { -1 }
             if (at >= 0) candidates[at to cell.second] = readings
         }
+
+        // «Отсюда и до конца — непрочитанное» правдиво только у хвоста последней страницы.
+        if (page === pages.last()) {
+            tail = page.unreadFrom?.let { placed.getOrNull(it) }?.takeIf { it >= 0 }
+        }
     }
-    return SheetPlan(rows, headerRows, candidates)
+    return SheetPlan(rows, headerRows, candidates, tail)
 }
 
 fun coveredClaim(layout: DocumentLayout, plan: SheetPlan, mode: ReadingMode): Boolean? = when {

@@ -9,8 +9,6 @@ import java.io.File
 
 class TableUsabilityTest {
 
-    private val caption = listOf(UNREAD_CAPTION)
-
     @Test
     fun `чистая таблица годна целиком`() {
         val score = scoreUsable(
@@ -32,19 +30,20 @@ class TableUsabilityTest {
 
     @Test
     fun `непрочитанное не годно и считается отдельно от документа`() {
+        // Границу хвоста несёт план листа, а не служебная строка в нём (#1368).
         val score = scoreUsable(
             "свалка",
             listOf(
                 listOf("Артикул", "Кол-во"),
                 listOf("11004", "120"),
-                caption,
                 listOf("Вийськове"),
                 listOf("горович"),
                 listOf("молодший"),
             ),
+            unreadFrom = 2,
         )
 
-        assertEquals("подпись в счёт ячеек не идёт", 4, score.documentCells)
+        assertEquals(4, score.documentCells)
         assertEquals(3, score.dumpCells)
         assertEquals(3, score.dumpRows)
         assertEquals(4.0 / 7.0, score.usableShare!!, 1e-9)
@@ -63,10 +62,11 @@ class TableUsabilityTest {
         val document = List(cells - unreadAtProductLimit) { listOf("значение") }
         val dump = List(unreadAtProductLimit) { listOf("непрочитанное") }
 
-        val atLimit = scoreUsable("на пороге", document + listOf(caption) + dump)
+        val atLimit = scoreUsable("на пороге", document + dump, unreadFrom = document.size)
         val below = scoreUsable(
             "ниже порога",
-            document + listOf(listOf("значение")) + listOf(caption) + dump.drop(1),
+            document + listOf(listOf("значение")) + dump.drop(1),
+            unreadFrom = document.size + 1,
         )
 
         assertTrue("продукт от такого листа отказывается, а измеритель его считает годным", Unfitness.DUMP in atLimit.unfit)
