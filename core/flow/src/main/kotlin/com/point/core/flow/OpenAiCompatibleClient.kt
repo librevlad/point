@@ -104,7 +104,7 @@ class OpenAiCompatibleClient(
                 requestBody(obj, promptFor(obj, prompt)),
             )
             if (res.code !in 200..299) {
-                throw com.point.core.flow.AiServiceRefusal(provider.id, res.code, refusal(res.code))
+                throw com.point.core.flow.AiServiceRefusal(provider.id, res.code, refusal(res.code, res.body))
             }
             val answer = answerOnly(parseAnswer(res.body))
 
@@ -160,15 +160,24 @@ class OpenAiCompatibleClient(
         return content.ifBlank { error("${provider.label}: пустой текст") }
     }
 
-    private fun refusal(code: Int): String = when (code) {
+    private fun refusal(code: Int, body: String = ""): String = when (code) {
         401, 403 -> "${provider.label}: ${com.point.core.flow.KEY_NOT_ACCEPTED} — $AI_KEY_HINT в настройках"
         402 -> "${provider.label}: сервис просит оплату — у этого ключа нет бесплатного доступа"
 
-        404 -> "${provider.label}: сервис не знает такой модели"
+        404 -> "${provider.label}: сервис не знает модели ${provider.model}"
         429 -> "${provider.label}: $FREE_LIMIT_SPENT — попробуйте завтра"
         in 500..599 -> "${provider.label}: сервис сейчас не отвечает"
-        else -> "${provider.label}: сервис отказал"
+
+        // Безликое «сервис отказал» уже стоило раскопок (живой прогон владельца 01.09.2026):
+        // сервис называет причину сам — его слова и выходят человеку.
+        else -> "${provider.label}: ${serviceWords(body) ?: "сервис отказал"}"
     }
+
+    /** Причина словами сервиса: OpenAI-совместимые кладут её в error.message. */
+    private fun serviceWords(body: String): String? = runCatching {
+        JSONObject(body).getJSONObject("error").getString("message")
+            .takeIf { it.isNotBlank() }?.take(160)
+    }.getOrNull()
 
     private fun isImage(obj: PointObject): Boolean = obj.mime.startsWith("image/")
 
