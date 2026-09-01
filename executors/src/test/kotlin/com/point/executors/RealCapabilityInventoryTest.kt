@@ -47,7 +47,7 @@ class RealCapabilityInventoryTest {
 
     private val builtIn: List<Capability> = shared.toList() + listOf(
         AiCapabilityOnPhone(aiKeysReady), BlurBgCapability(),
-        CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
+        CallCapability(), CloudOcrCapabilityOnPhone(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),
         FixErrorsCapabilityOnPhone(aiKeysReady), FixErrorsStrongerCapabilityOnPhone(aiKeysReady),
         CutoutCapability(), EmailCapability(), EventCapability(),

@@ -41,6 +41,12 @@ import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.ExcelCapabilityOnPhone
+import com.point.executors.DeviceOcrRealizerOnPhone
+import com.point.executors.CloudOcrCapabilityOnPhone
+import com.point.executors.ExternalEyeOcrRealizerOnPhone
+import com.point.executors.CloudOcrRealizerOnPhone
+import com.point.executors.ExternalEyeCloudOcrRealizerOnPhone
+import com.point.executors.CloudOcrDirectRealizerOnPhone
 import com.point.executors.WordCapabilityOnPhone
 import com.point.executors.WordRealizerOnPhone
 import com.point.executors.WordPlusCapabilityOnPhone
@@ -67,18 +73,12 @@ import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
-import com.point.executors.CloudOcrCapability
-import com.point.executors.CloudOcrDirectRealizer
-import com.point.executors.ExternalEyeCloudOcrRealizer
-import com.point.executors.ExternalEyeOcrRealizer
-import com.point.executors.CloudOcrRealizer
 import com.point.executors.CopyCapability
 import com.point.executors.CopyCardCapability
 import com.point.executors.CopyCardRealizer
 import com.point.executors.CopyRealizer
 import com.point.executors.CutoutCapability
 import com.point.executors.CutoutRealizer
-import com.point.executors.DeviceOcrRealizer
 import com.point.executors.OfficeRealizer
 import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
@@ -204,7 +204,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun hideAreaCap(c: HideAreaCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun aiCap(c: AiCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shoppingListCap(c: ShoppingListCapabilityOnPhone): Capability
 
@@ -267,12 +267,12 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun hideAreaR(r: HideAreaRealizer): Realizer
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
 
-    @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
-    @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
+    @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizerOnPhone): Realizer
 
-    @Binds @IntoSet abstract fun externalEyeOcrR(r: ExternalEyeOcrRealizer): Realizer
-    @Binds @IntoSet abstract fun externalEyeCloudOcrR(r: ExternalEyeCloudOcrRealizer): Realizer
-    @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
+    @Binds @IntoSet abstract fun externalEyeOcrR(r: ExternalEyeOcrRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun externalEyeCloudOcrR(r: ExternalEyeCloudOcrRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizerOnPhone): Realizer
@@ -313,7 +313,7 @@ abstract class CapabilityModule {
         ): Set<Capability> =
             com.point.core.flow.capabilities.sharedCapabilities(
                 office,
-                ocrPromise = com.point.executors.OCR_ON_PHONE_PROMISE,
+                ocrPromise = com.point.core.flow.OCR_ON_PHONE_PROMISE,
             ) { account.current() != null }.toSet()
 
         /**

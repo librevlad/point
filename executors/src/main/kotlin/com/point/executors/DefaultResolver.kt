@@ -49,7 +49,7 @@ class DefaultResolver @Inject constructor(
 
             chosen.size == 1 -> chosen.first()
 
-            else -> FallbackRealizer(capabilityId, chosen)
+            else -> com.point.core.flow.FallbackRealizer(capabilityId, chosen)
         }
     }
 

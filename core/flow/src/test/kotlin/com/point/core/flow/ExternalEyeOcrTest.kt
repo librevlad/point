@@ -1,18 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.ExternalEye
-import com.point.core.flow.ExternalReading
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.KnownCapabilities
-import com.point.core.flow.LlmClient
-import com.point.core.flow.META_FOCUS_REGION
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.PrivacyLevel
-import com.point.core.flow.investigationStateOf
-import com.point.core.flow.Box
-import com.point.core.flow.Focus
-import com.point.core.flow.regionWire
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -209,7 +196,7 @@ class ExternalEyeOcrTest {
         CloudOcrDirectRealizer(llm, privacyAt(), store).perform(image)
 
         assertTrue(asked, asked.contains("[нет текста]"))
-        assertTrue("условленная пометка должна узнаваться сторожем", com.point.core.flow.serviceNote("[нет текста]"))
+        assertTrue("условленная пометка должна узнаваться сторожем", serviceNote("[нет текста]"))
     }
 
     private fun readingStateOf(result: ActionResult): InvestigationState =
@@ -274,7 +261,7 @@ class ExternalEyeOcrTest {
         override suspend fun run(obj: PointObject, prompt: String): ResultObject = error("нет ключа")
     }
 
-    private fun recognizerOf(text: String) = object : com.point.core.flow.TextRecognizer {
+    private fun recognizerOf(text: String) = object : TextRecognizer {
         override suspend fun recognize(obj: PointObject) = text
     }
 }

@@ -1,5 +1,10 @@
 package com.point.executors
 
+import com.point.core.flow.CloudOcrCapability
+import com.point.core.flow.CloudOcrRealizer
+import com.point.core.flow.DeviceOcrRealizer
+import com.point.core.flow.ExternalEyeOcrRealizer
+
 import com.point.core.flow.JobReplyCapability
 import com.point.core.flow.ShoppingListCapability
 import com.point.core.flow.WordCapability

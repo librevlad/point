@@ -1,12 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.ExternalEye
-import com.point.core.flow.ExternalReading
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.KnownCapabilities
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.investigationStateOf
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind

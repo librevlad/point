@@ -53,3 +53,9 @@ internal object FileBackedStore : ObjectStore {
         ScratchRef(File.createTempFile("point-test", ".$extension").apply { deleteOnExit() }.absolutePath)
     override suspend fun clear() = Unit
 }
+
+/** Режим «куда можно отправлять» в тестах: по умолчанию открыт. */
+internal fun privacyAt(level: PrivacyLevel = PrivacyLevel.DEFAULT) = object : CloudPrivacySettings {
+    override fun level() = level
+    override suspend fun setLevel(level: PrivacyLevel) = Unit
+}

@@ -1,11 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.Atom
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.AtomRecognizer
-import com.point.core.flow.Box
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -81,7 +75,7 @@ class DeviceOcrRealizerTest {
     @Test
     fun `reuses the OCR sidecar of an enriched image instead of re-running the engine`() = runTest {
         val side = File.createTempFile("ocr", ".txt").apply { writeText("Уже распознано"); deleteOnExit() }
-        val enriched = image.copy(metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to side.absolutePath))
+        val enriched = image.copy(metadata = mapOf(META_OCR_TEXT_REF to side.absolutePath))
 
         val result = DeviceOcrRealizer(store, throwingRecognizer()).perform(enriched)
 
@@ -95,16 +89,16 @@ class DeviceOcrRealizerTest {
     fun `увеличение кадра переезжает на распознанный текст`() = runTest {
         val enlarged = image.copy(
             metadata = mapOf(
-                com.point.core.flow.META_READ_UPSCALE to "3",
-                com.point.core.flow.META_READING_MODE to "PRINTED",
+                META_READ_UPSCALE to "3",
+                META_READING_MODE to "PRINTED",
             ),
         )
 
         val result = DeviceOcrRealizer(store, recognizer("Ведомость")).perform(enlarged)
 
         val out = (result as ActionResult.Success).result
-        assertEquals("3", out.metadata[com.point.core.flow.META_READ_UPSCALE])
-        assertEquals("PRINTED", out.metadata[com.point.core.flow.META_READING_MODE])
+        assertEquals("3", out.metadata[META_READ_UPSCALE])
+        assertEquals("PRINTED", out.metadata[META_READING_MODE])
     }
 
     @Test
@@ -112,7 +106,7 @@ class DeviceOcrRealizerTest {
         val result = DeviceOcrRealizer(store, recognizer("Ведомость")).perform(image)
 
         val out = (result as ActionResult.Success).result
-        assertTrue(com.point.core.flow.META_READ_UPSCALE !in out.metadata)
+        assertTrue(META_READ_UPSCALE !in out.metadata)
     }
 
     @Test
@@ -164,7 +158,7 @@ class DeviceOcrRealizerTest {
     @Test
     fun `готовый сайдкар не рождает стадии — движок не запускался, врать не о чем`() = runTest {
         val side = File.createTempFile("ocr", ".txt").apply { writeText("Уже распознано"); deleteOnExit() }
-        val enriched = image.copy(metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to side.absolutePath))
+        val enriched = image.copy(metadata = mapOf(META_OCR_TEXT_REF to side.absolutePath))
 
         val heard = stagesHeard { DeviceOcrRealizer(store, throwingRecognizer()).perform(enriched) }
 

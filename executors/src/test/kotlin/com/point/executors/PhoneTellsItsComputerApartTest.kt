@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.ExternalEyeOcrRealizer
+
 import com.point.core.flow.Capability
 import com.point.core.flow.DefaultExecutionPolicy
 import com.point.core.flow.LinkedPc

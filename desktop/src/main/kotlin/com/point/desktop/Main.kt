@@ -166,7 +166,8 @@ fun main(args: Array<String>) {
         com.point.core.flow.FixErrorsCapability(excelKeys) +
         com.point.core.flow.FixErrorsStrongerCapability(excelKeys) +
         com.point.core.flow.ShoppingListCapability(excelKeys) +
-        com.point.core.flow.JobReplyCapability(excelKeys)
+        com.point.core.flow.JobReplyCapability(excelKeys) +
+        com.point.core.flow.CloudOcrCapability()
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
@@ -218,6 +219,11 @@ fun main(args: Array<String>) {
             com.point.core.flow.FixErrorsStrongerRealizer(pcLlm),
             com.point.core.flow.ShoppingListRealizer(pcLlm),
             com.point.core.flow.JobReplyRealizer(pcLlm),
+
+            // Глаза модели за ocr.space (#1377): у сервиса кончился дневной предел — смотрит
+            // связка ключей человека, а не человек читает «попробуйте завтра».
+            com.point.core.flow.CloudOcrRealizer(pcLlm, PcCloudPrivacy(pointDir)),
+            com.point.core.flow.CloudOcrDirectRealizer(pcLlm, PcCloudPrivacy(pointDir), excelStore),
 
             // «AI» умеет перенаправить просьбу другому действию — резолвер рождается ниже,
             // поэтому сюда он приходит лениво, как и стук телефона (#1079).
