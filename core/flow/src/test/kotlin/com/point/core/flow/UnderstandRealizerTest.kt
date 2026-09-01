@@ -18,7 +18,6 @@ import java.io.File
 
 class UnderstandRealizerTest {
 
-    private val aiKeysReady = AiReadiness { true }
 
     private val prompts = mutableListOf<String>()
     private val lastPrompt: String? get() = prompts.lastOrNull()

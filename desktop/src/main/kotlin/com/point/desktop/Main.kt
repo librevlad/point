@@ -151,11 +151,22 @@ fun main(args: Array<String>) {
         frames = PcModelFrames,
     )
     val pcKnowledge = com.point.core.flow.GraphKnowledge(excelStore, PcPdfTextKnowledge())
+    val pcDocx = com.point.core.flow.OoxmlDocxWriter(excelStore, PcEvidenceCrops())
+    val pcEyes = object : com.point.core.flow.TextRecognizer {
+        override suspend fun recognize(obj: com.point.core.model.PointObject): String =
+            runCatching { pcCloudReader!!.readFrame(java.io.File(obj.uri.value), obj.mime) }.getOrDefault("")
+    }
     val capabilities = desktopCapabilities { accountStore.current() != null } +
         com.point.core.flow.ExcelCapability(excelKeys) +
         com.point.core.flow.UnderstandCapability(excelKeys) +
         com.point.core.flow.TranslateCapability(excelKeys) +
-        com.point.core.flow.AiCapability(excelKeys)
+        com.point.core.flow.AiCapability(excelKeys) +
+        com.point.core.flow.WordCapability() +
+        com.point.core.flow.WordPlusCapability(excelKeys) +
+        com.point.core.flow.FixErrorsCapability(excelKeys) +
+        com.point.core.flow.FixErrorsStrongerCapability(excelKeys) +
+        com.point.core.flow.ShoppingListCapability(excelKeys) +
+        com.point.core.flow.JobReplyCapability(excelKeys)
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
@@ -198,6 +209,15 @@ fun main(args: Array<String>) {
             ),
             com.point.core.flow.UnderstandRealizer(pcLlm),
             com.point.core.flow.TranslateRealizer(pcLlm, pcKnowledge),
+
+            // Своего движка чтения у компьютера нет: снимок читает то же облако, что и
+            // «Распознать текст», — иначе «В Word» на фото молчал бы (#1379).
+            com.point.core.flow.WordRealizer(pcKnowledge, pcDocx, pcEyes),
+            com.point.core.flow.WordPlusRealizer(pcLlm, pcKnowledge, pcDocx, pcEyes),
+            com.point.core.flow.FixErrorsRealizer(pcLlm, pcKnowledge, excelStore),
+            com.point.core.flow.FixErrorsStrongerRealizer(pcLlm),
+            com.point.core.flow.ShoppingListRealizer(pcLlm),
+            com.point.core.flow.JobReplyRealizer(pcLlm),
 
             // «AI» умеет перенаправить просьбу другому действию — резолвер рождается ниже,
             // поэтому сюда он приходит лениво, как и стук телефона (#1079).

@@ -1,30 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Cost
-import com.point.core.flow.CurrentKnowledge
-import com.point.core.flow.FIX_TEXT_NOT_APPLIED
-import com.point.core.flow.GraphState
-import com.point.core.flow.Latency
-import com.point.core.flow.LlmClient
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.Realizer
-import com.point.core.flow.applyFixes
-import com.point.core.flow.fixPrompt
-import com.point.core.flow.fixText
-import com.point.core.flow.fixTextPrompt
-import com.point.core.flow.fixTextWindow
-import com.point.core.flow.fixableFacts
-import com.point.core.flow.fixedMessage
-import com.point.core.flow.fixedTextMessage
-import com.point.core.flow.fixesForFacts
-import com.point.core.flow.hasFixableFacts
-import com.point.core.flow.labelNeedingKey
-import com.point.core.flow.parseFixes
-import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -36,7 +11,6 @@ import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import javax.inject.Inject
 
 /**
  * «Исправить ошибки» (#666): всё знание объекта уходит в модель, она возвращает исправления
@@ -50,7 +24,7 @@ import javax.inject.Inject
  * следуют за его правкой: вырезанный из прочитанного снимка фрагмент несёт ошибки чтения и в
  * тексте, и в значениях, и второго пути починки у них нет — «Исправить сильнее» текст не берёт.
  */
-class FixErrorsCapability @Inject constructor(
+class FixErrorsCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -78,7 +52,7 @@ class FixErrorsCapability @Inject constructor(
  * «Исправить сильнее»: в модель уходит и сам снимок — знание сверяется с источником.
  * Подпись честности обязательна: объект покидает устройство (Конституция §11).
  */
-class FixErrorsStrongerCapability @Inject constructor(
+class FixErrorsStrongerCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -105,7 +79,7 @@ class FixErrorsStrongerCapability @Inject constructor(
     companion object { val ID = CapabilityId("fix-errors-stronger") }
 }
 
-class FixErrorsRealizer @Inject constructor(
+class FixErrorsRealizer(
     private val llm: LlmClient,
     private val known: CurrentKnowledge,
     private val store: ObjectStore,
@@ -116,7 +90,7 @@ class FixErrorsRealizer @Inject constructor(
         if (ownsText(input.state)) fixOwnText(llm, known, store, input) else fix(llm, input, withObject = false)
 }
 
-class FixErrorsStrongerRealizer @Inject constructor(
+class FixErrorsStrongerRealizer(
     private val llm: LlmClient,
 ) : Realizer {
     override val capabilityId = FixErrorsStrongerCapability.ID
@@ -136,13 +110,13 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
 
             // Первой ступени снимок не нужен: она правит опечатки в самом знании, и
             // отправлять наружу больше, чем требуется, незачем (принцип #1244).
-            val asked = if (withObject) input else com.point.core.flow.textStandIn(input)
+            val asked = if (withObject) input else textStandIn(input)
             val answer = File(llm.run(asked, fixPrompt(facts, withObject)).uri.value).readText()
             // Гейт тот же, что у находки (#666, #1032), и страница ему нужна та же:
             // слово-подпись накладной стоит в прочитанном тексте. Текст объекта на этом пути
             // не правится — правится значение, — поэтому на странице стоит прежнее прочтение,
             // и заземление исправленное наследует от него (`fixFits`).
-            val fixed = parseFixes(answer, facts, com.point.core.flow.entitySourceText(input))
+            val fixed = parseFixes(answer, facts, entitySourceText(input))
 
             when {
 

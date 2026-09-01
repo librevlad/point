@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.WordCapability
+
 import com.point.core.flow.capabilities.PdfCapability
 import com.point.core.flow.capabilities.ArchiveCapability
 import com.point.core.flow.capabilities.OfficeCapability

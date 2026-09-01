@@ -25,6 +25,14 @@ internal fun testKnowledge(
     store: ObjectStore = FileBackedStore,
 ): CurrentKnowledge = GraphKnowledge(store, pdf)
 
+/** Ключ у человека есть: имена действий проверяются без приписки «нужен ключ». */
+internal val aiKeysReady = AiReadiness { true }
+
+/** Текстовый слой PDF, который отдаёт заранее известное. */
+internal fun pdfSaying(text: String): PdfTextExtractor = object : PdfTextExtractor {
+    override suspend fun extractText(obj: PointObject, atMost: Int?): String = text
+}
+
 internal object PdfSaysNothing : PdfTextExtractor {
     override suspend fun extractText(obj: PointObject, atMost: Int?): String = ""
 }

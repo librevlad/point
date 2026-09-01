@@ -1,19 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.Atom
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.AtomRecognizer
-import com.point.core.flow.Box
-import com.point.core.flow.DocBlock
-import com.point.core.flow.DocStyle
-import com.point.core.flow.DocxWriter
-import com.point.core.flow.FrameTransform
-import com.point.core.flow.HANDWRITTEN_NOTE
-import com.point.core.flow.LlmClient
-import com.point.core.flow.META_READING_MODE
-import com.point.core.flow.PdfTextExtractor
-import com.point.core.flow.ReadingMode
-import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -153,7 +139,7 @@ class WordPlusTest {
     fun `на рукописи цифры уходят в документ помеченными`() {
         val blocks = parseDocBlocks(
             "T=Конспект\nP=Итого 1450 грн",
-            com.point.core.flow.ReadingMode.HANDWRITTEN,
+            ReadingMode.HANDWRITTEN,
         )
 
         assertFalse("заголовок без цифр — чистый", blocks[0].uncertain)
@@ -162,7 +148,7 @@ class WordPlusTest {
 
     @Test
     fun `на печати те же цифры идут чистыми — их читал движок`() {
-        val blocks = parseDocBlocks("P=Итого 1450 грн", com.point.core.flow.ReadingMode.PRINTED)
+        val blocks = parseDocBlocks("P=Итого 1450 грн", ReadingMode.PRINTED)
 
         assertFalse(blocks.single().uncertain)
     }
