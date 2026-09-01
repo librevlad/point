@@ -1,37 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AI_CHAIN_PRIVACY
-import com.point.core.flow.AtomRecognizer
-import com.point.core.flow.Capability
-import com.point.core.flow.capabilities.OcrCapability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.CloudPrivacySettings
-import com.point.core.flow.Cost
-import com.point.core.flow.ExternalEye
-import com.point.core.flow.Latency
-import com.point.core.flow.LlmClient
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.META_READ_UPSCALE
-import com.point.core.flow.META_READING_MODE
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.PrivacyLevel
-import com.point.core.flow.allowedAt
-import com.point.core.flow.META_READING_DOUBT
-import com.point.core.flow.degeneratedReading
-import com.point.core.flow.focusOf
-import com.point.core.flow.investigationKey
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.KnownCapabilities
-import com.point.core.flow.NO_TEXT_CLAUSE
-import com.point.core.flow.noTextAnswer
-import com.point.core.flow.readingDoubts
-import com.point.core.flow.poorlyRead
-import com.point.core.flow.stripMarkdownChrome
-import com.point.core.flow.Realizer
-import com.point.core.flow.RealizerKind
-import com.point.core.flow.RealizerMeta
-import com.point.core.flow.TextRecognizer
-import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -44,10 +12,9 @@ import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import javax.inject.Inject
 
 /** Просьба к зрячей модели — общая на все облачные пути (#840). */
-internal val OCR_CLOUD_PROMPT: String = com.point.core.flow.CLOUD_READING_PROMPT
+internal val OCR_CLOUD_PROMPT: String = CLOUD_READING_PROMPT
 
 /**
  * Узкий вопрос вместо вопроса о странице (#426): человек показал область, и на картинке
@@ -69,13 +36,13 @@ internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
  * вопроса. Живёт рядом с цепочкой, которая это и держит, а не в общем словаре — иначе
  * компьютер показывал его как своё.
  */
-internal const val OCR_ON_PHONE_PROMISE = "текст · сначала на телефоне, потом спрошу про сервис"
+const val OCR_ON_PHONE_PROMISE = "текст · сначала на телефоне, потом спрошу про сервис"
 
-class DeviceOcrRealizer @Inject constructor(
+class DeviceOcrRealizer(
     private val store: ObjectStore,
     private val recognizer: TextRecognizer,
 ) : Realizer {
-    override val capabilityId = OcrCapability.ID
+    override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
     override val meta = RealizerMeta(priority = 10, kind = RealizerKind.LOCAL)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -119,11 +86,11 @@ class DeviceOcrRealizer @Inject constructor(
         }
 }
 
-class ExternalEyeOcrRealizer @Inject constructor(
+class ExternalEyeOcrRealizer(
     private val eye: ExternalEye,
     private val store: ObjectStore,
 ) : Realizer {
-    override val capabilityId = OcrCapability.ID
+    override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
     override val meta = RealizerMeta(priority = 50, kind = RealizerKind.CLOUD)
 
     override fun isAvailable(): Boolean = eye.available()
@@ -132,11 +99,11 @@ class ExternalEyeOcrRealizer @Inject constructor(
         withContext(Dispatchers.IO) { readWithExternalEye(eye, store, input) }
 }
 
-class CloudOcrRealizer @Inject constructor(
+class CloudOcrRealizer(
     private val llm: LlmClient,
     private val privacy: CloudPrivacySettings,
 ) : Realizer {
-    override val capabilityId = OcrCapability.ID
+    override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
     override val meta = RealizerMeta(priority = 90, kind = RealizerKind.CLOUD)
 
     override fun isAvailable(): Boolean = allowedAt(privacy.level(), AI_CHAIN_PRIVACY)
@@ -151,7 +118,7 @@ class CloudOcrRealizer @Inject constructor(
         }
 }
 
-class CloudOcrCapability @Inject constructor() : Capability {
+class CloudOcrCapability() : Capability {
     override val id = ID
     override val icon = "ocr-cloud"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
@@ -169,7 +136,7 @@ class CloudOcrCapability @Inject constructor() : Capability {
     companion object { val ID = CapabilityId("ocr-cloud") }
 }
 
-class ExternalEyeCloudOcrRealizer @Inject constructor(
+class ExternalEyeCloudOcrRealizer(
     private val eye: ExternalEye,
     private val store: ObjectStore,
 ) : Realizer {
@@ -182,7 +149,7 @@ class ExternalEyeCloudOcrRealizer @Inject constructor(
         withContext(Dispatchers.IO) { readWithExternalEye(eye, store, input, asKnowledge = true) }
 }
 
-class CloudOcrDirectRealizer @Inject constructor(
+class CloudOcrDirectRealizer(
     private val llm: LlmClient,
     private val privacy: CloudPrivacySettings,
     private val store: ObjectStore,
@@ -234,10 +201,10 @@ private fun strongerReadingLands(
                 // Прочтение называет свою силу (#1242): офлайн-чтение, начатое раньше и
                 // дошедшее позже, вставало поверх этого текста и молча его заменяло. Теперь
                 // слияние видит, что здесь прочитано сильнее, и позднее слабое уходит в «или».
-                put(META_OCR_TEXT_REF + com.point.core.flow.META_STRENGTH_SUFFIX, com.point.core.flow.READING_STRONG)
+                put(META_OCR_TEXT_REF + META_STRENGTH_SUFFIX, READING_STRONG)
                 put(
-                    com.point.core.flow.investigationKey(com.point.core.flow.KnownCapabilities.IMAGE_TEXT),
-                    com.point.core.flow.InvestigationState.FOUND.wire,
+                    investigationKey(KnownCapabilities.IMAGE_TEXT),
+                    InvestigationState.FOUND.wire,
                 )
                 readingDoubts(page).takeIf { it.isNotEmpty() }?.let { doubts ->
                     put(META_READING_DOUBT, doubts.joinToString("; ") { it.what })
@@ -355,7 +322,7 @@ private fun unreadable(why: String): String =
  * `:core:flow` тремя копиями, и любая правка формулировки расходилась молча.
  */
 private fun chainClosed(level: PrivacyLevel): String =
-    com.point.core.flow.chainClosedBy(level)
+    chainClosedBy(level)
 
 private fun ocrMeta(input: PointObject): Map<String, String> = buildMap {
     put("op", "ocr")

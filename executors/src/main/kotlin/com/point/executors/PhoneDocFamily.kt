@@ -178,3 +178,82 @@ class JobReplyRealizerOnPhone @Inject constructor(llm: LlmClient) : Realizer {
         inner.perform(input, amendment)
     override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
 }
+
+// ---- чтение снимка: те же исполнители из ядра (#1377) ----
+
+class DeviceOcrRealizerOnPhone @Inject constructor(
+    store: ObjectStore,
+    recognizer: TextRecognizer,
+) : Realizer {
+    private val inner = com.point.core.flow.DeviceOcrRealizer(store, recognizer)
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
+}
+
+class CloudOcrCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.CloudOcrCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+}
+
+class ExternalEyeOcrRealizerOnPhone @Inject constructor(eye: com.point.core.flow.ExternalEye, store: ObjectStore) : Realizer {
+    private val inner = com.point.core.flow.ExternalEyeOcrRealizer(eye, store)
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
+}
+
+class CloudOcrRealizerOnPhone @Inject constructor(llm: LlmClient, privacy: com.point.core.flow.CloudPrivacySettings) : Realizer {
+    private val inner = com.point.core.flow.CloudOcrRealizer(llm, privacy)
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
+}
+
+class ExternalEyeCloudOcrRealizerOnPhone @Inject constructor(eye: com.point.core.flow.ExternalEye, store: ObjectStore) : Realizer {
+    private val inner = com.point.core.flow.ExternalEyeCloudOcrRealizer(eye, store)
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
+}
+
+class CloudOcrDirectRealizerOnPhone @Inject constructor(llm: LlmClient, privacy: com.point.core.flow.CloudPrivacySettings, store: ObjectStore) : Realizer {
+    private val inner = com.point.core.flow.CloudOcrDirectRealizer(llm, privacy, store)
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
+}

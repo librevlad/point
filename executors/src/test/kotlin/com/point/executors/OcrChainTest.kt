@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.CloudOcrRealizer
+import com.point.core.flow.DeviceOcrRealizer
+
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore

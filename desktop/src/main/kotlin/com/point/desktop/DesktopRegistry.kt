@@ -104,10 +104,21 @@ class DesktopResolver(
 
         // Аудит, блок 1.6: fallback на «первого попавшегося» превращал двери в обманки
         // («В PDF» на картинке всегда падало). Нет исполнителя — честная причина.
-        return policy.choose(state, candidates).firstOrNull()
-            ?: throw NoWayHere(
+        val chosen = policy.choose(state, candidates)
+        return when {
+            chosen.isEmpty() -> throw NoWayHere(
                 candidates.firstNotNullOfOrNull { it.unavailableReason() }
                     ?: "На компьютере это действие для такого объекта не выполняется",
             )
+
+            chosen.size == 1 -> chosen.first()
+
+            // Очередь исполнителей — то же правило, что на телефоне, и тот же код (#1377):
+            // предел одного сервиса не кончает работу, пока за ним есть кому посмотреть.
+            // Прежде компьютер брал первого и на его отказе останавливался — потому дневной
+            // предел ocr.space выходил человеку как «попробуйте завтра», хотя рядом жила
+            // связка сервисов («дневная квота вранье, у нас куча сервисов»).
+            else -> com.point.core.flow.FallbackRealizer(capabilityId, chosen)
+        }
     }
 }

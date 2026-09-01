@@ -1,6 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -14,7 +13,7 @@ import org.junit.Test
 
 class CloudOcrRealizerTest {
 
-    private val store = object : com.point.core.flow.ObjectStore {
+    private val store = object : ObjectStore {
         override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
         override suspend fun ingestMultiple(sources: List<String>) = error("unused")
         override suspend fun put(

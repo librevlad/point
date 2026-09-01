@@ -1,8 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.Realizer
-import com.point.core.flow.isStateKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Findings
@@ -56,7 +53,7 @@ class FallbackRealizer(
             told.metadata.all { (key, value) -> isStateKey(key) && value == InvestigationState.NOT_FOUND.wire }
     }
 
-    internal companion object {
+    companion object {
 
         const val NOBODY_TO_DO_IT = "Это действие сейчас выполнить нечем — вернитесь к объекту и выберите другое"
     }

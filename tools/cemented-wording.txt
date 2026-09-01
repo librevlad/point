@@ -115,10 +115,10 @@
 1 executors/src/test/kotlin/com/point/executors/CutoutActionTest.kt
 3 executors/src/test/kotlin/com/point/executors/DefaultCapabilityRegistryTest.kt
 3 executors/src/test/kotlin/com/point/executors/DefaultResolverTest.kt
-3 executors/src/test/kotlin/com/point/executors/DeviceOcrRealizerTest.kt
+3 core/flow/src/test/kotlin/com/point/core/flow/DeviceOcrRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/EntityActionsTest.kt
 4 core/flow/src/test/kotlin/com/point/core/flow/ExcelLayoutTest.kt
-1 executors/src/test/kotlin/com/point/executors/ExternalEyeOcrTest.kt
+1 core/flow/src/test/kotlin/com/point/core/flow/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
 6 executors/src/test/kotlin/com/point/executors/FindActionTest.kt
 3 core/flow/src/test/kotlin/com/point/core/flow/FixErrorsRealizerTest.kt
