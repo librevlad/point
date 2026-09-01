@@ -95,6 +95,32 @@ class SheetPlanTest {
     }
 
     @Test
+    fun `сетка и заголовок документа остаются знанием плана — писателю есть чем рисовать бланк`() {
+        // #1371: знание было в DocumentLayout и терялось — layoutSheet плющил блоки в строки,
+        // и в файле не было ни рамок, ни ширин. Хвост непрочитанного таблицей не считается.
+        val plan = layoutSheet(
+            layout(
+                block(BlockRole.TITLE, text = "ВІДОМІСТЬ"),
+                block(BlockRole.TABLE, grid = table, headerRows = 1),
+                block(BlockRole.UNREAD, grid = GroundedTable(listOf(listOf("підпис печатка")))),
+            ),
+        )
+
+        assertEquals(setOf(0), plan.titles)
+        assertEquals(listOf(1..2), plan.tables)
+    }
+
+    @Test
+    fun `сшивка двигает сетку страниц и рвёт диапазон на выкинутой шапке-повторе`() {
+        val page = layoutSheet(layout(block(BlockRole.TABLE, grid = table, headerRows = 1)))
+
+        val stitched = stitchSheets(listOf(page, page))
+
+        // Вторая страница потеряла шапку-повтор: её сетка продолжается без первой строки.
+        assertEquals(listOf(0..1, 2..2), stitched.tables)
+    }
+
+    @Test
     fun `непрочитанное вперемешку с документом границей не объявляется`() {
         val plan = layoutSheet(
             layout(

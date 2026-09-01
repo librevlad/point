@@ -19,6 +19,19 @@ data class SheetPlan(
      * границу значило бы соврать.
      */
     val unreadFrom: Int? = null,
+
+    /**
+     * Какие строки пришли сеткой таблицы (#1371) — по диапазону на блок сетки.
+     *
+     * Это знание у плана было и терялось: `layoutSheet` плющил блоки в общий список
+     * строк, и писателю было негде взять границы таблицы — потому в файле не было ни
+     * рамок, ни ширин, и бланк переставал быть бланком. Хвост непрочитанного сеткой
+     * не считается: его рамка объявила бы свалку таблицей.
+     */
+    val tables: List<IntRange> = emptyList(),
+
+    /** Строки-заголовки документа (роль TITLE): писатель кладёт их по ширине таблицы. */
+    val titles: Set<Int> = emptySet(),
 )
 
 fun sheetPlanOf(
@@ -32,6 +45,8 @@ fun layoutSheet(layout: DocumentLayout, mode: ReadingMode = ReadingMode.UNKNOWN)
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
     var unreadFrom: Int? = null
     var mixed = false
+    val tables = ArrayList<IntRange>()
+    val titles = LinkedHashSet<Int>()
     for (block in layout.blocks) {
         if (block.role == BlockRole.CHROME) continue
         if (block.role == BlockRole.UNREAD && unreadFrom == null) {
@@ -51,16 +66,22 @@ fun layoutSheet(layout: DocumentLayout, mode: ReadingMode = ReadingMode.UNKNOWN)
             grid.candidates.forEach { (cell, readings) ->
                 candidates[(from + cell.first) to cell.second] = readings
             }
+
+            // Сетка — таблица; хвост непрочитанного — нет (#1371).
+            if (block.role != BlockRole.UNREAD && rows.size > from) tables += from until rows.size
         } else {
             val line = buildList {
                 if (block.label.isNotEmpty()) add(marked(block.label, mode))
                 if (block.text.isNotEmpty() || isEmpty()) add(marked(block.text, mode))
             }
 
-            if (line.any { it.isNotEmpty() }) rows += line
+            if (line.any { it.isNotEmpty() }) {
+                if (block.role == BlockRole.TITLE) titles += rows.size
+                rows += line
+            }
         }
     }
-    return SheetPlan(rows, headerRows, candidates, if (mixed) null else unreadFrom)
+    return SheetPlan(rows, headerRows, candidates, if (mixed) null else unreadFrom, tables, titles)
 }
 
 /**
@@ -79,6 +100,8 @@ fun stitchSheets(pages: List<SheetPlan>): SheetPlan {
     val rows = ArrayList<List<String>>()
     val headerRows = LinkedHashSet<Int>()
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
+    val tables = ArrayList<IntRange>()
+    val titles = LinkedHashSet<Int>()
     // Эталон шапки — первая страница, у которой шапка есть: первая страница набора могла
     // не прочитаться вовсе, и тогда её место в таблице — строка без шапки.
     val leadAt = pages.indexOfFirst { it.headerRows.isNotEmpty() }
@@ -105,8 +128,26 @@ fun stitchSheets(pages: List<SheetPlan>): SheetPlan {
         if (page === pages.last()) {
             tail = page.unreadFrom?.let { placed.getOrNull(it) }?.takeIf { it >= 0 }
         }
+
+        // Сетки и заголовки страниц переезжают теми строками, что реально легли (#1371):
+        // выкинутая шапка-повтор рвёт диапазон, и он продолжается со следующей строки.
+        page.tables.forEach { range ->
+            var runStart = -1
+            var last = -1
+            for (r in range) {
+                val at = placed.getOrElse(r) { -1 }
+                if (at < 0) continue
+                if (runStart < 0 || at != last + 1) {
+                    if (runStart >= 0) tables += runStart..last
+                    runStart = at
+                }
+                last = at
+            }
+            if (runStart >= 0) tables += runStart..last
+        }
+        page.titles.forEach { r -> placed.getOrElse(r) { -1 }.takeIf { it >= 0 }?.let { titles += it } }
     }
-    return SheetPlan(rows, headerRows, candidates, tail)
+    return SheetPlan(rows, headerRows, candidates, tail, tables, titles)
 }
 
 fun coveredClaim(layout: DocumentLayout, plan: SheetPlan, mode: ReadingMode): Boolean? = when {
