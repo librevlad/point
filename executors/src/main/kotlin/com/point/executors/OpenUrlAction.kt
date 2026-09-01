@@ -51,7 +51,7 @@ class OpenUrlRealizer @Inject constructor(
                 // Общий порядок: знание (entity.url) → сам объект-ссылка → текст.
                 // Свой файл-путь отвечал «Ссылка не найдена» рядом с «Нашёл ссылку»
                 // на узле ссылки из QR (скрин владельца 2026-08-09).
-                val url = firstEntity(extractor, input, com.point.core.flow.EntityType.URL)
+                val url = com.point.core.flow.firstEntity(extractor, input, com.point.core.flow.EntityType.URL)
                     ?: error("Ссылка не найдена")
                 opener.open(url)
                 ActionResult.Done("Открываю: $url")

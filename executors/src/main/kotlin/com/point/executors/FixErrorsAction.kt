@@ -136,13 +136,13 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
 
             // Первой ступени снимок не нужен: она правит опечатки в самом знании, и
             // отправлять наружу больше, чем требуется, незачем (принцип #1244).
-            val asked = if (withObject) input else textStandIn(input)
+            val asked = if (withObject) input else com.point.core.flow.textStandIn(input)
             val answer = File(llm.run(asked, fixPrompt(facts, withObject)).uri.value).readText()
             // Гейт тот же, что у находки (#666, #1032), и страница ему нужна та же:
             // слово-подпись накладной стоит в прочитанном тексте. Текст объекта на этом пути
             // не правится — правится значение, — поэтому на странице стоит прежнее прочтение,
             // и заземление исправленное наследует от него (`fixFits`).
-            val fixed = parseFixes(answer, facts, entitySourceText(input))
+            val fixed = parseFixes(answer, facts, com.point.core.flow.entitySourceText(input))
 
             when {
 

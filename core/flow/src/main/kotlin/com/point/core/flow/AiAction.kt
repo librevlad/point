@@ -1,18 +1,6 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AiReadiness
-import com.point.core.flow.Capability
-import com.point.core.flow.capabilities.PdfCapability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Cost
-import com.point.core.flow.Latency
-import com.point.core.flow.LlmClient
-import com.point.core.flow.Realizer
-import com.point.core.flow.Resolver
-import com.point.core.flow.reportStage
-import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
-import dagger.Lazy
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -21,7 +9,6 @@ import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import javax.inject.Inject
 
 fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
     ObjectKind.IMAGE -> listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки")
@@ -46,14 +33,14 @@ fun aiTransformTarget(prompt: String): CapabilityId? {
     if (p.endsWith("?")) return null
     if (QUESTION_STARTERS.any { p.startsWith(it) }) return null
     return when {
-        WORD_HINTS.any { it in p } -> WordPlusCapability.ID
-        EXCEL_HINTS.any { it in p } -> com.point.core.flow.ExcelCapability.ID
-        PDF_HINTS.any { it in p } -> PdfCapability.ID
+        WORD_HINTS.any { it in p } -> KnownCapabilities.WORD_PLUS
+        EXCEL_HINTS.any { it in p } -> ExcelCapability.ID
+        PDF_HINTS.any { it in p } -> com.point.core.flow.capabilities.PdfCapability.ID
         else -> null
     }
 }
 
-class AiCapability @Inject constructor(
+class AiCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
@@ -67,7 +54,7 @@ class AiCapability @Inject constructor(
     companion object { val ID = CapabilityId("ai") }
 }
 
-class AiRealizer @Inject constructor(
+class AiRealizer(
     private val llm: LlmClient,
 
     private val resolver: Lazy<Resolver>,
@@ -83,7 +70,7 @@ class AiRealizer @Inject constructor(
         }
 
         aiTransformTarget(amendment)?.let { target ->
-            return resolver.get().realizerFor(target).perform(input, null)
+            return resolver.value.realizerFor(target).perform(input, null)
         }
 
         return withContext(Dispatchers.IO) {

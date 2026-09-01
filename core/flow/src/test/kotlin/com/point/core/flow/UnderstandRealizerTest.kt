@@ -1,14 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.KIND_ORGANIZATION
-import com.point.core.flow.LlmClient
-import com.point.core.flow.META_ENTITY_GEO
-import com.point.core.flow.META_ENTITY_METER
-import com.point.core.flow.META_ENTITY_TRACK
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.alternativesOf
-import com.point.core.flow.layoutOf
-import com.point.core.flow.parseFieldCandidates
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -26,6 +17,8 @@ import org.junit.Test
 import java.io.File
 
 class UnderstandRealizerTest {
+
+    private val aiKeysReady = AiReadiness { true }
 
     private val prompts = mutableListOf<String>()
     private val lastPrompt: String? get() = prompts.lastOrNull()
@@ -65,22 +58,22 @@ class UnderstandRealizerTest {
     private fun imageWithLayer(): PointObject {
         val pageText = "ТТН 20 4514 9154 9395  99 9999 9999 9995  RA123456789UA  RA123456780UA\n" +
             "Відправник 1ваненко ван"
-        val layer = com.point.core.flow.AtomLayer(
+        val layer = AtomLayer(
             listOf(
-                com.point.core.flow.Atom("m1", "ТТН", com.point.core.flow.Box(10f, 100f, 60f, 120f)),
-                com.point.core.flow.Atom("w1", "20", com.point.core.flow.Box(200f, 100f, 230f, 120f)),
-                com.point.core.flow.Atom("w2", "4514 9154", com.point.core.flow.Box(235f, 100f, 330f, 120f)),
-                com.point.core.flow.Atom("w3", "9395", com.point.core.flow.Box(335f, 100f, 380f, 120f)),
-                com.point.core.flow.Atom("w4", "99 9999 9999 9995", com.point.core.flow.Box(390f, 100f, 520f, 120f)),
-                com.point.core.flow.Atom("w8", "RA123456789UA", com.point.core.flow.Box(525f, 100f, 640f, 120f)),
-                com.point.core.flow.Atom("w9", "RA123456780UA", com.point.core.flow.Box(645f, 100f, 760f, 120f)),
-                com.point.core.flow.Atom("m2", "Відправник", com.point.core.flow.Box(10f, 200f, 150f, 220f)),
-                com.point.core.flow.Atom("w6", "1ваненко", com.point.core.flow.Box(200f, 200f, 300f, 220f)),
-                com.point.core.flow.Atom("w7", "ван", com.point.core.flow.Box(305f, 200f, 350f, 220f)),
+                Atom("m1", "ТТН", Box(10f, 100f, 60f, 120f)),
+                Atom("w1", "20", Box(200f, 100f, 230f, 120f)),
+                Atom("w2", "4514 9154", Box(235f, 100f, 330f, 120f)),
+                Atom("w3", "9395", Box(335f, 100f, 380f, 120f)),
+                Atom("w4", "99 9999 9999 9995", Box(390f, 100f, 520f, 120f)),
+                Atom("w8", "RA123456789UA", Box(525f, 100f, 640f, 120f)),
+                Atom("w9", "RA123456780UA", Box(645f, 100f, 760f, 120f)),
+                Atom("m2", "Відправник", Box(10f, 200f, 150f, 220f)),
+                Atom("w6", "1ваненко", Box(200f, 200f, 300f, 220f)),
+                Atom("w7", "ван", Box(305f, 200f, 350f, 220f)),
             ),
         )
         val dump = File.createTempFile("point-atoms", ".tsv").apply {
-            deleteOnExit(); writeText(com.point.core.flow.AtomCodec.encode(layer))
+            deleteOnExit(); writeText(AtomCodec.encode(layer))
         }
         val sidecar = File.createTempFile("point-ocr", ".txt").apply { deleteOnExit(); writeText(pageText) }
         return PointObject(
@@ -88,7 +81,7 @@ class UnderstandRealizerTest {
             ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT)),
             metadata = mapOf(
                 META_OCR_TEXT_REF to sidecar.absolutePath,
-                com.point.core.flow.META_OCR_ATOMS_REF to dump.absolutePath,
+                META_OCR_ATOMS_REF to dump.absolutePath,
             ),
         )
     }
@@ -131,10 +124,10 @@ class UnderstandRealizerTest {
 
         val meta = result.findings!!.metadata
         assertNull("номер удостоверения остался накладной", meta[META_ENTITY_TRACK])
-        assertEquals("8806923102858", meta[com.point.core.flow.META_ENTITY_SERIAL])
+        assertEquals("8806923102858", meta[META_ENTITY_SERIAL])
         assertTrue(
             "у номера без роли появилось «отследить»",
-            com.point.core.flow.actionReadiness(meta).none { it.schema.id == "track-parcel" },
+            actionReadiness(meta).none { it.schema.id == "track-parcel" },
         )
     }
 
@@ -144,26 +137,26 @@ class UnderstandRealizerTest {
         val result = realizer("TRACK=8806923102858").perform(textObject(waybill)) as ActionResult.Done
 
         assertEquals("8806923102858", result.findings!!.metadata[META_ENTITY_TRACK])
-        assertNull(result.findings!!.metadata[com.point.core.flow.META_ENTITY_SERIAL])
+        assertNull(result.findings!!.metadata[META_ENTITY_SERIAL])
     }
 
     @Test
     fun `два разных номера у одного объекта — два номера, а не спор прочтений`() = runTest {
         // #1032: госномер от правила уже стоит номером; приехавший из TRACK номер
         // удостоверения — другой идентификатор, «номер — ещё», а не «прочтения спорят».
-        val serial = com.point.core.flow.META_ENTITY_SERIAL
+        val serial = META_ENTITY_SERIAL
         val card = "IDFRABERTHIER<<<<<<<<<<<<<<<<<<\n8806923102858CORINNE<<<<<<<<<<<"
         val known = textObject(
             content = card,
-            metadata = mapOf(serial to "BH9249MT", serial + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.OCR.wire),
+            metadata = mapOf(serial to "BH9249MT", serial + META_SOURCE_SUFFIX to Provenance.OCR.wire),
         )
 
         val result = realizer("TRACK=8806923102858\nSUMMARY=удостоверение").perform(known) as ActionResult.Done
 
         val meta = result.findings!!.metadata
-        val numbers = listOfNotNull(meta[serial]) + com.point.core.flow.moreOf(meta, serial)
+        val numbers = listOfNotNull(meta[serial]) + moreOf(meta, serial)
         assertTrue("второй номер потерялся: $numbers", "BH9249MT" in numbers && "8806923102858" in numbers)
-        assertFalse("два разных номера стали спором", com.point.core.flow.isDisputed(meta, serial))
+        assertFalse("два разных номера стали спором", isDisputed(meta, serial))
     }
 
     @Test
@@ -171,15 +164,15 @@ class UnderstandRealizerTest {
         // #1032: переехавшие в «Номер» числа стоят в одном ведре кандидатов, и судья
         // оставляет на ключ одного победителя. Проигравший не спорит с ним как прочтение
         // того же значения: «номер» — многозначный факт, второе число идёт «ещё».
-        val serial = com.point.core.flow.META_ENTITY_SERIAL
+        val serial = META_ENTITY_SERIAL
         val card = "IDFRABERTHIER<<<<<<<<<<<<<<<<<<\n8806923102858CORINNE<<<<<<<<<<<\n5401237788990"
 
         val result = realizer("TRACK=8806923102858\nTRACK=5401237788990").perform(textObject(card)) as ActionResult.Done
 
         val meta = result.findings!!.metadata
-        val numbers = listOfNotNull(meta[serial]) + com.point.core.flow.moreOf(meta, serial)
+        val numbers = listOfNotNull(meta[serial]) + moreOf(meta, serial)
         assertTrue("второй номер потерялся: $numbers", "8806923102858" in numbers && "5401237788990" in numbers)
-        assertFalse("два разных номера стали спором", com.point.core.flow.isDisputed(meta, serial))
+        assertFalse("два разных номера стали спором", isDisputed(meta, serial))
     }
 
     @Test
@@ -191,10 +184,10 @@ class UnderstandRealizerTest {
 
         val meta = result.findings!!.metadata
         assertNull(meta["graph.role.issuer"])
-        assertEquals(garbled, meta["graph.role.issuer" + com.point.core.flow.META_BLOCKED_SUFFIX])
+        assertEquals(garbled, meta["graph.role.issuer" + META_BLOCKED_SUFFIX])
         assertEquals(
-            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
-            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(meta, UnderstandCapability.ID),
         )
     }
 
@@ -203,12 +196,12 @@ class UnderstandRealizerTest {
         // #1032: след держит тот вопрос, который его и оставил. Номер с несошедшейся
         // контрольной отклонило правило-читатель офлайн; «Понять» прочла всё и не нашла
         // ничего — это честное «не нашлось», а не вечное «исследовано недостаточно».
-        val foreign = mapOf(META_ENTITY_TRACK + com.point.core.flow.META_BLOCKED_SUFFIX to "RA123456789UA")
+        val foreign = mapOf(META_ENTITY_TRACK + META_BLOCKED_SUFFIX to "RA123456789UA")
         val result = realizer("нечего сказать").perform(textObject(metadata = foreign)) as ActionResult.Done
 
         assertEquals(
-            com.point.core.flow.InvestigationState.NOT_FOUND,
-            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+            InvestigationState.NOT_FOUND,
+            investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
         )
     }
 
@@ -340,11 +333,11 @@ class UnderstandRealizerTest {
         )
 
         assertEquals(
-            com.point.core.flow.FieldCandidate("20 4514 9154 9395", listOf("w1", "w2", "w3")),
+            FieldCandidate("20 4514 9154 9395", listOf("w1", "w2", "w3")),
             parsed.fields["entity.track"]!!.single(),
         )
         assertEquals(
-            com.point.core.flow.FieldCandidate("Про зустріч [важливо]"),
+            FieldCandidate("Про зустріч [важливо]"),
             parsed.fields["entity.subject"]!!.single(),
         )
     }
@@ -405,7 +398,7 @@ class UnderstandRealizerTest {
         val known = textObject(
             metadata = mapOf(
                 META_ENTITY_TRACK to "20 4514 9154 9395",
-                META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.OCR.wire,
+                META_ENTITY_TRACK + META_SOURCE_SUFFIX to Provenance.OCR.wire,
             ),
         )
 
@@ -421,7 +414,7 @@ class UnderstandRealizerTest {
         val edited = textObject(
             metadata = mapOf(
                 META_ENTITY_TRACK to "20 4514 9154 9395",
-                META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
+                META_ENTITY_TRACK + META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
             ),
         )
 
@@ -445,7 +438,7 @@ class UnderstandRealizerTest {
         val known = textObject(
             metadata = mapOf(
                 "graph.role.sender" to "ТОВ «Агротрейд»",
-                "graph.role.sender" + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
+                "graph.role.sender" + META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
             ),
         )
 
@@ -461,7 +454,7 @@ class UnderstandRealizerTest {
 
         val meta = result.findings!!.metadata
         assertNull(meta[META_ENTITY_TRACK])
-        val blocked = meta["entity.track" + com.point.core.flow.META_BLOCKED_SUFFIX]!!.split("\n")
+        val blocked = meta["entity.track" + META_BLOCKED_SUFFIX]!!.split("\n")
         assertTrue(blocked.contains("RA123456789UA"))
         assertTrue("чтение повторного вызова тоже не тонет", blocked.contains("RA123456780UA"))
     }
@@ -519,7 +512,7 @@ class UnderstandRealizerTest {
         val result = realizer("PHONE=+380679999999\nPHONE=+380671111111").perform(known) as ActionResult.Done
 
         assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
-        val more = com.point.core.flow.moreOf(result.findings!!.metadata, "entity.phone")
+        val more = moreOf(result.findings!!.metadata, "entity.phone")
         assertTrue(more.contains("+380679999999"))
         assertTrue("второй кандидат не исчез", more.contains("+380671111111"))
         assertTrue(alternativesOf(result.findings!!.metadata, "entity.phone").isEmpty())
@@ -578,17 +571,17 @@ class UnderstandRealizerTest {
         assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
         assertEquals(
             listOf("+380679999999"),
-            com.point.core.flow.moreOf(result.findings!!.metadata, "entity.phone"),
+            moreOf(result.findings!!.metadata, "entity.phone"),
         )
     }
 
     @Test
     fun `подтверждение первого трека не стирает второй номер страницы`() = runTest {
-        val two = com.point.core.flow.altValue(listOf("20 4514 9154 9395", "20451491549396"))
+        val two = altValue(listOf("20 4514 9154 9395", "20451491549396"))
         val known = textObject(
             metadata = mapOf(
                 META_ENTITY_TRACK to "20 4514 9154 9395",
-                META_ENTITY_TRACK + com.point.core.flow.META_MORE_SUFFIX to two,
+                META_ENTITY_TRACK + META_MORE_SUFFIX to two,
             ),
         )
 
@@ -597,7 +590,7 @@ class UnderstandRealizerTest {
         assertEquals("20 4514 9154 9395", result.findings!!.metadata[META_ENTITY_TRACK])
         assertEquals(
             listOf("20 4514 9154 9395", "20451491549396"),
-            com.point.core.flow.moreOf(result.findings!!.metadata, META_ENTITY_TRACK),
+            moreOf(result.findings!!.metadata, META_ENTITY_TRACK),
         )
     }
 
@@ -690,8 +683,8 @@ class UnderstandRealizerTest {
 
         assertTrue(meta.network)
         assertTrue(meta.auth)
-        assertEquals(com.point.core.flow.Cost.PAID, meta.cost)
-        assertEquals(com.point.core.flow.Latency.SLOW, meta.latency)
+        assertEquals(Cost.PAID, meta.cost)
+        assertEquals(Latency.SLOW, meta.latency)
     }
 
     @Test
@@ -768,12 +761,12 @@ class UnderstandRealizerTest {
         assertFalse("найденное раньше выдано за прирост: $said", said.contains("елефон"))
     }
 
-    private fun namedLlm(answer: String, by: String) = object : com.point.core.flow.LlmClient {
+    private fun namedLlm(answer: String, by: String) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String): com.point.core.model.ResultObject {
             val f = File.createTempFile("ans", ".txt").apply { deleteOnExit(); writeText(answer) }
             return com.point.core.model.ResultObject(
                 ObjectKind.TEXT, "text/plain", ScratchRef(f.absolutePath),
-                metadata = mapOf(com.point.core.flow.META_ANSWERED_BY to by),
+                metadata = mapOf(META_ANSWERED_BY to by),
             )
         }
     }
@@ -789,8 +782,8 @@ class UnderstandRealizerTest {
             .perform(photo) as ActionResult.Done
         val enriched = photo.copy(metadata = photo.metadata + first.findings!!.metadata)
         assertEquals(
-            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
-            com.point.core.flow.investigationStateOf(enriched.metadata, UnderstandCapability.ID),
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(enriched.metadata, UnderstandCapability.ID),
         )
 
         val second = UnderstandRealizer(namedLlm("METER=20842", "groq"))
@@ -798,10 +791,10 @@ class UnderstandRealizerTest {
 
         val meta = second.findings!!.metadata
         assertEquals(
-            com.point.core.flow.InvestigationState.FOUND,
-            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+            InvestigationState.FOUND,
+            investigationStateOf(meta, UnderstandCapability.ID),
         )
-        val marks = meta["entity.meter" + com.point.core.flow.META_EVIDENCE_SUFFIX].orEmpty()
+        val marks = meta["entity.meter" + META_EVIDENCE_SUFFIX].orEmpty()
         assertTrue("согласие не стало уликой: $marks", marks.contains("agree:gemini") && marks.contains("agree:groq"))
     }
 
@@ -818,11 +811,11 @@ class UnderstandRealizerTest {
         val meta = second.findings!!.metadata
         assertTrue(
             "расхождение исчезло молча",
-            !meta["entity.meter" + com.point.core.flow.META_ALT_SUFFIX].isNullOrBlank(),
+            !meta["entity.meter" + META_ALT_SUFFIX].isNullOrBlank(),
         )
         assertTrue(
             "спор прикрыт согласием",
-            !meta["entity.meter" + com.point.core.flow.META_EVIDENCE_SUFFIX].orEmpty().contains("agree:"),
+            !meta["entity.meter" + META_EVIDENCE_SUFFIX].orEmpty().contains("agree:"),
         )
     }
 
@@ -854,7 +847,7 @@ class UnderstandRealizerTest {
         assertEquals(
             "накладная на зрячем пути стала номером без роли",
             "5900123456789",
-            meta[com.point.core.flow.META_ENTITY_PREFIX + "track"],
+            meta[META_ENTITY_PREFIX + "track"],
         )
     }
 
@@ -880,7 +873,7 @@ class UnderstandRealizerTest {
         assertEquals(
             "число без подписи объявлено накладной",
             null,
-            meta[com.point.core.flow.META_ENTITY_PREFIX + "track"],
+            meta[META_ENTITY_PREFIX + "track"],
         )
     }
 
@@ -895,8 +888,8 @@ class UnderstandRealizerTest {
 
         val meta = (result as ActionResult.Done).findings!!.metadata
         assertEquals(
-            com.point.core.flow.InvestigationState.FOUND,
-            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+            InvestigationState.FOUND,
+            investigationStateOf(meta, UnderstandCapability.ID),
         )
     }
 
@@ -910,8 +903,8 @@ class UnderstandRealizerTest {
 
         val meta = (result as ActionResult.Done).findings!!.metadata
         assertEquals(
-            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
-            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(meta, UnderstandCapability.ID),
         )
     }
 
@@ -974,11 +967,11 @@ class UnderstandRealizerTest {
 
         assertTrue(
             "спорная цифра обязана нести сомнение",
-            com.point.core.flow.isAssumption(meta, "entity.meter"),
+            isAssumption(meta, "entity.meter"),
         )
         assertFalse(
             "уверенное значение сомнением не метится",
-            com.point.core.flow.isAssumption(meta, "entity.amount"),
+            isAssumption(meta, "entity.amount"),
         )
     }
 
@@ -1025,7 +1018,7 @@ class UnderstandRealizerTest {
             content = document.replace("вул. Хрещатик, 1", "вул. Хрещатик, 16"),
             metadata = mapOf(
                 "entity.address" to "вул. Хрещатик, 1б",
-                "entity.address" + com.point.core.flow.META_SOURCE_SUFFIX to
+                "entity.address" + META_SOURCE_SUFFIX to
                     com.point.core.model.Provenance.HUMAN.wire,
             ),
         )
@@ -1037,7 +1030,7 @@ class UnderstandRealizerTest {
         org.junit.Assert.assertEquals("вул. Хрещатик, 1б", merged["entity.address"])
         org.junit.Assert.assertEquals(
             com.point.core.model.Provenance.HUMAN,
-            com.point.core.flow.provenanceOf(merged, "entity.address"),
+            provenanceOf(merged, "entity.address"),
         )
     }
 
@@ -1059,7 +1052,7 @@ class UnderstandRealizerTest {
         ).perform(chat, null)
 
         val findings = (result as ActionResult.Done).findings!!
-        val people = findings.objects.filter { it.state.kind == com.point.core.flow.KIND_PERSON }
+        val people = findings.objects.filter { it.state.kind == KIND_PERSON }
         assertEquals(3, people.size)
 
         val first = people.single { it.uri.value == "АНДРІЯЩЕНКО Артур Миколайович" }
@@ -1070,7 +1063,7 @@ class UnderstandRealizerTest {
         val merged = findings.metadata
         assertTrue("номера — «ещё», не спор: " + merged["entity.phone.alt"],
             alternativesOf(merged, "entity.phone").isEmpty())
-        assertEquals(2, com.point.core.flow.moreOf(merged, "entity.phone").size)
+        assertEquals(2, moreOf(merged, "entity.phone").size)
     }
 
     @Test
@@ -1081,7 +1074,7 @@ class UnderstandRealizerTest {
             content = document + "\n+380665262706\n+380961992869",
             metadata = mapOf(
                 "entity.phone" to "+380665262706",
-                "entity.phone" + com.point.core.flow.META_ALT_SUFFIX to "+380961992869",
+                "entity.phone" + META_ALT_SUFFIX to "+380961992869",
             ),
         )
 
@@ -1089,7 +1082,7 @@ class UnderstandRealizerTest {
 
         val merged = (result as ActionResult.Done).findings!!.metadata
         assertTrue(alternativesOf(merged, "entity.phone").isEmpty())
-        assertEquals(listOf("+380961992869"), com.point.core.flow.moreOf(merged, "entity.phone"))
+        assertEquals(listOf("+380961992869"), moreOf(merged, "entity.phone"))
     }
 
     /**
@@ -1116,7 +1109,7 @@ class UnderstandRealizerTest {
         val qrOnly = PointObject(
             "img-qr", "image/png", ScratchRef("/tmp/qr.png"),
             ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_QR)),
-            metadata = mapOf(com.point.core.flow.META_ENTITY_PREFIX + "qr" to "Ночь: связь после реанимации"),
+            metadata = mapOf(META_ENTITY_PREFIX + "qr" to "Ночь: связь после реанимации"),
         )
 
         val result = realizer("SUMMARY=короткая заметка").perform(qrOnly)
@@ -1158,18 +1151,18 @@ class UnderstandRealizerTest {
 
         // Окно обрезается по границе слова (не ровно 24 000) — ожидание считается той же
         // функцией, которой пользуется сам исполнитель, а не постоянным числом.
-        val expectedRead = com.point.core.flow.readWindowOf(doc, already = 0, limit = 24_000).length
+        val expectedRead = readWindowOf(doc, already = 0, limit = 24_000).length
 
         val result = realizer("PHONE=+380671234567").perform(textObject(content = doc)) as ActionResult.Done
 
-        assertEquals(com.point.core.flow.partialReadMessage(expectedRead, doc.length), result.message)
+        assertEquals(partialReadMessage(expectedRead, doc.length), result.message)
         assertTrue(result.message.contains("Прочитано начало"))
         assertTrue("дверь «читать дальше» — то же действие «Понять»", result.message.contains("«Понять»"))
 
         val meta = result.findings!!.metadata
         assertEquals("+380671234567", meta["entity.phone"])
-        assertEquals(expectedRead.toString(), meta[com.point.core.flow.META_READ_CHARS])
-        assertEquals(doc.length.toString(), meta[com.point.core.flow.META_READ_TOTAL_CHARS])
+        assertEquals(expectedRead.toString(), meta[META_READ_CHARS])
+        assertEquals(doc.length.toString(), meta[META_READ_TOTAL_CHARS])
     }
 
     @Test
@@ -1179,8 +1172,8 @@ class UnderstandRealizerTest {
         val result = realizer("PHONE=+380671234567").perform(textObject(content = doc)) as ActionResult.Done
 
         assertEquals(
-            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
-            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
         )
     }
 
@@ -1222,8 +1215,8 @@ class UnderstandRealizerTest {
 
         assertFalse("дочитанный объект больше не частичен", second.message.contains("Прочитано начало"))
         assertEquals(
-            com.point.core.flow.InvestigationState.FOUND,
-            com.point.core.flow.investigationStateOf(
+            InvestigationState.FOUND,
+            investigationStateOf(
                 second.findings?.metadata ?: partiallyRead.metadata, UnderstandCapability.ID,
             ),
         )
@@ -1235,8 +1228,8 @@ class UnderstandRealizerTest {
         val done = textObject(
             content = doc,
             metadata = mapOf(
-                com.point.core.flow.META_READ_CHARS to doc.length.toString(),
-                com.point.core.flow.META_READ_TOTAL_CHARS to doc.length.toString(),
+                META_READ_CHARS to doc.length.toString(),
+                META_READ_TOTAL_CHARS to doc.length.toString(),
             ),
         )
 
@@ -1257,14 +1250,14 @@ class UnderstandRealizerTest {
     @Test
     fun `имя файла и размер не закрывают «Понять» находкой при пустых руках`() = runTest {
         val accepted = textObject(
-            metadata = mapOf("name" to "skan.txt", com.point.core.flow.META_SIZE to "20480"),
+            metadata = mapOf("name" to "skan.txt", META_SIZE to "20480"),
         )
 
         val result = realizer("NONE").perform(accepted) as ActionResult.Done
 
         assertEquals(
-            com.point.core.flow.InvestigationState.NOT_FOUND,
-            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+            InvestigationState.NOT_FOUND,
+            investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
         )
     }
 
@@ -1285,16 +1278,16 @@ class UnderstandRealizerTest {
             "shot", "image/jpeg", ScratchRef("/tmp/shot.jpg"), ObjectState(ObjectKind.IMAGE),
             metadata = mapOf(
                 META_OCR_TEXT_REF to read.absolutePath,
-                com.point.core.flow.META_UNUSABLE_REASON to
-                    com.point.core.flow.readerFailure(com.point.core.flow.READER_NOT_DECODED, ObjectKind.IMAGE),
+                META_UNUSABLE_REASON to
+                    readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE),
             ),
         )
 
         val result = realizer("NONE").perform(unopened) as ActionResult.Done
 
         assertEquals(
-            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
-            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
         )
     }
 
@@ -1308,16 +1301,16 @@ class UnderstandRealizerTest {
         val sender = "Іваненко Іван"
         val receiver = "Петренко Петро"
         val number = "067 636 05 60"
-        val layer = com.point.core.flow.AtomLayer(
+        val layer = AtomLayer(
             listOf(
-                com.point.core.flow.Atom("w1", sender, com.point.core.flow.Box(100f, 100f, 450f, 140f)),
-                com.point.core.flow.Atom("w2", receiver, com.point.core.flow.Box(600f, 100f, 950f, 140f)),
-                com.point.core.flow.Atom("w3", number, com.point.core.flow.Box(100f, 160f, 450f, 200f)),
-                com.point.core.flow.Atom("w4", "Відділення №7", com.point.core.flow.Box(600f, 160f, 950f, 200f)),
+                Atom("w1", sender, Box(100f, 100f, 450f, 140f)),
+                Atom("w2", receiver, Box(600f, 100f, 950f, 140f)),
+                Atom("w3", number, Box(100f, 160f, 450f, 200f)),
+                Atom("w4", "Відділення №7", Box(600f, 160f, 950f, 200f)),
             ),
         )
         val dump = File.createTempFile("point-atoms", ".tsv").apply {
-            deleteOnExit(); writeText(com.point.core.flow.AtomCodec.encode(layer))
+            deleteOnExit(); writeText(AtomCodec.encode(layer))
         }
         val sidecar = File.createTempFile("point-ocr", ".txt").apply {
             deleteOnExit(); writeText("$sender  $receiver\n$number  Відділення №7")
@@ -1327,7 +1320,7 @@ class UnderstandRealizerTest {
             ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT)),
             metadata = mapOf(
                 META_OCR_TEXT_REF to sidecar.absolutePath,
-                com.point.core.flow.META_OCR_ATOMS_REF to dump.absolutePath,
+                META_OCR_ATOMS_REF to dump.absolutePath,
             ),
         )
 
@@ -1336,7 +1329,7 @@ class UnderstandRealizerTest {
 
         val findings = result.findings!!
         assertEquals("graph.role.sender", findings.metadata["entity.phone.of"])
-        val owner = findings.objects.single { it.state.kind == com.point.core.flow.KIND_PERSON }
+        val owner = findings.objects.single { it.state.kind == KIND_PERSON }
         assertEquals(sender, owner.uri.value)
         assertEquals(number, owner.metadata["entity.phone"])
     }
@@ -1353,15 +1346,15 @@ class UnderstandRealizerTest {
     fun `слово страницы вместо слова модели хозяина у места не отнимает`() = runTest {
         val sender = "Іваненко Іван"
         val receiver = "Петренко Петро"
-        val a = com.point.core.flow.Atom("w1", sender, com.point.core.flow.Box(100f, 100f, 450f, 140f))
-        val b = com.point.core.flow.Atom("w2", receiver, com.point.core.flow.Box(600f, 100f, 950f, 140f))
+        val a = Atom("w1", sender, Box(100f, 100f, 450f, 140f))
+        val b = Atom("w2", receiver, Box(600f, 100f, 950f, 140f))
         val ourBranch = "Відділення №14"
         val theirBranch = "Відділення №7"
-        val c = com.point.core.flow.Atom("w3", ourBranch, com.point.core.flow.Box(100f, 160f, 450f, 200f))
-        val d = com.point.core.flow.Atom("w4", theirBranch, com.point.core.flow.Box(600f, 160f, 950f, 200f))
-        val layer = com.point.core.flow.AtomLayer(listOf(a, b, c, d))
+        val c = Atom("w3", ourBranch, Box(100f, 160f, 450f, 200f))
+        val d = Atom("w4", theirBranch, Box(600f, 160f, 950f, 200f))
+        val layer = AtomLayer(listOf(a, b, c, d))
         val dump = File.createTempFile("point-atoms", ".tsv").apply {
-            deleteOnExit(); writeText(com.point.core.flow.AtomCodec.encode(layer))
+            deleteOnExit(); writeText(AtomCodec.encode(layer))
         }
         val sidecar = File.createTempFile("point-ocr", ".txt").apply {
             deleteOnExit(); writeText("$sender  $receiver\n$ourBranch  $theirBranch")
@@ -1371,7 +1364,7 @@ class UnderstandRealizerTest {
             ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT)),
             metadata = mapOf(
                 META_OCR_TEXT_REF to sidecar.absolutePath,
-                com.point.core.flow.META_OCR_ATOMS_REF to dump.absolutePath,
+                META_OCR_ATOMS_REF to dump.absolutePath,
             ),
         )
 

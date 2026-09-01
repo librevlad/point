@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.AiCapability
+import com.point.core.flow.AiRealizer
+
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind

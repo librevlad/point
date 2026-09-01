@@ -1,5 +1,6 @@
 package com.point.executors
 
+
 import com.point.core.flow.ExcelCapability
 import com.point.core.flow.capabilities.PdfCapability
 import com.point.core.flow.Capability
@@ -45,7 +46,7 @@ class RealCapabilityInventoryTest {
     private val shared: Set<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests())
 
     private val builtIn: List<Capability> = shared.toList() + listOf(
-        AiCapability(aiKeysReady), BlurBgCapability(),
+        AiCapabilityOnPhone(aiKeysReady), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),
         FixErrorsCapability(aiKeysReady), FixErrorsStrongerCapability(aiKeysReady),
@@ -62,7 +63,7 @@ class RealCapabilityInventoryTest {
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
         ShootMoreCapability(),
         ShoppingListCapability(aiKeysReady), SmsCapability(), TranscribeCapability(keysReady),
-        TranslateCapability(aiKeysReady), UnderstandCapability(aiKeysReady), VCardCapability(), WordCapability(),
+        TranslateCapabilityOnPhone(aiKeysReady), UnderstandCapabilityOnPhone(aiKeysReady), VCardCapability(), WordCapability(),
         WordPlusCapability(aiKeysReady), CleanMetadataCapability(),
     )
 

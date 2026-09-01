@@ -89,7 +89,7 @@ class WordPlusCapability @Inject constructor(
         "документ Word · ${if (state.kind == ObjectKind.IMAGE) "снимок" else "текст"} уйдёт в сервис",
     )
 
-    companion object { val ID = CapabilityId("word-plus") }
+    companion object { val ID = com.point.core.flow.KnownCapabilities.WORD_PLUS }
 }
 
 class WordPlusRealizer @Inject constructor(
@@ -132,7 +132,7 @@ class WordPlusRealizer @Inject constructor(
                 reportStage(if (modelReads) "Читаю страницу" else "Размечаю документ")
                 val answer =
                     if (modelReads) llm.run(input, WORD_PLUS_HANDWRITING_PROMPT)
-                    else llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)
+                    else llm.run(com.point.core.flow.textStandIn(input), WORD_PLUS_PROMPT + text)
                 val read = parseDocBlocks(File(answer.uri.value).readText(), mode)
                 if (read.isEmpty()) {
                     ActionResult.Failure(

@@ -84,5 +84,5 @@ class SaveContactRealizer @Inject constructor(
 
     private suspend fun contactValue(input: PointObject, key: String, type: EntityType): String? =
         input.metadata[META_ENTITY_PREFIX + key]?.takeIf { it.isNotBlank() }
-            ?: firstEntity(extractor, input, type)
+            ?: com.point.core.flow.firstEntity(extractor, input, type)
 }

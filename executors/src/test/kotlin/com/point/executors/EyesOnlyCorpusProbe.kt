@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.UnderstandCapability
+import com.point.core.flow.UnderstandRealizer
+
 import com.point.core.flow.ACTION_SCHEMAS
 import com.point.core.flow.AiFact
 import com.point.core.flow.AiFacts

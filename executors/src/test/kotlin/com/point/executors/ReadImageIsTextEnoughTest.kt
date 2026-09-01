@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.TranslateCapability
+
 import com.point.core.flow.AiReadiness
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind

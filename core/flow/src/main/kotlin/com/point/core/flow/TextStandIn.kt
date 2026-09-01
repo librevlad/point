@@ -1,6 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 
@@ -17,6 +16,6 @@ import com.point.core.model.PointObject
  * слой OCR, которая текстом объекта не является. Текстовый объект отдаётся как есть: у него
  * файл и есть тот самый текст.
  */
-internal fun textStandIn(input: PointObject): PointObject =
+fun textStandIn(input: PointObject): PointObject =
     if (input.state.kind == ObjectKind.TEXT) input
     else input.copy(mime = "text/plain", metadata = input.metadata - META_OCR_TEXT_REF)

@@ -74,11 +74,11 @@ import com.point.core.model.ScratchRef
 import com.point.core.model.ObjectRef
 import com.point.core.model.PointObject
 import com.point.executors.Bitmaps
-import com.point.executors.AiCapability
+import com.point.core.flow.AiCapability
 import com.point.executors.FindCapability
 import com.point.executors.OpenInCapability
-import com.point.executors.aiSuggestions
-import com.point.executors.aiTransformTarget
+import com.point.core.flow.aiSuggestions
+import com.point.core.flow.aiTransformTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap

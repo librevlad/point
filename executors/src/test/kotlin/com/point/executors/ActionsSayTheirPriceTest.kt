@@ -1,5 +1,9 @@
 package com.point.executors
 
+import com.point.core.flow.AiCapability
+import com.point.core.flow.TranslateCapability
+import com.point.core.flow.UnderstandCapability
+
 import com.point.core.flow.ExcelCapability
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability

@@ -140,11 +140,26 @@ fun main(args: Array<String>) {
     val excelKeys = com.point.core.flow.AiReadiness {
         FilePcConfig(pointDir).load().aiKeys.mine.isNotEmpty()
     }
+    // Один клиент — вся связка ключей человека: им читают «В Excel», «Понять»,
+    // «Перевести» и «AI» (#1379: «пк должен все уметь не хуже телефона»).
+    val pcLlm = com.point.core.flow.UserKeyLlmClient(
+        userKeys = PcUserKeys(pointDir),
+        http = com.point.core.flow.UrlConnectionHttpJson(),
+        store = excelStore,
+        facts = PcAiFacts(),
+        privacy = PcCloudPrivacy(pointDir),
+        frames = PcModelFrames,
+    )
+    val pcKnowledge = com.point.core.flow.GraphKnowledge(excelStore, PcPdfTextKnowledge())
     val capabilities = desktopCapabilities { accountStore.current() != null } +
-        com.point.core.flow.ExcelCapability(excelKeys)
+        com.point.core.flow.ExcelCapability(excelKeys) +
+        com.point.core.flow.UnderstandCapability(excelKeys) +
+        com.point.core.flow.TranslateCapability(excelKeys) +
+        com.point.core.flow.AiCapability(excelKeys)
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
+    var resolverLate: com.point.core.flow.Resolver? = null
     val resolver = DesktopResolver(
         realizers = setOf(
             PcOpenRealizer(opener, browse),
@@ -174,25 +189,23 @@ fun main(args: Array<String>) {
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(
                 com.point.core.flow.ExcelRealizer(
-                    providers = listOf(
-                        com.point.core.flow.UserKeyLlmClient(
-                            userKeys = PcUserKeys(pointDir),
-                            http = com.point.core.flow.UrlConnectionHttpJson(),
-                            store = excelStore,
-                            facts = PcAiFacts(),
-                            privacy = PcCloudPrivacy(pointDir),
-                            frames = PcModelFrames,
-                        ),
-                    ),
+                    providers = listOf(pcLlm),
                     writer = com.point.core.flow.OoxmlSpreadsheetWriter(excelStore),
                     cropper = PcEvidenceCrops(),
                     store = excelStore,
-                    known = com.point.core.flow.GraphKnowledge(excelStore, PcPdfTextKnowledge()),
+                    known = pcKnowledge,
                 ),
             ),
+            com.point.core.flow.UnderstandRealizer(pcLlm),
+            com.point.core.flow.TranslateRealizer(pcLlm, pcKnowledge),
+
+            // «AI» умеет перенаправить просьбу другому действию — резолвер рождается ниже,
+            // поэтому сюда он приходит лениво, как и стук телефона (#1079).
+            com.point.core.flow.AiRealizer(pcLlm, lazy { resolverLate!! }),
         ),
         capabilityIsNetwork = { id -> capabilities.any { it.id == id && it.meta.network } },
     )
+    resolverLate = resolver
     // Приём файла по ссылке на компьютере (#727): разговор с сервером — общий с телефоном.
     val receiver = ReceiveOnPc(
         inbox = com.point.core.flow.HttpDropInbox(

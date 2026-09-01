@@ -14,7 +14,6 @@ import com.point.executors.AppCapability
 import com.point.executors.PcCapability
 import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
-import com.point.executors.AiCapability
 import com.point.executors.remotePcCapabilities
 import com.point.executors.WordPlusCapability
 import com.point.executors.WordPlusRealizer
@@ -25,12 +24,8 @@ import com.point.executors.FixErrorsCapability
 import com.point.executors.FixErrorsRealizer
 import com.point.executors.FixErrorsStrongerCapability
 import com.point.executors.FixErrorsStrongerRealizer
-import com.point.executors.UnderstandCapability
-import com.point.executors.UnderstandRealizer
 import com.point.executors.ShoppingListCapability
 import com.point.executors.ShoppingListRealizer
-import com.point.executors.AiChatResponderImpl
-import com.point.executors.AiRealizer
 import com.point.executors.CallCapability
 import com.point.executors.CallRealizer
 import com.point.executors.EmailCapability
@@ -56,6 +51,12 @@ import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.ExcelCapabilityOnPhone
+import com.point.executors.AiCapabilityOnPhone
+import com.point.executors.AiRealizerOnPhone
+import com.point.executors.TranslateCapabilityOnPhone
+import com.point.executors.TranslateRealizerOnPhone
+import com.point.executors.UnderstandCapabilityOnPhone
+import com.point.executors.UnderstandRealizerOnPhone
 import com.point.executors.ExcelRealizerOnPhone
 import com.point.executors.ExtractAllRealizer
 import com.point.executors.FindCapability
@@ -113,8 +114,6 @@ import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
 import com.point.executors.TranscribeCapability
 import com.point.executors.TranscribeRealizer
-import com.point.executors.TranslateCapability
-import com.point.executors.TranslateRealizer
 import com.point.executors.WordCapability
 import com.point.executors.WordRealizer
 import com.point.executors.SaveContactCapability
@@ -186,7 +185,7 @@ abstract class CapabilityModule {
     // Сканированный PDF читается одним действием (#1014): страницы → чтение → знание на PDF.
     @Binds @IntoSet @OwnCapabilities abstract fun readDocumentCap(c: ReadDocumentCapability): Capability
     @Binds @IntoSet abstract fun readDocumentReal(r: ReadDocumentRealizer): Realizer
-    @Binds @IntoSet @OwnCapabilities abstract fun translateCap(c: TranslateCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun translateCap(c: TranslateCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun speakCap(c: com.point.executors.SpeakCapability): Capability
@@ -206,10 +205,10 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun aiCap(c: AiCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun aiCap(c: AiCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shoppingListCap(c: ShoppingListCapability): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun understandCap(c: UnderstandCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun understandCap(c: UnderstandCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsCap(c: FixErrorsCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsStrongerCap(c: FixErrorsStrongerCapability): Capability
@@ -251,7 +250,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun slidesR(r: SlidesRealizer): Realizer
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizer): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
-    @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
+    @Binds @IntoSet abstract fun translateR(r: TranslateRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizer): Realizer
     @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizerOnPhone): Realizer
@@ -274,9 +273,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun externalEyeOcrR(r: ExternalEyeOcrRealizer): Realizer
     @Binds @IntoSet abstract fun externalEyeCloudOcrR(r: ExternalEyeCloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
-    @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
+    @Binds @IntoSet abstract fun aiR(r: AiRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
-    @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer
+    @Binds @IntoSet abstract fun understandR(r: UnderstandRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun phoneAppsR(r: PhoneAppsRealizer): Realizer
 
     @Binds @IntoSet abstract fun fixErrorsR(r: FixErrorsRealizer): Realizer
@@ -349,7 +348,7 @@ abstract class CapabilityModule {
             OpenCvPaperWhitener(store)
 
         @Provides
-        fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)
+        fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = com.point.core.flow.AiChatResponderImpl(llm)
 
         @Provides @ElementsIntoSet @OwnCapabilities
         fun appCapabilities(chosen: ChosenApps): Set<Capability> =

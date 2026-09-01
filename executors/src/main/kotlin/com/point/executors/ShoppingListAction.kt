@@ -44,12 +44,12 @@ class ShoppingListRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = entitySourceText(input).take(MAX_CHARS)
+                val text = com.point.core.flow.entitySourceText(input).take(MAX_CHARS)
                 if (text.isBlank()) return@withContext ActionResult.Failure("Нет текста рецепта", recoverable = true)
                 reportStage("Собираю список")
 
                 // Рецепт уже в запросе — снимок страницы модели не нужен (#1244).
-                ActionResult.Success(llm.run(textStandIn(input), SHOPPING_LIST_PROMPT + text))
+                ActionResult.Success(llm.run(com.point.core.flow.textStandIn(input), SHOPPING_LIST_PROMPT + text))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось составить список", recoverable = true) }
         }
 

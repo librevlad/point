@@ -82,7 +82,7 @@ class CopyCardRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val card = firstEntity(extractor, input, EntityType.PAYMENT_CARD) ?: error("Карта не найдена")
+                val card = com.point.core.flow.firstEntity(extractor, input, EntityType.PAYMENT_CARD) ?: error("Карта не найдена")
                 val digits = card.filter { it.isDigit() }
                 clipboard.copy(digits, "Card")
 

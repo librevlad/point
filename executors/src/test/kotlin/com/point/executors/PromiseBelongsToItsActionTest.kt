@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.UnderstandCapability
+
 import com.point.core.flow.yieldLabel
 import com.point.core.model.ActionYield
 import com.point.core.model.ObjectKind
