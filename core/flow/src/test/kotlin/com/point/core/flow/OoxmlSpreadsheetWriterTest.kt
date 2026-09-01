@@ -139,4 +139,107 @@ class OoxmlSpreadsheetWriterTest {
             rgb,
         )
     }
+
+    // ---- #1371: таблица в Excel остаётся таблицей ----
+
+    /** Мини-ведомость: заголовок, шапка на пять граф, две пустые нумерованные строки. */
+    private fun vidomist() = SheetPlan(
+        rows = listOf(
+            listOf("ВІДОМІСТЬ"),
+            listOf("№", "ПІБ", "ЗВАННЯ", "ПОСАДА", "ОСОБИСТИЙ ПІДПИС"),
+            listOf("1"),
+            listOf("2"),
+        ),
+        headerRows = setOf(1),
+        tables = listOf(1..3),
+        titles = setOf(0),
+    )
+
+    @Test
+    fun `строки сетки обведены рамкой — включая пустые графы бланка`() = runBlocking {
+        val sheet = sheetOf(OoxmlSpreadsheetWriter(store).write(vidomist()))
+
+        assertTrue("шапка в стиле сетки: $sheet", sheet.contains("""r="A2" s="7""""))
+        assertTrue("значение сетки с рамкой", sheet.contains("""r="A3" s="6""""))
+        assertTrue(
+            "пустая графа дописана и несёт рамку — бланк остаётся бланком",
+            sheet.contains("""<c r="B3" s="6"/>"""),
+        )
+        assertTrue("пустая графа подписи", sheet.contains("""<c r="E4" s="6"/>"""))
+    }
+
+    @Test
+    fun `свободные строки рамкой не обводятся, а заголовок ложится по ширине таблицы`() = runBlocking {
+        val sheet = sheetOf(OoxmlSpreadsheetWriter(store).write(vidomist()))
+
+        assertTrue("заголовок — стиль заголовка, не сетки", sheet.contains("""r="A1" s="5""""))
+        assertTrue(
+            "заголовок объединён на все пять граф",
+            sheet.contains("""<mergeCell ref="A1:E1"/>"""),
+        )
+        assertFalse("заголовку пустых клеток сетки не дописано", sheet.contains("""<c r="B1" s="6"/>"""))
+    }
+
+    @Test
+    fun `ширина колонки идёт за содержимым, но не дальше потолка`() = runBlocking {
+        val long = "х".repeat(120)
+        val plan = vidomist().let { it.copy(rows = it.rows + listOf(listOf("3", long))) }
+            .copy(tables = listOf(1..4))
+        val sheet = sheetOf(OoxmlSpreadsheetWriter(store).write(plan))
+
+        assertTrue(
+            "«ОСОБИСТИЙ ПІДПИС» читается целиком — кириллица шире знака цифры: $sheet",
+            sheet.contains("""<col min="5" max="5" width="22" customWidth="1"/>"""),
+        )
+        assertTrue("узкому № — узкая колонка", sheet.contains("""<col min="1" max="1" width="7" customWidth="1"/>"""))
+        assertTrue(
+            "одна длинная ячейка не растягивает колонку на весь экран",
+            sheet.contains("""<col min="2" max="2" width="50" customWidth="1"/>"""),
+        )
+    }
+
+    @Test
+    fun `длинный объединённый заголовок получает высоту — Excel сам её merged-ячейке не подбирает`() = runBlocking {
+        val long = "доведення про кримінальну відповідальність за незаконне поводження зі зброєю, " +
+            "бойовими припасами або вибуховими речовинами відповідно до Кримінального кодексу"
+        val plan = vidomist().let { it.copy(rows = listOf(listOf(long)) + it.rows.drop(1)) }
+        val sheet = sheetOf(OoxmlSpreadsheetWriter(store).write(plan))
+
+        assertTrue("строке задана высота под перенос: $sheet", Regex("""<row r="1" ht="\d+" customHeight="1">""").containsMatchIn(sheet))
+    }
+
+    @Test
+    fun `лист без знания о сетке пишется как раньше — ни рамок, ни ширин`() = runBlocking {
+        val sheet = sheetOf(
+            OoxmlSpreadsheetWriter(store).write(listOf(listOf("Имя", "Сумма"), listOf("Приказ", "42"))),
+        )
+
+        assertFalse(sheet.contains("<cols>"))
+        assertFalse(sheet.contains("mergeCell"))
+        assertFalse("стилей сетки нет", sheet.contains("""s="6""""))
+    }
+
+    @Test
+    fun `наш же читатель читает бланк назад`() = runBlocking {
+        val ref = OoxmlSpreadsheetWriter(store).write(vidomist())
+        val obj = PointObject("x", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ref, com.point.core.model.ObjectState(com.point.core.model.ObjectKind.OFFICE))
+
+        val back = OoxmlSpreadsheetReader().readRows(obj)
+
+        assertEquals(listOf("ВІДОМІСТЬ"), back.first().filter { it.isNotBlank() })
+        assertEquals(listOf("№", "ПІБ", "ЗВАННЯ", "ПОСАДА", "ОСОБИСТИЙ ПІДПИС"), back[1])
+    }
+
+    @Test
+    fun `лист — валидный XML целиком`() = runBlocking {
+        val ref = OoxmlSpreadsheetWriter(store).write(vidomist())
+        ZipFile(File(ref.value)).use { zip ->
+            for (entry in zip.entries()) {
+                val bytes = zip.getInputStream(entry).readBytes()
+                javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                    .newDocumentBuilder()
+                    .parse(bytes.inputStream())
+            }
+        }
+    }
 }
