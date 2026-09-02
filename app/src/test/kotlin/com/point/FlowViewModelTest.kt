@@ -822,6 +822,36 @@ class FlowViewModelTest {
      * передавались вовсе — после чего всё подтверждалось и исчезало из очереди компьютера:
      * повторить было неоткуда.
      */
+    /**
+     * Экран работы говорит, на каком он шаге (#1386).
+     *
+     * Кольцо крутилось одинаково всё время: «визуально неясно, что именно сейчас происходит —
+     * поиск компьютера, подключение или передача объекта». Шаги названы тем, что происходит на
+     * самом деле: телефон не ищет компьютер рядом, а спрашивает сервер, что тот оставил.
+     */
+    @Test fun `забор с компьютера называет каждый свой шаг`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "первый.txt", "mime" to "text/plain")),
+            com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "второй.txt", "mime" to "text/plain")),
+        )
+        val vm = vm()
+        val said = mutableListOf<String>()
+        pcTransport.atFetchOutbox = { vm.ui.value.busyStage?.let { said += it } }
+        pcTransport.atDownload = { vm.ui.value.busyStage?.let { said += it } }
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                "Спрашиваю, что оставил компьютер",
+                "Забираю первый.txt · 1 из 2",
+                "Забираю второй.txt · 2 из 2",
+            ),
+            said,
+        )
+    }
+
     @Test fun `пачка с просьбами не теряет ни просьб, ни знания`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер")
         pcTransport.outbox = listOf(
@@ -6352,6 +6382,10 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     /** Что видно на экране, пока письмо ещё в пути (#1269): отправка — сетевой круг. */
     var atSend: ((Map<String, String>) -> Unit)? = null
 
+    /** Что видно на экране в тот миг, когда шаг начался (#1386). */
+    var atFetchOutbox: (() -> Unit)? = null
+    var atDownload: ((Int) -> Unit)? = null
+
     override suspend fun send(
         pc: com.point.core.flow.LinkedPc,
         obj: com.point.core.model.PointObject,
@@ -6380,9 +6414,11 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     }
     override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcOutboxEntry>? {
         outboxFetches++
+        atFetchOutbox?.invoke()
         return outbox
     }
     override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String): Boolean {
+        atDownload?.invoke(id)
         if (!downloadOk) return false
         java.io.File(targetPath).apply { parentFile?.mkdirs(); writeText("pulled-$id") }
         return true
