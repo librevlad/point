@@ -161,7 +161,7 @@ class CropEvidenceTest {
 
     @Test
     fun `кусок для глаз и кусок для чтения — разные назначения одного адреса`() {
-        val glance = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 10f, 10f))
+        val glance = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 10f, 10f), uprightDegrees = 0)
 
         assertEquals(CropPurpose.GLANCE, glance.purpose)
         assertEquals(CropPurpose.READING, glance.copy(purpose = CropPurpose.READING).purpose)

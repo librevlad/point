@@ -5,6 +5,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import com.point.core.flow.FrameTransform
+import com.point.core.flow.UprightAngle
+import javax.inject.Inject
 
 data class SelectionFrame(val bitmap: Bitmap, val transform: FrameTransform)
 
@@ -22,15 +24,7 @@ fun decodeSelectionFrame(path: String, maxPx: Int): SelectionFrame? {
     val sample = com.point.core.flow.sampleSizeFor(bounds.outWidth, bounds.outHeight, maxPx)
     val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
         ?: return null
-    val orientation = runCatching {
-        ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-    val degrees = when (orientation) {
-        ExifInterface.ORIENTATION_ROTATE_90 -> 90
-        ExifInterface.ORIENTATION_ROTATE_180 -> 180
-        ExifInterface.ORIENTATION_ROTATE_270 -> 270
-        else -> 0
-    }
+    val degrees = uprightDegreesOf(path)
     val upright = if (degrees == 0) {
         decoded
     } else {
@@ -48,6 +42,28 @@ fun decodeSelectionFrame(path: String, maxPx: Int): SelectionFrame? {
             uprightHeight = upright.height,
         ),
     )
+}
+
+/**
+ * На сколько развёрнут кадр в этом файле по метке камеры.
+ *
+ * Тот же ответ получает экран выделения, поэтому вырезанное из файла встаёт ровно так же, как
+ * то, что человек видел, когда выделял.
+ */
+fun uprightDegreesOf(path: String): Int {
+    val orientation = runCatching {
+        ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    return when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270
+        else -> 0
+    }
+}
+
+class ExifUprightAngle @Inject constructor() : UprightAngle {
+    override fun degreesOf(path: String): Int = uprightDegreesOf(path)
 }
 
 fun cropRegion(path: String, left: Int, top: Int, right: Int, bottom: Int): Bitmap? {
