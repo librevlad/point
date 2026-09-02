@@ -65,6 +65,7 @@ class TakeFragmentCapability @Inject constructor() : Capability {
 class TakeFragmentRealizer @Inject constructor(
     private val cropper: EvidenceCropper,
     private val store: ObjectStore,
+    private val angle: com.point.core.flow.UprightAngle,
 ) : Realizer {
 
     override val capabilityId = TakeFragmentCapability.ID
@@ -75,8 +76,15 @@ class TakeFragmentRealizer @Inject constructor(
                 ?: return@withContext ActionResult.Failure("Не видно, какую область брать", recoverable = false)
 
             runCatching {
+                // Область режется из файла как есть, а камера могла записать его повёрнутым:
+                // без этого числа фрагмент выходил на боку, хотя выделяли ровный кадр (#1389).
                 val image = cropper.crop(
-                    CropEvidence(input.uri.value, region, purpose = CropPurpose.GLANCE),
+                    CropEvidence(
+                        input.uri.value,
+                        region,
+                        uprightDegrees = angle.degreesOf(input.uri.value),
+                        purpose = CropPurpose.GLANCE,
+                    ),
                 ) ?: return@withContext ActionResult.Failure("Не удалось вырезать область", recoverable = true)
 
                 val ref = store.newScratchFile(image.extension)

@@ -71,7 +71,8 @@ class TakeFragmentIsAnActionTest {
         override suspend fun clear() = Unit
     }
 
-    private fun realizer(cropper: EvidenceCropper) = TakeFragmentRealizer(cropper, scratch)
+    private fun realizer(cropper: EvidenceCropper, turnedInFile: Int = 0) =
+        TakeFragmentRealizer(cropper, scratch) { turnedInFile }
 
     @Test
     fun `у объекта с показанной областью действие есть`() {
@@ -98,6 +99,22 @@ class TakeFragmentIsAnActionTest {
 
         assertEquals(Box(10f, 20f, 110f, 90f), scissors.asked?.region)
         assertEquals(shot.uri.value, scissors.asked?.imagePath)
+    }
+
+    /**
+     * Фрагмент встаёт так же, как кадр, который человек видел, когда его выделял (#1389).
+     *
+     * Область режется из файла как есть, а камера могла записать файл повёрнутым. Пока это число
+     * не называли, человек выделял ровный текст и получал картинку на боку — при том что и экран
+     * объекта, и экран выделения, и превью области показывали кадр ровно.
+     */
+    @Test
+    fun `фрагмент выходит развёрнутым так же, как виденный кадр`() = runTest {
+        val scissors = Scissors(EvidenceImage(byteArrayOf(1, 2, 3), 100, 70))
+
+        realizer(scissors, turnedInFile = 270).perform(focused)
+
+        assertEquals(270, scissors.asked?.uprightDegrees)
     }
 
     @Test

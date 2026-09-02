@@ -60,7 +60,7 @@ class OoxmlDocxWriterTest {
     }
 
     private fun evidence(text: String) =
-        DocBlock(text, DocStyle.NORMAL, uncertain = true, evidence = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 100f, 40f)))
+        DocBlock(text, DocStyle.NORMAL, uncertain = true, evidence = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 100f, 40f), uprightDegrees = 0))
 
     @Test
     fun `writes the OOXML parts, one paragraph per line`() = runBlocking {
@@ -198,7 +198,7 @@ class OoxmlDocxWriterTest {
             listOf(
                 DocBlock(
                     "11004 Гречка 50", DocStyle.NORMAL,
-                    evidence = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 100f, 40f)),
+                    evidence = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 100f, 40f), uprightDegrees = 0),
                 ),
             ),
         )

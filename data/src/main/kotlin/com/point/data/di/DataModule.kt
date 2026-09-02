@@ -208,6 +208,10 @@ abstract class DataModule {
     @Binds
     abstract fun evidenceCropper(impl: BitmapEvidenceCropper): EvidenceCropper
 
+    // Метку камеры читает тот, кто открывает файл (#1389), а не каждый желающий по-своему.
+    @Binds
+    abstract fun uprightAngle(impl: com.point.data.ExifUprightAngle): com.point.core.flow.UprightAngle
+
     // Уровень звука меряет декодер телефона (#1053) — до того, как запись уедет в сервис.
     @Binds
     abstract fun audioLevel(impl: DecodedAudioLevel): AudioLevel
