@@ -810,6 +810,10 @@ def create_app(
         if not got:
             return HTMLResponse(pages.drop_gone_page(), status_code=404)
         path, name, mime = got
+
+        # Срок человек читает остатком, а не «сутками вообще» (#1388): считает его тот же,
+        # кто присланное и сотрёт.
+        left = mailbox.time_left(path)
         with open(path, "rb") as f:
             data = f.read()
 
@@ -824,13 +828,13 @@ def create_app(
             # картой. Файл никуда не делся и лежит рядом, для тех, кому нужен именно файл.
             if "BEGIN:VCARD" in text.upper():
                 who, fields = _vcard_fields(text)
-                return HTMLResponse(pages.drop_contact_page(who or name, fields, here))
+                return HTMLResponse(pages.drop_contact_page(who or name, fields, here, left))
 
             point = _geo_point(text)
             if point:
-                return HTMLResponse(pages.drop_place_page(name, point, here))
+                return HTMLResponse(pages.drop_place_page(name, point, here, left))
 
-            return HTMLResponse(pages.drop_text_page(name, text, here))
+            return HTMLResponse(pages.drop_text_page(name, text, here, left))
 
         # Снимок видно, запись слышно, файл хотя бы называет себя (#883). Раньше всё, кроме
         # текста, контакта и места, браузер молча качал: человек не знал ни что ему прислали,
@@ -838,12 +842,12 @@ def create_app(
         base = (mime or "").split(";")[0].strip().lower()
         here = "/d/" + drop_id + "?raw=1"
         if not raw and base.startswith("image/"):
-            return HTMLResponse(pages.drop_image_page(name, here, _weight(len(data))))
+            return HTMLResponse(pages.drop_image_page(name, here, _weight(len(data)), left))
         if not raw and base.startswith("audio/"):
-            return HTMLResponse(pages.drop_audio_page(name, here, mime, _weight(len(data))))
+            return HTMLResponse(pages.drop_audio_page(name, here, mime, _weight(len(data)), left))
         if not raw:
             return HTMLResponse(
-                pages.drop_file_page(name, here, _kind_word(mime, name), _weight(len(data)))
+                pages.drop_file_page(name, here, _kind_word(mime, name), _weight(len(data)), left)
             )
 
         quoted = urllib.parse.quote(name)
