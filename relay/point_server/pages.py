@@ -27,6 +27,11 @@ background:#00000033;color:#F2F3F5;font-size:28px;font-weight:600;letter-spacing
 button,a.go{display:block;width:100%;padding:14px;border:0;border-radius:12px;background:#7C5CFF;
 color:#fff;font-size:16px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
 button:active,a.go:active{background:#6A4BE8}
+/* Обычная ссылка на тёмном фоне: браузер красит её своим тёмно-синим (#0000EE), и на
+   #0E1014 человек её почти не видит — «Открыть в картах» и «Скачать файлом» пропадали
+   (ревью страниц 02.09.2026). Цвет — тот же сиреневый, что у кнопок. */
+main a:not(.go){color:#A78BFA;text-decoration:underline;text-underline-offset:2px}
+main a:not(.go):hover{color:#C4B5FD}
 small{display:block;margin-top:16px;font-size:13px;line-height:1.5;color:#7E8492}
 small.warn{border-left:2px solid #FF6B6B80;padding-left:10px;margin-top:12px}
 .shot{display:block;width:100%;border-radius:12px;border:1px solid #FFFFFF14;margin:0 0 12px}
