@@ -158,6 +158,15 @@ fun PortalRow(
     place: Int = 0,
     chevron: Boolean = true,
     subtitleMaxLines: Int = 2,
+
+    /**
+     * Где действие исполнится: состояние строки, а не обещание действия (#1384).
+     *
+     * «на телефоне» стояло второй строкой — там же, где «снимок уйдёт в сервис». Одно из них
+     * говорит про цену и приватность, другое — только про то, чьими руками сделано; читались
+     * они одинаково. Место ушло меткой вправо, вторая строка осталась цене.
+     */
+    mark: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val presence = remember { Animatable(0f) }
@@ -223,6 +232,21 @@ fun PortalRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+            if (mark != null) {
+                Text(
+                    text = mark,
+                    style = PointType.small.copy(
+                        color = if (primary) Color.White.copy(alpha = 0.78f) else PointColors.muted,
+                    ),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .background(
+                            if (primary) Color.White.copy(alpha = 0.14f) else PointColors.muted.copy(alpha = 0.14f),
+                            RoundedCornerShape(6.dp),
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
             }
             if (trailing != null) {
                 trailing()

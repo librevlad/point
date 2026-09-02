@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.AutoFixNormal
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Bolt
@@ -50,6 +52,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Search
@@ -81,6 +84,12 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "pages" -> Icons.Filled.Collections
     "translate" -> Icons.Filled.Translate
     "ai" -> Icons.Filled.AutoAwesome
+    // Четыре соседа носили один знак и читались как дубли одного действия (#1384):
+    // «Понять», «Исправить ошибки», «Исправить сильнее», «AI». Тон у них общий — они и
+    // правда одна семья, — а знак у каждого свой, иначе список врёт про их число.
+    "fix" -> Icons.Filled.AutoFixNormal
+    "fix-more" -> Icons.Filled.AutoFixHigh
+    "ask" -> Icons.Filled.QuestionAnswer
     "cart" -> Icons.Filled.ShoppingCart
     "reply" -> Icons.Filled.Send
     "link" -> Icons.Filled.Link
@@ -128,6 +137,10 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "save-all" -> Color(0xFF64748B)
     "open" -> Color(0xFF2F80ED)
     "ai" -> Color(0xFF7C4DFF)
+    // Одна семья — один тон: врозь их разводит знак, а не цвет (#1384).
+    "fix" -> Color(0xFF7C4DFF)
+    "fix-more" -> Color(0xFF7C4DFF)
+    "ask" -> Color(0xFF7C4DFF)
     "cart" -> Color(0xFF16A34A)
     "reply" -> Color(0xFF7C4DFF)
     "pdf" -> Color(0xFF2F80ED)
