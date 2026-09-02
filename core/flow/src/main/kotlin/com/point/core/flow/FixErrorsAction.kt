@@ -28,7 +28,7 @@ class FixErrorsCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
-    override val icon = "ai"
+    override val icon = "fix"
 
     override val meta = CapabilityMeta(priority = 32, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
@@ -56,7 +56,7 @@ class FixErrorsStrongerCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
-    override val icon = "ai"
+    override val icon = "fix-more"
 
     override val meta = CapabilityMeta(priority = 33, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 

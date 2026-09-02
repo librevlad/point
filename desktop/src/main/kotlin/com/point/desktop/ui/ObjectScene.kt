@@ -410,7 +410,8 @@ internal fun Station(
 ) {
     PortalRow(
         title = title,
-        subtitle = listOfNotNull(note, where).firstOrNull(),
+        subtitle = note,
+        mark = where,
         icon = bubbleIcon(icon),
         accent = accent,
         primary = primary,
@@ -433,7 +434,8 @@ internal fun MutedStation(
     // строкой, как остальные: гаснет плашка и название, а не форма.
     PortalRow(
         title = title,
-        subtitle = listOfNotNull(reason, where).joinToString(" · "),
+        subtitle = reason,
+        mark = where,
         icon = bubbleIcon(icon),
         accent = PointColors.muted,
         appearIndex = appearIndex,

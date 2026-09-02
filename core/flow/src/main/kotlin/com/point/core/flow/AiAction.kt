@@ -44,7 +44,7 @@ class AiCapability(
     private val keys: AiReadiness,
 ) : Capability {
     override val id = ID
-    override val icon = "ai"
+    override val icon = "ask"
     override val meta = CapabilityMeta(priority = 100, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
     override fun label(state: ObjectState) = labelNeedingKey("AI", keys.keySet())
