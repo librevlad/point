@@ -199,7 +199,6 @@ internal fun CompactObject(
             // список «Что можно сделать»: порядок совпадал с телефонным, но человеку это
             // было не видно. Действие без пузыря (просьба к телефону) идёт последней
             // группой — у него нет своего намерения, кроме «отправить».
-            val primary = actions.indexOfFirst { it.unavailable == null }
 
             // «Извлечь» ведёт, только когда есть что извлекать (#1101) — правило общее с
             // телефоном.
@@ -215,10 +214,25 @@ internal fun CompactObject(
                     else com.point.core.ui.actionGroupOf(intent) == group
                 }.takeIf { it.isNotEmpty() }?.let { group to it }
             }
-            grouped.forEach { (group, rows) ->
+            grouped.forEachIndexed { groupIndex, (group, rows) ->
                 Text(group.label.uppercase(), style = PointType.label)
-                rows.forEach { action ->
+
+                // Группа показывает вероятное, остальное — по просьбе (#879, то же правило
+                // и тот же код, что на телефоне). Компьютер показывал всё подряд: у снимка
+                // выходила стена в два десятка одинаковых строк, и «помочь выбрать»
+                // превращалось в «вывалить всё, что умею» (ревью экранов 02.09.2026).
+                var expanded by androidx.compose.runtime.remember(group, rows.size) {
+                    androidx.compose.runtime.mutableStateOf(false)
+                }
+                val shown = if (expanded) rows else rows.take(com.point.core.ui.likelyCount(rows.size))
+                shown.forEachIndexed { rowIndex, action ->
                 val i = actions.indexOf(action)
+
+                // Подсвечено то, с чего человек начинает читать, — первая строка первой
+                // группы, как на телефоне. Прежде «главное» считалось по плоскому списку ДО
+                // группировки, и после перестановки подсветка садилась на случайную строку
+                // в середине: у снимка ею оказалось «Открыть» тринадцатым по счёту.
+                val primaryHere = groupIndex == 0 && rowIndex == 0
                 when {
                     action.unavailable != null -> MutedStation(
                         action.title,
@@ -231,7 +245,7 @@ internal fun CompactObject(
                     action.bubble != null -> Station(
                         action.title,
                         bubbleColor(action.icon),
-                        primary = i == primary,
+                        primary = primaryHere,
                         icon = action.icon,
                         note = yieldLabel(
                             action.bubble.yields,
@@ -244,11 +258,17 @@ internal fun CompactObject(
                         action.title,
                         bubbleColor(action.icon),
                         where = "на телефоне",
-                        primary = i == primary,
+                        primary = primaryHere,
                         icon = action.icon,
                         appearIndex = i,
                     ) { state.sendToPhone(item, action.remote) }
                 }
+                }
+                val hidden = rows.size - shown.size
+                if (hidden > 0 || expanded) {
+                    androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
+                        Text(if (expanded) "Свернуть" else "Показать ещё $hidden", style = PointType.small)
+                    }
                 }
             }
         }
