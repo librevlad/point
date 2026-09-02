@@ -17,8 +17,23 @@ fun looksLikeOcrGarbage(text: String): Boolean {
     val nonSpace = text.count { !it.isWhitespace() }
     if (nonSpace < MIN_JUDGEABLE) return shortReadingIsGarbage(text)
     val readable = text.count { it.isLetterOrDigit() }
-    return readable.toDouble() / nonSpace < MIN_READABLE_SHARE || WORD.findAll(text).count() < MIN_WORDS
+    if (readable.toDouble() / nonSpace < MIN_READABLE_SHARE) return true
+    return WORD.findAll(text).count() < MIN_WORDS && !holdsValue(text)
 }
+
+/**
+ * Держит ли прочитанное узнаваемое значение: сумму, дату, время, номер, счёт, телефон.
+ *
+ * Признак не зависит от длины ответа (#1391). Выделенная человеком строка накладной держит дату
+ * и сумму ровно так же, как держала бы их целая страница, — а «не меньше трёх слов от четырёх
+ * букв» написано под страницу. По этой мерке кусок, выбранный человеком, выбрасывался: движок
+ * прочитал его дословно и уверенно, разметка слов легла на устройство, а текста у объекта не
+ * появлялось, и рядом предлагалось прочитать заново.
+ *
+ * Мусор от этого прочтением не становится: дословный ответ движка на снимке без текста
+ * («. aa - 11 ВЕНЕ», #694) не держит ни одного такого значения.
+ */
+private fun holdsValue(text: String): Boolean = VALUES.any { it.containsMatchIn(text) }
 
 /**
  * Короткий ответ судится составом, а не длиной: раньше всё короче тридцати символов
@@ -32,7 +47,7 @@ fun looksLikeOcrGarbage(text: String): Boolean {
 private fun shortReadingIsGarbage(text: String): Boolean {
     val tokens = text.split(SPACES).filter { it.isNotBlank() }
     if (tokens.isEmpty()) return true
-    if (VALUES.any { it.containsMatchIn(text) }) return false
+    if (holdsValue(text)) return false
     if (tokens.count { it.length <= FRAGMENT } * 2 > tokens.size) return true
     return !SHORT_WORD.containsMatchIn(text)
 }
@@ -81,7 +96,7 @@ fun weaklyRead(layer: AtomLayer): Boolean {
     val median = confidences[confidences.size / 2]
     if (median < MIN_MEDIAN_CONFIDENCE) return true
 
-    return WORD.findAll(text).count() < MIN_WORDS
+    return WORD.findAll(text).count() < MIN_WORDS && !holdsValue(text)
 }
 
 fun degeneratedReading(text: String, minRepeats: Int = MIN_REPEATS): String? {
