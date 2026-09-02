@@ -388,4 +388,4 @@ private fun PreviewChatThread() = PointTheme(darkTheme = true) {
 }
 
 /** Разговор не делает вещей сам: он называет действие, которое их делает (#804). */
-private const val OFFER_WHAT = "Это делает действие объекта — тапните, и оно выполнится"
+private const val OFFER_WHAT = "Это делает действие объекта — нажмите, и оно выполнится"

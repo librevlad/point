@@ -124,7 +124,7 @@ class StructuralCorrespondenceTest {
         assertTrue(brief.contains("CELL «Цукор» × «Ціна»"))
     }
 
-    @Test fun `ответ ложится в вопросный узел чисто — без спора и плейсхолдерного мусора`() {
+    @Test fun `ответ ложится в вопросный узел чисто — без спора и пустого мусора`() {
         val key = anchoredCellKey("Цукор", "Ціна")
         val question = mapOf(
             key + META_ANCHOR_ROW_SUFFIX to "Цукор",

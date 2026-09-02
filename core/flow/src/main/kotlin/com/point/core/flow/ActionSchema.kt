@@ -61,7 +61,7 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
             val alternatives = distinctReadings(alternativesOf(facts, spec.key))
 
             // Одно значение не бывает сразу и спором, и «ещё»: списки «или/ещё»
-            // с одинаковыми номерами дублировали друг друга (#652, кейс 24).
+            // с одинаковыми номерами дублировали друг друга (#652, случай 24).
             val claimed = alternatives.map { readingKey(it) }.toSet()
             FieldReading(
                 spec, value,

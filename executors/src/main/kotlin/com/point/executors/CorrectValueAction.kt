@@ -69,7 +69,7 @@ class CorrectValueRealizer @Inject constructor() : Realizer {
         }
 
         // Знание, а не новый объект: правка уходит исходом «выполнено» (ADR-0001 §18)
-        // и мержится единым mergeKnowledge — там человеческое слово разрешает спор.
+        // и сливается единым mergeKnowledge — там человеческое слово разрешает спор.
         val findings = Findings(
             metadata = mapOf(
                 key to value,

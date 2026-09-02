@@ -178,7 +178,7 @@ internal fun KeySection(
         Spacer(Modifier.height(6.dp))
         PortalRow(
             title = "Вернуться к «${errand.objectName}»",
-            subtitle = "«${errand.action}» ждёт там — уже без приписки про ключ. Тапнуть по нему " +
+            subtitle = "«${errand.action}» ждёт там — уже без приписки про ключ. Нажать на него " +
                 "Point за вас не станет.",
             onClick = onLeave,
 

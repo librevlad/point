@@ -194,7 +194,7 @@ class ContactKeepsPersonNameTest {
         )
     }
 
-    /** «Понять» на объекте: знание витка ложится в объект тем же слиянием, что и во флоу. */
+    /** «Понять» на объекте: знание витка ложится в объект тем же слиянием, что и в разборе. */
     private suspend fun understand(text: String, answer: String): PointObject =
         understood(objectOf(text), answer)
 

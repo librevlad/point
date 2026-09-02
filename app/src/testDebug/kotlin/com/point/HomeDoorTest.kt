@@ -64,7 +64,7 @@ class HomeDoorTest {
 
         val opened = shadowOf(compose.activity).nextStartedActivity
             ?: shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
-        assertNotNull("тап по ссылке на сайт не открыл ничего — колбэк потерян на этой двери", opened)
+        assertNotNull("тап по ссылке на сайт не открыл ничего — обратный вызов потерян на этой двери", opened)
         assertEquals(Intent.ACTION_VIEW, opened!!.action)
     }
 

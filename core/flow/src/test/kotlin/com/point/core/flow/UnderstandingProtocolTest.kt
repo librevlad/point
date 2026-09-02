@@ -236,7 +236,7 @@ class UnderstandingProtocolTest {
     private fun cards(answer: String): List<String> =
         parseFieldCandidates(answer).fields[META_ENTITY_PREFIX + "card"].orEmpty().map { it.text }
 
-    // #747, кейс почтовой наклейки: «Нашёл карту В1Д: 29.07/12:59», и следом Point
+    // #747, случай почтовой наклейки: «Нашёл карту В1Д: 29.07/12:59», и следом Point
     // предлагал реквизиты перевода, где «не хватает только суммы». Перевод на дату.
     @Test
     fun `дата картой не становится — перевода на несуществующий счёт не предлагаем (#747)`() {
