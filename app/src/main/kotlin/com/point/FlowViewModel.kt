@@ -227,6 +227,17 @@ class FlowViewModel @Inject constructor(
 
     private fun owns(voice: Long) = voice == workVoice
 
+    /**
+     * Шаг работы называется словами (#1386).
+     *
+     * Кольцо крутится одинаково на всех шагах, и человек не видел, что именно сейчас
+     * происходит: спрашивают ли сервер, качают ли объект, какой из нескольких. Одна строка
+     * под заголовком отвечает на это, не заводя второго экрана.
+     */
+    private fun sayStage(voice: Long, said: String) {
+        if (owns(voice)) _ui.update { it.copy(busyStage = said) }
+    }
+
     @Volatile private var workVoice = 0L
 
     private fun claimVoice(): Long = ++workVoice
@@ -570,6 +581,10 @@ class FlowViewModel @Inject constructor(
         raiseBusy("Забираю с компьютера…", cancelable = true)
         trackWork {
 
+            // Шаг назван тем, что происходит на самом деле (#1386): телефон не ищет компьютер
+            // рядом — связи между ними нет, — а спрашивает сервер, что компьютер там оставил.
+            sayStage(voice, "Спрашиваю, что оставил компьютер")
+
             // Исходы без объекта уходят домой до забора вещей (#1073): скачивать с них нечего.
             val entries = takeOutcomesHome(pc, runCatching { pcFlow.transport.fetchOutbox(pc) }.getOrNull().orEmpty())
             if (!owns(voice)) return@trackWork
@@ -579,8 +594,12 @@ class FlowViewModel @Inject constructor(
                 _ui.update { it.copy(busy = null) }
                 return@trackWork
             }
-            val pulled = entries.map { entry ->
+            val pulled = entries.mapIndexed { i, entry ->
                 val name = entry.meta["name"] ?: "объект"
+                sayStage(
+                    voice,
+                    if (entries.size > 1) "Забираю $name · ${i + 1} из ${entries.size}" else "Забираю $name",
+                )
                 val path = pcFlow.pulledFiles.create("${entry.id}-$name")
                 val ok = runCatching { pcFlow.transport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
                 Triple(entry, path, ok)
