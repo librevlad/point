@@ -226,12 +226,13 @@ def drop_text_page(name: str, text: str, download_url: str) -> str:
     """
     return page(
         name or "Текст",
-        "<h1>%s</h1>"
+        "<h1>Вам прислали текст</h1>"
+        '<p class="what">%s</p>'
         '<textarea id="t" readonly rows="16">%s</textarea>'
         '<p><button id="c" type="button">Скопировать</button> '
         '<a href="%s" download>Скачать файлом</a></p>'
-        "<small>Ссылка живёт сутки.</small>"
-        % (html.escape(name or "Текст"), html.escape(text), html.escape(download_url)),
+        % (html.escape(name or "Текст"), html.escape(text), html.escape(download_url))
+        + LIVES_A_DAY,
         head="<script>"
         "document.addEventListener('DOMContentLoaded',function(){"
         "var b=document.getElementById('c'),t=document.getElementById('t');"
@@ -256,10 +257,11 @@ def drop_contact_page(name: str, fields: list[tuple[str, str]], download_url: st
     )
     return page(
         name or "Контакт",
-        "<h1>%s</h1>%s"
+        "<h1>Вам прислали контакт</h1>"
+        '<p class="what">%s</p>%s'
         '<p><a href="%s" download>Добавить в контакты</a></p>'
-        "<small>Ссылка живёт сутки.</small>"
-        % (html.escape(name or "Контакт"), rows, html.escape(download_url)),
+        % (html.escape(name or "Контакт"), rows, html.escape(download_url))
+        + LIVES_A_DAY,
     )
 
 
@@ -272,17 +274,18 @@ def drop_place_page(name: str, coordinates: str, download_url: str) -> str:
     """
     return page(
         name or "Место",
-        "<h1>%s</h1>"
+        "<h1>Вам прислали место</h1>"
+        '<p class="what">%s</p>'
         '<p><a href="geo:%s">Открыть в картах</a></p>'
         "<p>%s</p>"
         '<p><a href="%s" download>Скачать файлом</a></p>'
-        "<small>Ссылка живёт сутки.</small>"
         % (
             html.escape(name or "Место"),
             html.escape(coordinates),
             html.escape(coordinates),
             html.escape(download_url),
-        ),
+        )
+        + LIVES_A_DAY,
     )
 
 
