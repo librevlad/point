@@ -37,6 +37,20 @@ small.warn{border-left:2px solid #FF6B6B80;padding-left:10px;margin-top:12px}
 .shot{display:block;width:100%;border-radius:12px;border:1px solid #FFFFFF14;margin:0 0 12px}
 .player{display:block;width:100%;margin:0 0 12px}
 .what{color:#F2F3F5;font-weight:600;margin-bottom:4px}
+/* Чужой человек открывает незнакомую ссылку и должен видеть, куда попал (#1388).
+   Две строки по построению: имя и дверь к обещанию в одной, пояснение под ними. На узком
+   телефоне пояснение иначе переносилось и наезжало на ссылку. */
+.brand{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;margin:0 0 20px;
+padding-bottom:12px;border-bottom:1px solid #FFFFFF14;font-size:13px;color:#7E8492}
+.brand b{font-size:16px;font-weight:600;color:#F2F3F5;letter-spacing:.2px}
+.brand a{margin-left:auto;white-space:nowrap}
+.brand span{flex:0 0 100%;margin-top:2px}
+/* Главное на странице о данных читается списком, а не пятью абзацами. */
+.brief{margin:0 0 16px;padding:12px 14px;border-radius:12px;background:#00000033}
+.brief p{margin:0 0 6px;font-size:14px;color:#C8CCD4}
+.brief p:last-child{margin-bottom:0}
+/* Кнопка не липнет к предупреждению, которое человек обязан прочесть до неё. */
+small + a.go,small + button{margin-top:16px}
 """
 
 
@@ -44,12 +58,61 @@ small.warn{border-left:2px solid #FF6B6B80;padding-left:10px;margin-top:12px}
 LIVES_A_DAY = "<small>Ссылка живёт сутки, потом присланное стирается само.</small>"
 
 
+def link_lifetime(left_seconds: float | None = None) -> str:
+    """Сколько у человека осталось времени, а не сколько ссылка живёт вообще (#1388).
+
+    «Живёт сутки» не отвечает на единственный вопрос, от которого зависит, заберёт человек
+    присланное сейчас или потеряет: сутки от чего? Ссылку могли переслать через двадцать часов
+    после того, как её создали.
+
+    Названо остатком, а не часом на календаре («до завтра, 14:00»): получатель бывает в другом
+    часовом поясе, чем сервер, и абсолютное время увело бы его ровно там, где он и так не уверен.
+    Остаток одинаково верен откуда угодно.
+
+    Остаток неизвестен — говорится прежнее общее правило: врать про часы нельзя.
+    """
+    if left_seconds is None:
+        return LIVES_A_DAY
+    left = max(0, int(left_seconds))
+    if left < 60:
+        return "<small>Ссылка вот-вот перестанет работать — заберите присланное сейчас.</small>"
+    if left < 3600:
+        return "<small>Ссылка работает ещё %d мин, потом присланное стирается само.</small>" % (
+            left // 60
+        )
+    hours = left // 3600
+    return "<small>Ссылка работает ещё %d %s, потом присланное стирается само.</small>" % (
+        hours,
+        _hours_word(hours),
+    )
+
+
+def _hours_word(hours: int) -> str:
+    if hours % 10 == 1 and hours % 100 != 11:
+        return "час"
+    if hours % 10 in (2, 3, 4) and hours % 100 not in (12, 13, 14):
+        return "часа"
+    return "часов"
+
+
+#: Страница называет себя (#1388).
+#:
+#: Чужой человек открывает незнакомую ссылку с телефона, первый раз в жизни, и видит карточку
+#: без единого признака того, что это за сервис и можно ли ему верить. Имя и одна строка о том,
+#: чем сервис занят, стоят на каждой странице; рядом — дверь к обещанию о данных, чтобы
+#: недоверчивому было куда пойти проверить, а не только гадать.
+BRAND = (
+    '<p class="brand"><b>Point</b><a href="/privacy">О ваших данных</a>'
+    '<span>передача между устройствами</span></p>'
+)
+
+
 def page(title: str, body: str, head: str = "") -> str:
     return (
         '<!doctype html><html lang="ru" class="no-js"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "%s<title>%s</title><style>%s</style></head><body><main>%s</main></body></html>"
-        % (head, html.escape(title), PAGE_STYLE, body)
+        "%s<title>%s</title><style>%s</style></head><body><main>%s%s</main></body></html>"
+        % (head, html.escape(title), PAGE_STYLE, BRAND, body)
     )
 
 
@@ -71,10 +134,17 @@ def login_page(login_id: str, code: str) -> str:
 
 
 def done_page(code: str) -> str:
+    """Код здесь больше нечего сверять — сверка была на прошлом экране (#1388).
+
+    «Вход» и «Готово» показывали одинаковый крупный моноширинный блок, и человек не понимал,
+    закончилось что-то или его снова о чём-то просят. Код остаётся в подписи — узнать, какое
+    устройство вошло, по-прежнему можно, — но экран говорит прямо, что дело сделано.
+    """
     return page(
         "Готово",
-        "<h1>Готово</h1><p>Устройство с кодом ниже входит в аккаунт. Можно закрывать страницу.</p>"
-        '<span class="code">%s</span>' % html.escape(code),
+        "<h1>Устройство вошло</h1>"
+        "<p>Можно закрыть эту страницу и вернуться в Point.</p>"
+        "<small>Вошло устройство с кодом %s.</small>" % html.escape(code),
     )
 
 
@@ -95,6 +165,24 @@ def return_page(app_url: str) -> str:
         '<a class="go" href="%s">Вернуться в Point</a>' % safe,
         head='<meta http-equiv="refresh" content="0;url=%s">' % safe,
     )
+
+
+#: Главное — первым, до подробностей (#1388).
+#:
+#: Страницу читают в двух разных состояниях: недоверчивый человек хочет за десять секунд понять,
+#: видит ли сервер его файлы, а магазин требует полного текста. Раньше ответ на первый вопрос
+#: тонул в ответе на второй. Короткий список стоит сверху и ничего не заменяет: подробности
+#: остаются под ним слово в слово, иначе страница перестала бы годиться магазину.
+SHORT_ANSWER = '<div class="brief">' + "".join(
+    "<p>· %s</p>" % html.escape(v)
+    for v in (
+        "Содержимое ваших объектов сервер не читает и не хранит.",
+        "Между вашими устройствами передаётся только то, что вы отправили сами.",
+        "Присланное по ссылке живёт сутки и стирается само.",
+        "От Google Point получает имя и почту — больше ничего.",
+        "Удаление аккаунта стирает всё сразу и навсегда, без корзины на тридцать дней.",
+    )
+) + "</div>"
 
 
 #: Что Point знает о человеке — один список на две страницы и на анкету магазина.
@@ -148,6 +236,7 @@ def privacy_page() -> str:
         "<h1>О ваших данных</h1>"
         "<p>Point работает с объектом на самом устройстве. На сервер попадает только то, что "
         "нужно, чтобы узнать вас и передать объект между вашими устройствами.</p>"
+        + SHORT_ANSWER +
         "<h1>Что хранится</h1>" + keep +
         "<h1>Чего Point не делает</h1>" + dont +
         "<h1>Чужие сервисы</h1>"
@@ -216,7 +305,7 @@ def link_gone_page() -> str:
     )
 
 
-def drop_text_page(name: str, text: str, download_url: str) -> str:
+def drop_text_page(name: str, text: str, download_url: str, left: float | None = None) -> str:
     """
     Присланный текст читается прямо со страницы (#780-класс).
 
@@ -232,7 +321,7 @@ def drop_text_page(name: str, text: str, download_url: str) -> str:
         '<p><button id="c" type="button">Скопировать</button> '
         '<a href="%s" download>Скачать файлом</a></p>'
         % (html.escape(name or "Текст"), html.escape(text), html.escape(download_url))
-        + LIVES_A_DAY,
+        + link_lifetime(left),
         head="<script>"
         "document.addEventListener('DOMContentLoaded',function(){"
         "var b=document.getElementById('c'),t=document.getElementById('t');"
@@ -243,7 +332,7 @@ def drop_text_page(name: str, text: str, download_url: str) -> str:
     )
 
 
-def drop_contact_page(name: str, fields: list[tuple[str, str]], download_url: str) -> str:
+def drop_contact_page(name: str, fields: list[tuple[str, str]], download_url: str, left: float | None = None) -> str:
     """
     Присланный контакт показан контактом, а не файлом (#737).
 
@@ -261,11 +350,11 @@ def drop_contact_page(name: str, fields: list[tuple[str, str]], download_url: st
         '<p class="what">%s</p>%s'
         '<p><a href="%s" download>Добавить в контакты</a></p>'
         % (html.escape(name or "Контакт"), rows, html.escape(download_url))
-        + LIVES_A_DAY,
+        + link_lifetime(left),
     )
 
 
-def drop_place_page(name: str, coordinates: str, download_url: str) -> str:
+def drop_place_page(name: str, coordinates: str, download_url: str, left: float | None = None) -> str:
     """
     Присланное место открывается картой, а не скачивается (#737).
 
@@ -285,11 +374,11 @@ def drop_place_page(name: str, coordinates: str, download_url: str) -> str:
             html.escape(coordinates),
             html.escape(download_url),
         )
-        + LIVES_A_DAY,
+        + link_lifetime(left),
     )
 
 
-def drop_image_page(name: str, download_url: str, size: str) -> str:
+def drop_image_page(name: str, download_url: str, size: str, left: float | None = None) -> str:
     """
     Присланный снимок виден сразу, а не скачивается вслепую (#883).
 
@@ -310,12 +399,12 @@ def drop_image_page(name: str, download_url: str, size: str) -> str:
             html.escape(name or "Снимок"),
             (" · " + html.escape(size)) if size else "",
             html.escape(download_url),
-            LIVES_A_DAY,
+            link_lifetime(left),
         ),
     )
 
 
-def drop_audio_page(name: str, download_url: str, mime: str, size: str) -> str:
+def drop_audio_page(name: str, download_url: str, mime: str, size: str, left: float | None = None) -> str:
     """
     Присланную запись можно послушать прямо здесь (#883).
 
@@ -334,33 +423,36 @@ def drop_audio_page(name: str, download_url: str, mime: str, size: str) -> str:
             html.escape(name or "Запись"),
             (" · " + html.escape(size)) if size else "",
             html.escape(download_url),
-            LIVES_A_DAY,
+            link_lifetime(left),
         ),
     )
 
 
-def drop_file_page(name: str, download_url: str, what: str, size: str) -> str:
+def drop_file_page(name: str, download_url: str, what: str, size: str, left: float | None = None) -> str:
     """
     Файл, который нельзя показать, хотя бы называет себя (#883).
 
     PDF, архив, документ по-прежнему скачиваются — но человек сначала видит, что именно
-    ему прислали и сколько это весит, и решает сам. Ссылку могли переслать дальше, чем
-    рассчитывал хозяин, поэтому здесь же стоит тихое предупреждение.
+    ему прислали, сколько это весит и сколько осталось времени, и решает сам.
+
+    Кнопка стоит последней (#1388). Ссылку могли переслать дальше, чем рассчитывал хозяин, и
+    большая кнопка первой тянула палец раньше, чем человек успевал прочитать предупреждение:
+    сначала что прислали и до когда, потом «не ждали — не скачивайте», и только потом «Скачать».
     """
     return page(
         name or "Файл",
         "<h1>Вам прислали файл</h1>"
         "<p class=\"what\">%s</p>"
         "<p>%s%s</p>"
-        '<a class="go" href="%s" download>Скачать</a>'
         "%s"
         '<small class="warn">Если вы не ждали эту ссылку — не скачивайте файл.</small>'
+        '<a class="go" href="%s" download>Скачать</a>'
         % (
             html.escape(name or "Файл"),
             html.escape(what),
             (" · " + html.escape(size)) if size else "",
+            link_lifetime(left),
             html.escape(download_url),
-            LIVES_A_DAY,
         ),
     )
 

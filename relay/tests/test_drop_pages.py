@@ -33,7 +33,7 @@ def test_снимок_виден_на_странице_а_не_качается_
     assert "text/html" in got.headers["content-type"]
     assert "<img" in got.text, "снимок не показан"
     assert "?raw=1" in got.text, "скачивание пропало"
-    assert "живёт сутки" in got.text, "срок жизни ссылки не назван"
+    assert "работает ещё" in got.text, "не сказано, сколько у человека осталось времени"
 
 
 def test_запись_слышно_прямо_на_странице(point):
@@ -147,3 +147,45 @@ def test_каждая_страница_говорит_что_человеку_п
         got = point.client.get("/d/" + did)
 
         assert "Вам прислали" in got.text, f"страница «{name}» не говорит, что прислали"
+
+
+def test_страница_называет_себя_чужому_человеку(point):
+    """Незнакомая ссылка, телефон, первый раз в жизни — и ни одного признака, что это за сервис.
+
+    Чужой человек видел только карточку с файлом и решал вопрос доверия ни на чём. Имя сервиса и
+    дверь к обещанию о данных стоят на каждой странице, включая те, что он видит первыми (#1388).
+    """
+    did = _drop(point, "договор.pdf", "application/pdf", b"%PDF-1.4" + b"x" * 900)
+    me = point.sign_in(sub="brand-check")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    for path in ("/d/" + did, "/privacy", "/u/" + box):
+        got = point.client.get(path)
+        assert got.status_code == 200, path
+        assert "<b>Point</b>" in got.text, "страница не называет себя: " + path
+        assert 'href="/privacy"' in got.text, "некуда пойти проверить: " + path
+
+
+def test_предупреждение_стоит_раньше_кнопки_скачивания(point):
+    """Ссылку могли переслать дальше, чем рассчитывал хозяин.
+
+    Большая кнопка первой тянула палец раньше, чем человек успевал прочитать предупреждение.
+    Порядок обратный: что прислали и до когда → «не ждали — не скачивайте» → «Скачать» (#1388).
+    """
+    did = _drop(point, "договор.pdf", "application/pdf", b"%PDF-1.4" + b"x" * 900)
+
+    text = point.client.get("/d/" + did).text
+
+    warn = text.index("не скачивайте файл")
+    button = text.index("download>Скачать")
+    assert warn < button, "кнопка тянет палец раньше, чем человек прочитал предупреждение"
+
+
+def test_срок_назван_остатком_а_не_сутками_вообще(point):
+    """Сутки от чего? Ссылку могли переслать через двадцать часов после того, как её создали."""
+    did = _drop(point, "чек.jpg", "image/jpeg", b"\xff\xd8\xff\xe0" + b"x" * 2048)
+
+    text = point.client.get("/d/" + did).text
+
+    assert "работает ещё 23 часа" in text, "остаток не назван: " + text[-200:]
+    assert "живёт сутки" not in text, "прежнее «сутки вообще» вернулось"

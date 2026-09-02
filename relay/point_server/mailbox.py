@@ -304,6 +304,19 @@ def forget_device(root: str, user_id: str, device_id: str) -> None:
     shutil.rmtree(mailbox_dir(root, user_id, device_id), ignore_errors=True)
 
 
+def time_left(path: str, now: float | None = None) -> float:
+    """Сколько присланному осталось жить (#1388).
+
+    Считается тем же правилом, которым его сотрёт [sweep]: срок, названный человеку, и срок, по
+    которому файл исчезнет, обязаны быть одним числом. Файла уже нет — остатка нет тоже.
+    """
+    now = time.time() if now is None else now
+    try:
+        return TTL_SECONDS - (now - os.path.getmtime(path))
+    except OSError:
+        return 0.0
+
+
 def sweep(root: str, now: float | None = None) -> int:
     """Всё старше суток исчезает само. Возвращает, сколько каталогов убрано."""
     now = time.time() if now is None else now
