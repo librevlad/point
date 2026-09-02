@@ -212,6 +212,10 @@ abstract class DataModule {
     @Binds
     abstract fun uprightAngle(impl: com.point.data.ExifUprightAngle): com.point.core.flow.UprightAngle
 
+    // Стук оставляет след в файле телефона (#1398): иначе живой прогон не назовёт, где он пропал.
+    @Binds
+    abstract fun knockTrace(impl: com.point.data.FileKnockTrace): com.point.core.flow.KnockTrace
+
     // Уровень звука меряет декодер телефона (#1053) — до того, как запись уедет в сервис.
     @Binds
     abstract fun audioLevel(impl: DecodedAudioLevel): AudioLevel
