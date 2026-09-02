@@ -56,7 +56,7 @@ class FirstContactTest {
         compose.onNodeWithText("без ключа, без сети", substring = true).assertExists()
     }
 
-    @Test fun `тап по примеру зовёт положить пример во флоу`() {
+    @Test fun `тап по примеру зовёт положить пример в разбор`() {
         var opened = 0
         compose.setContent {
             HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {}, aiKeySet = false, onExample = { opened++ })

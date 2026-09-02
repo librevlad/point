@@ -43,7 +43,7 @@ class PermissionsTest {
     }
 
     @Test
-    fun `отказали сейчас — путь прежний, тапнуть ещё раз`() {
+    fun `отказали сейчас — путь прежний, нажать ещё раз`() {
         assertEquals(
             PermissionOutcome.DENIED,
             permissionOutcome(mapOf(place to false), willAskAgain = { true }),

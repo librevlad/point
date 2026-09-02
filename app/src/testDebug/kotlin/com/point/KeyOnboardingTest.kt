@@ -259,7 +259,7 @@ class KeyOnboardingTest {
     @Test fun `дверь обратно не обещает выполнить действие сама`() {
         keyScreen(keys = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"), openService = null)
 
-        compose.onNodeWithText("Тапнуть по нему Point за вас не станет", substring = true)
+        compose.onNodeWithText("Нажать на него Point за вас не станет", substring = true)
             .performScrollTo().assertIsDisplayed()
     }
 

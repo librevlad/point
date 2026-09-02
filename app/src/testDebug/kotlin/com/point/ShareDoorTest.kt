@@ -181,7 +181,7 @@ class ScratchWipedTest {
 
     private fun leftovers(): List<File> = objectBytes(context)
 
-    @Test fun `конец флоу уносит байты объекта с диска`() {
+    @Test fun `конец разбора уносит байты объекта с диска`() {
         val intent = Intent(context, ShareActivity::class.java)
             .setAction(Intent.ACTION_SEND)
             .setType("text/plain")
@@ -203,7 +203,7 @@ class ScratchWipedTest {
         }
 
         assertTrue(
-            "флоу кончился, а байты объекта остались на диске: ${leftovers().map(File::getName)}",
+            "разбор кончился, а байты объекта остались на диске: ${leftovers().map(File::getName)}",
             leftovers().isEmpty(),
         )
     }

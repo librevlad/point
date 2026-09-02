@@ -782,7 +782,7 @@ class FlowViewModelTest {
         assertEquals("+380671234567", snapshot.saved.last().last().metadata["entity.phone"])
     }
 
-    @Test fun `конец флоу стирает рабочую копию объекта, а не только запись о пути`() = runTest(dispatcher) {
+    @Test fun `конец разбора стирает рабочую копию объекта, а не только запись о пути`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         val beforeEnd = store.clearedTimes
@@ -792,18 +792,18 @@ class FlowViewModelTest {
         assertTrue("копия объекта обязана быть стёрта", store.clearedTimes > beforeEnd)
     }
 
-    @Test fun `конец флоу уносит и расшаренный текст, а не только рабочую копию`() = runTest(dispatcher) {
+    @Test fun `конец разбора уносит и расшаренный текст, а не только рабочую копию`() = runTest(dispatcher) {
         val texts = FakeSharedTexts()
         val vm = vm(sharedTexts = texts)
         vm.onSharedText("пароль от почты"); advanceUntilIdle()
-        assertTrue("текст обязан лечь файлом — иначе флоу его не примет", texts.files().isNotEmpty())
+        assertTrue("текст обязан лечь файлом — иначе разбор его не примет", texts.files().isNotEmpty())
 
         vm.endFlow(); advanceUntilIdle()
 
         assertTrue("на диске не должно остаться расшаренного текста", texts.files().isEmpty())
     }
 
-    @Test fun `уход из флоу снимает начатую работу`() = runTest(dispatcher) {
+    @Test fun `уход из разбора снимает начатую работу`() = runTest(dispatcher) {
         val vm = vm(slow = setOf(CapabilityId("a")))
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble("a"))
@@ -5379,7 +5379,7 @@ class FlowViewModelTest {
 
         assertTrue(said, "Ничего не отправлено" in said)
         assertTrue(said, "объект остался на телефоне" in said)
-        assertTrue("нет выхода — человеку некуда деться", "тапните ещё раз" in said)
+        assertTrue("нет выхода — человеку некуда деться", "нажмите ещё раз" in said)
     }
 
     @Test fun `an already-granted consent lets a cloud action run without asking`() = runTest(dispatcher) {
@@ -5420,7 +5420,7 @@ class FlowViewModelTest {
     }
 
     /**
-     * Путь человека (#1088): он тапнул «На компьютер», чтобы объект оказался на его же второй
+     * Путь человека (#1088): он нажал «На компьютер», чтобы объект оказался на его же второй
      * машине, — и читал «Отправить в облако?» с «Объект уйдёт на чужой сервер». Одно
      * «Разрешить» открывало дорогу заодно всем облачным моделям: согласие берётся областью
      * (`CloudScope.MODELS`), а не действием.
@@ -5873,8 +5873,8 @@ class FlowViewModelTest {
     @Test fun `refreshClipboard offers when idle but stays silent while a flow is active`() = runTest(dispatcher) {
         val vm = vm()
 
-        vm.refreshClipboard { "скопировано до флоу" }
-        assertEquals("скопировано до флоу", vm.clipboard.value)
+        vm.refreshClipboard { "скопировано до разбора" }
+        assertEquals("скопировано до разбора", vm.clipboard.value)
         vm.dismissClipboard()
 
         vm.onShared("uri", "image/png"); advanceUntilIdle()

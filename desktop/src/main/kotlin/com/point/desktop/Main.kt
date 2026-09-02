@@ -461,7 +461,7 @@ fun main(args: Array<String>) {
         }
     }, "point-handoff").apply { isDaemon = true }.also { it.start() }
 
-    // Рабочая область (без таскбара) — в координатах интерфейса.
+    // Рабочая область (без панели задач) — в координатах интерфейса.
     val workArea = runCatching {
         val b = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
         ScreenArea(b.x, b.y, b.width, b.height)
