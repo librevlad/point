@@ -171,7 +171,7 @@ class ExtractTextIsKnowledgeTest {
 
     @Test
     fun `смета со строками внутри листа читается — вместе с числами`() = runTest {
-        val result = OfficeRealizer(store, OoxmlOfficeTextExtractor())
+        val result = OfficeRealizerOnPhone(store, OoxmlOfficeTextExtractor())
             .perform(xlsx("смета.xlsx", smeta), null)
 
         val known = knownText(result)
@@ -182,7 +182,7 @@ class ExtractTextIsKnowledgeTest {
     /** Книга читается целиком: у неё бывает больше одного листа (#995). */
     @Test
     fun `у книги из двух листов читаются оба, а не только первый`() = runTest {
-        val result = OfficeRealizer(store, OoxmlOfficeTextExtractor())
+        val result = OfficeRealizerOnPhone(store, OoxmlOfficeTextExtractor())
             .perform(xlsx("смета.xlsx", smeta, itogo), null)
 
         val known = knownText(result)
@@ -195,7 +195,7 @@ class ExtractTextIsKnowledgeTest {
     fun `современной таблице не рассказывают про старые doc и xls`() = runTest {
         val empty = xlsx("смета.xlsx", "<worksheet><sheetData></sheetData></worksheet>")
 
-        val result = OfficeRealizer(store, OoxmlOfficeTextExtractor()).perform(empty, null)
+        val result = OfficeRealizerOnPhone(store, OoxmlOfficeTextExtractor()).perform(empty, null)
 
         val said = (result as ActionResult.Failure).reason
         assertFalse("причина не про этот файл: $said", said.contains(".doc") || said.contains(".xls "))
@@ -211,7 +211,7 @@ class ExtractTextIsKnowledgeTest {
             metadata = mapOf("name" to "смета.xls"),
         )
 
-        val result = OfficeRealizer(store, OoxmlOfficeTextExtractor()).perform(old, null)
+        val result = OfficeRealizerOnPhone(store, OoxmlOfficeTextExtractor()).perform(old, null)
 
         val said = (result as ActionResult.Failure).reason
         assertTrue(said, said.contains(".xlsx"))

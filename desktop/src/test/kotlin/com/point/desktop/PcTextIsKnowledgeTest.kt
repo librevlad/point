@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.TEXT_NOT_KEPT
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READ_TEXT
 import com.point.core.flow.OoxmlOfficeTextExtractor
@@ -106,7 +107,7 @@ class PcTextIsKnowledgeTest {
         metadata = mapOf("name" to file.name),
     )
 
-    private fun realizer() = PcOfficeTextRealizer(OoxmlOfficeTextExtractor())
+    private fun realizer() = com.point.core.flow.OfficeRealizer(OoxmlOfficeTextExtractor(), PcTextBesideDocument)
 
     private fun knownText(result: ActionResult): String {
         assertTrue("ожидалось знание документу, вышло: $result", result is ActionResult.Done)
@@ -311,7 +312,7 @@ class PcTextIsKnowledgeTest {
         val inbox = Inbox(temp.newFolder("inbox"))
         val state = DesktopState(
             registry = DesktopRegistry(setOf(OfficeCapability())),
-            resolver = DesktopResolver(setOf(PcOfficeTextRealizer(OoxmlOfficeTextExtractor()))),
+            resolver = DesktopResolver(setOf(com.point.core.flow.OfficeRealizer(OoxmlOfficeTextExtractor(), PcTextBesideDocument))),
             clipboard = { },
             outbox = outbox,
         )

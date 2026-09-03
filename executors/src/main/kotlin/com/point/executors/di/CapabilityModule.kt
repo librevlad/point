@@ -79,7 +79,7 @@ import com.point.executors.CopyCardRealizer
 import com.point.executors.CopyRealizer
 import com.point.executors.CutoutCapability
 import com.point.executors.CutoutRealizer
-import com.point.executors.OfficeRealizer
+import com.point.executors.OfficeRealizerOnPhone
 import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
 import com.point.executors.OpenUrlCapability
@@ -248,7 +248,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
     @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer
     @Binds @IntoSet abstract fun slidesR(r: SlidesRealizer): Realizer
-    @Binds @IntoSet abstract fun officeR(r: OfficeRealizer): Realizer
+    @Binds @IntoSet abstract fun officeR(r: OfficeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizer): Realizer

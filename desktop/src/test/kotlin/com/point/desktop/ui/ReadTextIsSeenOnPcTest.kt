@@ -11,7 +11,7 @@ import com.point.desktop.DesktopState
 import com.point.desktop.Inbox
 import com.point.desktop.InboxItem
 import com.point.desktop.ObjectSource
-import com.point.desktop.PcOfficeTextRealizer
+import com.point.desktop.PcTextBesideDocument
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -37,7 +37,7 @@ class ReadTextIsSeenOnPcTest {
 
     private val state = DesktopState(
         registry = DesktopRegistry(setOf(OfficeCapability())),
-        resolver = DesktopResolver(setOf(PcOfficeTextRealizer(OoxmlOfficeTextExtractor()))),
+        resolver = DesktopResolver(setOf(com.point.core.flow.OfficeRealizer(OoxmlOfficeTextExtractor(), PcTextBesideDocument))),
         clipboard = { },
     )
 
