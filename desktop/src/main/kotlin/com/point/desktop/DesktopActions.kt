@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.TEXT_NOT_KEPT
 import com.point.core.flow.BrowserOpener
 import com.point.core.flow.Capability
 import com.point.core.flow.ClipboardPayload

@@ -39,10 +39,13 @@ fun textBesideDocument(source: File): File =
 fun keepTextBesideDocument(source: File, text: String): File? =
     runCatching { textBesideDocument(source).apply { writeText(text) } }.getOrNull()
 
-/** Что слышит человек, когда текст прочитан, а лечь на диск не смог: причина записи (#995). */
-const val TEXT_NOT_KEPT =
-    "Текст прочитан, но не сохранился рядом с документом — папка может быть только для чтения " +
-        "или на диске нет места. Перенесите документ в свою папку и повторите"
+/**
+ * Орган компьютера для общего чтения офисного документа (#1379): текст ложится рядом с
+ * документом, а не в `%TEMP%`, который подметает операционная система (#995).
+ */
+val PcTextBesideDocument = com.point.core.flow.TextKeeper { source, text ->
+    keepTextBesideDocument(File(source.uri.value), text)?.absolutePath
+}
 
 /** Читает не больше `limit` символов: окно не обязано держать в памяти файл целиком. */
 fun readTextHead(file: File, limit: Int): TextHead {

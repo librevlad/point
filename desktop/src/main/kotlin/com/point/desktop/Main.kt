@@ -190,7 +190,7 @@ fun main(args: Array<String>) {
                 clipboard,
             ),
             PcUnzipRealizer(revealer),
-            PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor()),
+            com.point.core.flow.OfficeRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), PcTextBesideDocument),
             PcShrinkImageRealizer(outbox),
             PcTranscribeRealizer({ speechCall(FilePcConfig(pointDir).load()) }),
             PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, entities).let { cloudReader ->
