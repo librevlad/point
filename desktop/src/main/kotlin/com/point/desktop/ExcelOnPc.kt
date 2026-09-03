@@ -26,6 +26,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Base64
+import java.util.UUID
 import javax.imageio.ImageIO
 
 /**
@@ -51,9 +52,19 @@ class PcExcelRealizer(private val inner: Realizer) : Realizer by inner {
  * старое убирает `forgetAbandoned` при запуске.
  */
 class PcScratchStore(private val dir: File) : ObjectStore {
+
+    /**
+     * Только путь, файла по нему нет — как обещает [ObjectStore.newScratchFile] и как живёт
+     * телефон (#1412). Прежде здесь лежал `File.createTempFile`, то есть пустой файл: общий
+     * «Слайды» превращал полученное место в папку набора, `mkdirs()` о существующий файл молча
+     * возвращал `false`, запись первого слайда падала — и человеку уходило «Не удалось
+     * разобрать презентацию» про документ, который цел.
+     */
     override suspend fun newScratchFile(extension: String): ScratchRef {
         dir.mkdirs()
-        return ScratchRef(File.createTempFile("point-", ".$extension", dir).absolutePath)
+        val ext = extension.trimStart('.')
+        val name = if (ext.isBlank()) "point-${UUID.randomUUID()}" else "point-${UUID.randomUUID()}.$ext"
+        return ScratchRef(File(dir, name).absolutePath)
     }
 
     override suspend fun readText(obj: PointObject, limit: Int): String =
