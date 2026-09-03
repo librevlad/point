@@ -435,7 +435,7 @@ private fun FoundObjects(
 
                                     ownerOfFound(obj, relations, found),
 
-                                    provenanceLabel(obj.provenance),
+                                    foundProvenance(obj),
 
                                     "возможно".takeIf { isDoubtful(obj.metadata) },
                                 ).joinToString(" · "),
@@ -490,7 +490,13 @@ private fun sameAsOwnValue(fact: com.point.core.ui.UnderstoodFact, own: String):
 }
 
 fun foundHeadline(obj: PointObject): String =
-    obj.metadata.entries.firstOrNull { (key, _) ->
+    // Объект-файл в списке найденного — исходник, из которого сделан результат (#925), или
+    // страница набора — зовётся своим именем, а не первым найденным в нём фактом (#1421):
+    // исходный текст с контактами стоял у результата под именем своей ссылки, как второй
+    // узел той же ссылки. Первый факт — лицо узла-значения, не файла.
+    obj.metadata["name"]?.takeIf { it.isNotBlank() && !isValueNode(obj) }
+
+        ?: obj.metadata.entries.firstOrNull { (key, _) ->
         (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX)) &&
             !com.point.core.flow.isAnnotationKey(key) && !com.point.core.flow.isStateKey(key)
     }?.takeIf { it.value.isNotBlank() }
@@ -509,6 +515,20 @@ fun foundHeadline(obj: PointObject): String =
 
         // Совсем без имени — вид объекта: путь на диске к человеку не выходит (#1038, #1100).
         ?: kindMarkLabel(kindMarkOf(obj))
+
+/** Узел-значение: телефон, дата, ссылка — то, что найдено в объекте, а не сам объект-файл. */
+private fun isValueNode(obj: PointObject): Boolean =
+    obj.state.kind in com.point.core.flow.EXTRACTED_KINDS || obj.uri is com.point.core.model.ValueRef
+
+/**
+ * Откуда взялось найденное — подпись только у узла-значения (#1421).
+ *
+ * У объекта-файла в `provenance` лежит сильнейшее происхождение его фактов: исходник с
+ * контактами, найденными правилами, стоял в «Нашёл» у результата с подписью «выведено
+ * правилом» — как будто правилом выведен сам исходник. Файл ничем не выведен: он дан.
+ */
+fun foundProvenance(obj: PointObject): String? =
+    if (isValueNode(obj)) provenanceLabel(obj.provenance) else null
 
 /**
  * Chip прячется, только если ЕГО ФАКТ уже показан строкой выше: сравнение по `uri`
