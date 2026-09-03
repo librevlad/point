@@ -95,6 +95,38 @@ class FoundChipDisplayTest {
         assertEquals("111", foundHeadline(node(emptyMap())))
     }
 
+    /**
+     * Живая охота 03.09.2026 (#1421): исходный текст с контактами стоял в «Нашёл» у результата
+     * «Собрать данные» под именем своей ссылки и с подписью «выведено правилом» — как второй
+     * узел той же ссылки, выведенный правилом.
+     */
+    @Test
+    fun `объект-файл в найденном зовётся своим именем, а не первым фактом`() {
+        val source = com.point.core.model.PointObject(
+            id = "src:text",
+            mime = "text/plain",
+            uri = com.point.core.model.ScratchRef("/data/user/0/com.point/files/scratch/8870.txt"),
+            state = ObjectState(com.point.core.model.ObjectKind.TEXT),
+            metadata = mapOf(
+                "entity.url" to "https://example.com/pay",
+                "entity.phone" to "+380671234567",
+                "name" to "Contact: John Smith",
+            ),
+            provenance = Provenance.RULE,
+        )
+
+        assertEquals(source.metadata["name"], foundHeadline(source))
+        assertNull("файл ничем не выведен — он дан", foundProvenance(source))
+    }
+
+    @Test
+    fun `узел-значение показывает значение и своё происхождение`() {
+        val phone = node(mapOf("entity.phone" to "111")).copy(provenance = Provenance.RULE)
+
+        assertEquals("111", foundHeadline(phone))
+        assertEquals(com.point.core.flow.provenanceLabel(Provenance.RULE), foundProvenance(phone))
+    }
+
     @Test
     fun `узел-файл без имени показывает вид, а не путь в scratch`() {
         // Путь на диске к человеку не выходит (#1038, #1100): раньше чип без имени
