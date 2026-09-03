@@ -55,7 +55,7 @@ class RealCapabilityInventoryTest {
         JobReplyCapabilityOnPhone(aiKeysReady), MapCapability(), MergePdfCapability(),
         OpenCapability(), OpenInCapability(), OpenUrlCapability(),
         PagesCapability(), PcCapability(pairedPc), PhoneAppsCapability(),
-        ReadDocumentCapability(),
+        ReadDocumentCapabilityOnPhone(),
         ReadQrCapability(), RenewPeriodCapability(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
         SlidesCapability(), SpeakCapability(),

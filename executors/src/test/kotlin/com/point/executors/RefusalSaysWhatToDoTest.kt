@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.FallbackRealizer
 
 import com.point.core.flow.capabilities.OcrCapability

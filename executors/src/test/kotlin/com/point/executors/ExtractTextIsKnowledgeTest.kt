@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OoxmlOfficeTextExtractor

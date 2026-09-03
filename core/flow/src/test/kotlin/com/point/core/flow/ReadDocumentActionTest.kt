@@ -1,12 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.KnownCapabilities
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.PdfRasterizer
-import com.point.core.flow.TextRecognizer
-import com.point.core.flow.investigationStateOf
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -67,8 +60,10 @@ class ReadDocumentActionTest {
         ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF)),
     )
 
+    private val keeper = TextKeeper { _, text -> store.newScratchFile("txt").value.also { File(it).writeText(text) } }
+
     private suspend fun read(pages: Int, vararg answers: () -> String): ActionResult =
-        ReadDocumentRealizer(rasterizer(pages), reads(*answers), store).perform(document, null)
+        ReadDocumentRealizer(rasterizer(pages), reads(*answers), keeper).perform(document, null)
 
     @Test fun `текст страниц ложится знанием на сам PDF`() = runTest {
         val done = read(2, { "первая" }, { "вторая" }) as ActionResult.Done
@@ -135,7 +130,7 @@ class ReadDocumentActionTest {
             override suspend fun rasterizeFirstPage(obj: PointObject) = null
         }
 
-        val result = ReadDocumentRealizer(broken, reads({ "" }), store).perform(document, null)
+        val result = ReadDocumentRealizer(broken, reads({ "" }), keeper).perform(document, null)
 
         val said = (result as ActionResult.Failure).reason
         assertTrue("английский хвост библиотеки на экране: $said", "PDF header" !in said)

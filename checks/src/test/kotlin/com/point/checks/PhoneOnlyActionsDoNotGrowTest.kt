@@ -112,6 +112,7 @@ class PhoneOnlyActionsDoNotGrowTest {
         val PC_SOURCES = listOf(
             "desktop/src/main/kotlin/com/point/desktop/PhoneFacing.kt",
             "desktop/src/main/kotlin/com/point/desktop/Main.kt",
+            "desktop/src/main/kotlin/com/point/desktop/ReadDocumentOnPc.kt",
             "core/flow/src/main/kotlin/com/point/core/flow/capabilities/SharedDictionary.kt",
         )
     }

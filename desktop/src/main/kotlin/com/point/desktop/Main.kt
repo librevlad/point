@@ -204,7 +204,7 @@ fun main(args: Array<String>) {
                 pcCloudReader = cloudReader
                 cloudReader
             },
-            PcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
+            pcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(
                 com.point.core.flow.ExcelRealizer(
