@@ -57,6 +57,10 @@ Point не является AI-чатом, менеджером файлов и�
 - CLI JDK: `C:\Program Files\Android\Android Studio\jbr`.
 - Установщик Windows (`:desktop:packageMsi`) этим JDK **не собирается**: в JBR нет `jpackage.exe`.
   Для него `JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot` (Temurin 17).
+- Ставить MSI на компьютер — только `tools/install-desktop.ps1`: он останавливает работающий
+  Point, а после установки проверяет очередь удалений Windows и версию. MSI поверх работающего
+  Point отчитывается «успешно» (код 3010), а после перезагрузки оставляет установку без
+  библиотек и без JVM (#1408).
 - Toolchain: JDK 17 через `jvmToolchain(17)` + `foojay-resolver`.
 - `compileSdk = 36`.
 - Версии — в `gradle/libs.versions.toml`.
