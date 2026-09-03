@@ -33,8 +33,18 @@ class PhoneOnlyActionsDoNotGrowTest {
     private fun phoneIds(): Set<String> {
         val ids = CapabilityIds.map(repo, SOURCES)
         val module = File(repo, PHONE_MODULE).readText()
-        val bound = Regex("""@OwnCapabilities\s+abstract fun \w+\(\s*\w+:\s*(\w+)\s*\):\s*Capability""")
-            .findAll(module).map { it.groupValues[1] }.toList()
+
+        // Тип двери бывает и коротким, и полным именем (`com.point.executors.SpeakCapability`):
+        // первая версия сторожа полное имя не видела, и «Озвучить» выпало из счёта молча.
+        // Поэтому считаются все привязки, и каждая обязана быть прочитана.
+        val binds = Regex("""@OwnCapabilities\s+abstract fun \w+\(""").findAll(module).count()
+        val bound = Regex("""@OwnCapabilities\s+abstract fun \w+\(\s*\w+:\s*([\w.]+)\s*\):\s*Capability""")
+            .findAll(module).map { it.groupValues[1].substringAfterLast('.') }.toList()
+        assertEquals(
+            "не каждая привязка телефона прочитана: привязок $binds, прочитано ${bound.size}",
+            binds,
+            bound.size,
+        )
 
         val lost = bound.filter { ids[it] == null }
         assertTrue(
