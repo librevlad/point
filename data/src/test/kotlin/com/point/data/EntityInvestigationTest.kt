@@ -204,10 +204,61 @@ class EntityInvestigationTest {
     }
 
     @Test
-    fun `applies only to text objects`() {
-        val enricher = EntityInvestigationRealizer(extractor())
-        assertTrue(EntityInvestigation().accepts(ObjectState(ObjectKind.TEXT)))
-        assertFalse(EntityInvestigation().accepts(ObjectState(ObjectKind.IMAGE)))
+    fun `applies to text objects and to anything that has read text`() {
+        val investigation = EntityInvestigation()
+        assertTrue(investigation.accepts(ObjectState(ObjectKind.TEXT)))
+        assertFalse(investigation.accepts(ObjectState(ObjectKind.IMAGE)))
+
+        // #1410: слова записи, страниц и документа — тот же текст; вид объекта не важен.
+        assertTrue(investigation.accepts(ObjectState(ObjectKind.AUDIO, setOf(Feature.HAS_TEXT))))
+        assertTrue(investigation.accepts(ObjectState(ObjectKind.PDF, setOf(Feature.HAS_TEXT))))
+        assertTrue(investigation.accepts(ObjectState(ObjectKind.OFFICE, setOf(Feature.HAS_TEXT))))
+        assertFalse("без текста искать нечего", investigation.accepts(ObjectState(ObjectKind.AUDIO)))
+
+        // Снимок читает и разбирает сущности OcrInvestigation тем же заходом — второй проход
+        // по тому же слою дал бы те же узлы дважды.
+        assertFalse(investigation.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT))))
+    }
+
+    /**
+     * Живая охота 03.09.2026 (#1410): запись с датой, телефоном и адресом в словах после
+     * расшифровки оставалась без единой сущности — исследователь читал байты WAV.
+     */
+    @Test
+    fun `слова записи читаются из сидекара расшифровки, а не из байтов записи`() = runTest {
+        val words = File.createTempFile("said", ".txt").apply {
+            writeText("Meeting on 11.09.2026 at 15:00, call +380671234567"); deleteOnExit()
+        }
+        val wav = File.createTempFile("rec", ".wav").apply { writeBytes(ByteArray(64)); deleteOnExit() }
+        val recording = PointObject(
+            "rec", "audio/wav", ScratchRef(wav.absolutePath),
+            ObjectState(ObjectKind.AUDIO, setOf(Feature.HAS_TEXT)),
+            metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to words.absolutePath),
+        )
+        // Извлекатель отвечает только на слова записи: байты WAV он бы не узнал.
+        val onWords = object : EntityExtractor {
+            override suspend fun extract(text: String) =
+                if ("+380671234567" in text) listOf(Entity(EntityType.PHONE, "+380671234567"), Entity(EntityType.DATE_TIME, "11.09.2026")) else emptyList()
+        }
+
+        val delta = EntityInvestigationRealizer(onWords).look(recording)
+
+        assertEquals("+380671234567", delta.metadata[META_ENTITY_PREFIX + "phone"])
+        assertTrue(Feature.HAS_PHONE in delta.features)
+        assertTrue(Feature.HAS_DATE in delta.features)
+    }
+
+    @Test
+    fun `запись с признаком текста, но без сидекара — срыв операции, а не «не нашлось»`() = runTest {
+        val wav = File.createTempFile("rec", ".wav").apply { writeBytes(ByteArray(64)); deleteOnExit() }
+        val recording = PointObject(
+            "rec", "audio/wav", ScratchRef(wav.absolutePath),
+            ObjectState(ObjectKind.AUDIO, setOf(Feature.HAS_TEXT)),
+        )
+
+        val result = EntityInvestigationRealizer(extractor()).perform(recording, null)
+
+        assertTrue("знание о тексте было, а читать нечем — это неудача: $result", result is ActionResult.Failure)
     }
 
     @Test
