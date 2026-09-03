@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.TranscribeCapability
 import com.point.core.flow.CloudOcrCapability
 import com.point.core.flow.CloudOcrRealizer
 import com.point.core.flow.DeviceOcrRealizer

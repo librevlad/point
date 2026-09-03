@@ -44,7 +44,11 @@ class SameActionSameFaceTest {
     fun `расшифровка и поиск зовутся теми же именами, что на телефоне`() {
         val used = keysUsedByDesktop().keys
 
-        assertTrue("расшифровка зовётся не так, как на телефоне", "transcribe" in used)
+        // Расшифровка — общая способность из `:core:flow` (#1379): её значок объявлен там же, где
+        // у телефона, и компьютер обязан объявлять именно её, а не свою копию.
+        val facing = File("src/main/kotlin/com/point/desktop/PhoneFacing.kt").readText()
+        assertTrue("расшифровка зовётся не так, как на телефоне", facing.contains("TranscribeCapability("))
+        assertTrue("у компьютера снова свой значок расшифровки", "transcribe" !in used)
         assertTrue("поиск зовётся не так, как на телефоне", "find" in used)
     }
 

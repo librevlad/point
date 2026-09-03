@@ -90,7 +90,7 @@ import com.point.core.flow.oncePerPath
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileHistoryStore
 import com.point.core.flow.GeminiLlmClient
-import com.point.data.GroqWhisperSpeechToText
+import com.point.core.flow.GroqWhisperSpeechToText
 import com.point.data.SummarizingSpeechToText
 import com.point.core.flow.HttpJson
 import com.point.core.flow.UrlConnectionHttpJson

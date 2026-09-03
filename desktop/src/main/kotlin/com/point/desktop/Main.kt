@@ -156,7 +156,10 @@ fun main(args: Array<String>) {
         override suspend fun recognize(obj: com.point.core.model.PointObject): String =
             runCatching { pcCloudReader!!.readFrame(java.io.File(obj.uri.value), obj.mime) }.getOrDefault("")
     }
-    val capabilities = desktopCapabilities { accountStore.current() != null } +
+    // Речь (#1379): общий клиент Whisper с ключом компьютера; готовность — есть ли ключ.
+    val pcSpeech = pcSpeechEngine { speechCall(FilePcConfig(pointDir).load()) }
+    val pcSpeechReady = com.point.core.flow.SpeechReadiness { com.point.core.flow.speechKeyNeeds(listOf(pcSpeech)) }
+    val capabilities = desktopCapabilities(speechReady = pcSpeechReady) { accountStore.current() != null } +
         com.point.core.flow.ExcelCapability(excelKeys) +
         com.point.core.flow.UnderstandCapability(excelKeys) +
         com.point.core.flow.TranslateCapability(excelKeys) +
@@ -192,7 +195,7 @@ fun main(args: Array<String>) {
             PcUnzipRealizer(revealer),
             com.point.core.flow.OfficeRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), PcTextBesideDocument),
             PcShrinkImageRealizer(outbox),
-            PcTranscribeRealizer({ speechCall(FilePcConfig(pointDir).load()) }),
+            com.point.core.flow.TranscribeRealizer(pcSpeech, pcSpeechReady, JvmAudioLevel(), PcTextInTemp),
             PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, entities).let { cloudReader ->
                 pcCloudReader = cloudReader
                 cloudReader

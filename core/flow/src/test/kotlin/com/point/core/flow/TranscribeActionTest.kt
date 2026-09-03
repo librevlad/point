@@ -1,17 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.AudioLevel
-import com.point.core.flow.GROQ_PROVIDER_ID
-import com.point.core.flow.KEY_SETTINGS_CALL
-import com.point.core.flow.LISTENING
-import com.point.core.flow.META_SEMANTIC_SUMMARY
-import com.point.core.flow.NO_SPEECH_HEARD
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.SpeechKeyNeed
-import com.point.core.flow.SpeechReadiness
-import com.point.core.flow.SpeechToText
-import com.point.core.flow.refusalNeedsKey
-import com.point.core.flow.Transcription
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -74,7 +62,9 @@ class TranscribeActionTest {
         speech: SpeechToText,
         readiness: SpeechReadiness,
         level: AudioLevel = audible,
-    ) = TranscribeRealizer(store, speech, readiness, level)
+    ) = TranscribeRealizer(speech, readiness, level, keeper)
+
+    private val keeper = TextKeeper { _, text -> store.newScratchFile("txt").value.also { File(it).writeText(text) } }
 
     private val keyless = SpeechReadiness {
         listOf(

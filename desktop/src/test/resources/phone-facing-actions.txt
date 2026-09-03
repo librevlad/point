@@ -1,8 +1,8 @@
 pc-open-link=Открыть в браузере на компьютере	URL				5
 pc-open=Открыть на компьютере					10
+transcribe=Расшифровать	AUDIO				10
 pc-copy=В буфер компьютера	IMAGE,TEXT				15
 pc-reveal=Показать в папке на компьютере	IMAGE,TEXT,PDF,ZIP,OFFICE,URL,AUDIO,UNKNOWN				20
-transcribe=Расшифровать	AUDIO				21
 read-document=Прочитать документ	PDF			IS_IMAGE_PDF	24
 pc-print=Напечатать на компьютере	IMAGE,TEXT,PDF,ZIP,OFFICE,URL,AUDIO,UNKNOWN				25
 pc-save-as=Сохранить на компьютере	IMAGE,TEXT,PDF,ZIP,OFFICE,URL,AUDIO,UNKNOWN				30

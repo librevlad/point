@@ -228,7 +228,17 @@ class SmartActionsTest {
     }
 
     @Test fun `без ключа расшифровка не идёт в сеть и называет нужный сервис`() = runTest {
-        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "") })
+        val keyless = com.point.core.flow.SpeechReadiness {
+            listOf(com.point.core.flow.SpeechKeyNeed("Whisper слушает по ключу Groq", com.point.core.flow.GROQ_PROVIDER_ID))
+        }
+        val realizer = com.point.core.flow.TranscribeRealizer(
+            object : com.point.core.flow.SpeechToText {
+                override suspend fun transcribe(obj: PointObject): com.point.core.flow.Transcription = error("в сеть ходить нельзя")
+            },
+            keyless,
+            com.point.core.flow.AudioLevel { 0.4 },
+            PcTextInTemp,
+        )
 
         val result = realizer.perform(audioObject(), null)
 
@@ -236,7 +246,8 @@ class SmartActionsTest {
         val message = (result as ActionResult.Failure).reason
 
         assertTrue("не назван сервис: $message", message.contains("Groq") || message.contains("OpenAI"))
-        assertFalse(result.recoverable)
+        // Нет ключа — поправимо: ключ можно вписать (так отвечает и телефон, исполнитель один, #1379).
+        assertTrue(result.recoverable)
     }
 
     /**
@@ -244,9 +255,13 @@ class SmartActionsTest {
      * сказал «речи нет» — это знание, а не сбой, и вопрос расшифровки закрывается им.
      */
     @Test fun `сервис не разобрал ни слова — компьютер запоминает это знанием`() = runTest {
-        val realizer = PcTranscribeRealizer(
-            { SpeechConfig(key = "есть") },
-            askOutside = { _, _, _ -> "   " },
+        val realizer = com.point.core.flow.TranscribeRealizer(
+            object : com.point.core.flow.SpeechToText {
+                override suspend fun transcribe(obj: PointObject): com.point.core.flow.Transcription = com.point.core.flow.Transcription.Silence
+            },
+            com.point.core.flow.SpeechReadiness { emptyList() },
+            com.point.core.flow.AudioLevel { 0.4 },
+            PcTextInTemp,
         )
 
         val result = realizer.perform(audioObject(), null)
@@ -263,7 +278,12 @@ class SmartActionsTest {
     }
 
     @Test fun `формат, который движок не читает, отсекается до сети`() = runTest {
-        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть") })
+        val realizer = com.point.core.flow.TranscribeRealizer(
+            com.point.core.flow.GroqWhisperSpeechToText(com.point.core.flow.UrlConnectionHttpFiles(), { "есть" }, "http://127.0.0.1:9", "m"),
+            com.point.core.flow.SpeechReadiness { emptyList() },
+            com.point.core.flow.AudioLevel { 0.4 },
+            PcTextInTemp,
+        )
 
         val result = realizer.perform(audioObject(name = "запись.amr", mime = "audio/amr"), null)
 
