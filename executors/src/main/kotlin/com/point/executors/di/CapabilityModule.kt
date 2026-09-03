@@ -142,7 +142,7 @@ abstract class CapabilityModule {
     @Binds abstract fun actionAvailability(impl: com.point.executors.RealizerAvailability): ActionAvailability
     @Binds abstract fun bubblePolicy(impl: LearningBubblePolicy): BubblePolicy
 
-    @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizer): Realizer
+    @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizerOnPhone): Realizer
 
     @Binds @IntoSet @OwnCapabilities abstract fun correctValueCap(c: com.point.executors.CorrectValueCapability): Capability
     @Binds @IntoSet abstract fun correctValueReal(r: com.point.executors.CorrectValueRealizer): Realizer

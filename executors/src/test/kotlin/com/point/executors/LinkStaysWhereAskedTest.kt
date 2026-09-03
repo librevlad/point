@@ -68,7 +68,7 @@ class LinkStaysWhereAskedTest {
             own + remotePcCapabilities(own, advertisedByPc, pairedPc),
             DefaultBubblePolicy(),
         )
-        val realizers = setOf<com.point.core.flow.Realizer>(DropLinkRealizer(NoStore, NoServer)) +
+        val realizers = setOf<com.point.core.flow.Realizer>(com.point.core.flow.DropLinkRealizer(NoServer, com.point.core.flow.TextKeeper { _, t -> java.io.File.createTempFile("link-", ".txt").apply { deleteOnExit(); writeText(t) }.absolutePath })) +
             remotePcRealizers(own, advertisedByPc, pairedPc, transport)
         return DefaultResolver(realizers, registry)
     }

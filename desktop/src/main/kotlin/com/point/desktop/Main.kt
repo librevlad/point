@@ -188,9 +188,13 @@ fun main(args: Array<String>) {
             PcPdfTextRealizer(PdfBoxText()),
             PcEntitiesRealizer(entities),
             PcQrRealizer(outbox),
-            PcDropRealizer(
+            // Ссылка — общий исполнитель (#1379): знание объекта на обеих сторонах, а буфер —
+            // орган компьютера сверху.
+            com.point.core.flow.DropLinkRealizer(
                 DesktopDropLink(serverUrl) { accountStore.current()?.deviceToken },
-                clipboard,
+                PcTextInTemp,
+                onLink = { clipboard.copy(it) },
+                meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD),
             ),
             PcUnzipRealizer(revealer),
             com.point.core.flow.OfficeRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), PcTextBesideDocument),

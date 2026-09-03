@@ -132,9 +132,10 @@ class SmartActionsTest {
 
     @Test fun `ссылка кладётся в буфер компьютера — оттуда её и вставляют`() = runTest {
         var copied: String? = null
-        val realizer = PcDropRealizer(
+        val realizer = com.point.core.flow.DropLinkRealizer(
             drop = { _, _, _ -> com.point.core.flow.DropOutcome.Given("https://point.leerio.app/d/abc") },
-            clipboard = { text -> copied = text },
+            keeper = PcTextInTemp,
+            onLink = { text -> copied = text },
         )
 
         val result = realizer.perform(textObject("отчёт"), null)
@@ -155,9 +156,10 @@ class SmartActionsTest {
     @Test fun `ссылки не вышло — назван тот, кто отказал, а не список догадок`() = runTest {
         var copied: String? = null
         val refusal = com.point.core.flow.serverRefusedDrop("")
-        val realizer = PcDropRealizer(
+        val realizer = com.point.core.flow.DropLinkRealizer(
             drop = { _, _, _ -> com.point.core.flow.DropOutcome.Refused(refusal) },
-            clipboard = { copied = it },
+            keeper = PcTextInTemp,
+            onLink = { copied = it },
         )
 
         val result = realizer.perform(textObject("отчёт"), null)
