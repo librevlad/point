@@ -14,6 +14,7 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
             read.sheets,
             read.shared,
             OoxmlSpreadsheetReader.sheetOrder(read.workbook, read.relations),
+            read.styles,
         )
         when {
             rows.isNotEmpty() ->
@@ -84,6 +85,9 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                                 parts.workbook = zis.readBytes().toString(Charsets.UTF_8)
                             entry.name == OoxmlSpreadsheetReader.WORKBOOK_RELS ->
                                 parts.relations = zis.readBytes().toString(Charsets.UTF_8)
+                            // Стили — чтобы даты книги вышли датами, а не числом дней (#1418).
+                            entry.name == OoxmlSpreadsheetReader.STYLES ->
+                                parts.styles = zis.readBytes().toString(Charsets.UTF_8)
                             OoxmlSpreadsheetReader.isWorksheet(entry.name) ->
                                 parts.sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
                         }
@@ -133,6 +137,7 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
         var shared: String? = null
         var workbook: String? = null
         var relations: String? = null
+        var styles: String? = null
 
         /** На чём проход оборвался, или `null` — архив дочитан до конца. */
         var broken: Throwable? = null
