@@ -59,21 +59,49 @@ fun sameDay(left: String, right: String, hint: DayOrder = DayOrder.UNKNOWN): Boo
     return a == b
 }
 
-/** «5 серпня 2026», «5 августа 2026» — день, месяц словом, год. Без года дня нет. */
+/**
+ * «5 серпня 2026», «5 августа 2026», «11 September 2026» и «September 11, 2026» — день, месяц
+ * словом, год; месяц по-русски, по-украински и по-английски, днём вперёд или месяцем вперёд
+ * (#1426: так пишет расшифровка английской речи). Без года дня нет.
+ */
 private fun monthByWordDay(value: String): LocalDate? {
-    val m = MONTH_BY_WORD.find(value) ?: return null
-    val day = m.groupValues[1].toIntOrNull() ?: return null
-    val year = m.groupValues[3].toIntOrNull() ?: return null
-    val word = m.groupValues[2].lowercase()
-    val month = MONTH_ORDER.indexOfFirst { word.startsWith(it) }
-        .takeIf { it >= 0 }
-        ?: MONTH_ORDER_UA.indexOfFirst { word.startsWith(it) }.takeIf { it >= 0 }
-        ?: return null
+    val (dayText, word, yearText) = MONTH_BY_WORD.find(value)?.let { m ->
+        Triple(m.groupValues[1], m.groupValues[2], m.groupValues[3])
+    } ?: MONTH_FIRST_BY_WORD.find(value)?.let { m ->
+        Triple(m.groupValues[2], m.groupValues[1], m.groupValues[3])
+    } ?: return null
+    val day = dayText.toIntOrNull() ?: return null
+    val year = yearText.toIntOrNull() ?: return null
+    val month = monthIndex(word.lowercase()) ?: return null
     return runCatching { LocalDate.of(year, month + 1, day) }.getOrNull()
 }
 
+private fun monthIndex(word: String): Int? =
+    listOf(MONTH_ORDER, MONTH_ORDER_UA)
+        .map { order -> order.indexOfFirst { word.startsWith(it) } }
+        .firstOrNull { it >= 0 }
+        ?: englishMonth(word)
+
+/** Полное имя или принятое сокращение, точка не в счёт; «market» и «janet» месяцем не становятся. */
+private fun englishMonth(word: String): Int? {
+    val bare = word.removeSuffix(".")
+    return MONTH_NAMES_EN
+        .indexOfFirst { name -> bare == name || bare == name.take(3) || (name == "september" && bare == "sept") }
+        .takeIf { it >= 0 }
+}
+
 private val MONTH_BY_WORD = Regex(
-    """(?iu)(?<!\d)(\d{1,2})\s+(\p{L}+)\s+(\d{4})(?!\d)""",
+    """(?iu)(?<!\d)(\d{1,2})(?:st|nd|rd|th)?\s+(\p{L}+)\.?,?\s+(\d{4})(?!\d)""",
+)
+
+/** «September 11, 2026»: месяц словом вперёд — английский порядок. */
+private val MONTH_FIRST_BY_WORD = Regex(
+    """(?iu)(?<!\p{L})(\p{L}+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?!\d)""",
+)
+
+private val MONTH_NAMES_EN: List<String> = listOf(
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december",
 )
 
 /** Основы месяцев по порядку: русский и украинский вперемешку, оба варианта на месяц. */
@@ -150,12 +178,23 @@ private val DATE_TOKEN = Regex(
     """(?iu)(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{2,4}(?!\d)""" +
         """|(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)""" +
         """|(?<!\d)\d{1,2}[./]\d{1,2}(?![./\d])""" +
-        """|(?<!\d)\d{1,2}\s+(?:$MONTH_STEMS)\p{L}*(?:\s+\d{4})?(?!\d)""",
+        """|(?<!\d)\d{1,2}\s+(?:$MONTH_STEMS)\p{L}*(?:\s+\d{4})?(?!\d)""" +
+        // По-английски — днём вперёд и месяцем вперёд («11 September 2026», «September 11, 2026», #1426).
+        """|(?<!\d)\d{1,2}(?:st|nd|rd|th)?\s+(?:$ENGLISH_MONTH)(?!\p{L})\.?(?:,?\s+\d{4})?(?!\d)""" +
+        """|(?<!\p{L})(?:$ENGLISH_MONTH)(?!\p{L})\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?(?!\d)""",
 )
 
 private const val MONTH_STEMS =
     "январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр|" +
         "січн|лют|берез|квітн|травн|червн|липн|серпн|вересн|жовтн|листопад|грудн"
+
+/**
+ * Английский месяц — полное имя или принятое сокращение, и дальше буквы нет: трёхбуквенная
+ * основа с любым хвостом делала бы датами «Market 12, 2026» и «5 Junior 2026».
+ */
+internal const val ENGLISH_MONTH =
+    "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|" +
+        "sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
 
 /** Час принадлежит своей дате: «в 11:09», «до 18:00», «0:00:00» — часть того же срока. */
 private val DATE_TAIL = Regex("""(?:\s+\p{L}{1,3})?\s*(?<!\d)\d{1,2}:\d{2}(?::\d{2})?""")
