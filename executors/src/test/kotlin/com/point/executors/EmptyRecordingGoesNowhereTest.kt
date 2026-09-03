@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.TranscribeCapability
 import com.point.core.flow.AudioLevel
 import com.point.core.flow.Capability
 import com.point.core.flow.InvestigationState
@@ -88,12 +89,12 @@ class EmptyRecordingGoesNowhereTest {
     }
 
     private fun phoneWithPc(transport: PcTransport, level: AudioLevel, speech: SpeechToText): DefaultResolver {
-        val own: Set<Capability> = setOf(TranscribeCapability(ready))
+        val own: Set<Capability> = setOf(com.point.core.flow.TranscribeCapability(ready))
         val registry = DefaultCapabilityRegistry(
             own + remotePcCapabilities(own, advertisedByPc, pairedPc),
             DefaultBubblePolicy(),
         )
-        val realizers = setOf<Realizer>(TranscribeRealizer(NoStore, speech, ready, level)) +
+        val realizers = setOf<Realizer>(com.point.core.flow.TranscribeRealizer(speech, ready, level, com.point.core.flow.TextKeeper { _, t -> java.io.File.createTempFile("tr-", ".txt").apply { deleteOnExit(); writeText(t) }.absolutePath })) +
             remotePcRealizers(own, advertisedByPc, pairedPc, transport)
         return DefaultResolver(realizers, registry)
     }

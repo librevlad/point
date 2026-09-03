@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.TranscribeCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.DropLink
 import com.point.core.flow.LinkedPc

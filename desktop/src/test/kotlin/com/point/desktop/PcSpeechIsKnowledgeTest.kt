@@ -36,6 +36,21 @@ import org.junit.rules.TemporaryFolder
  */
 class PcSpeechIsKnowledgeTest {
 
+    private val readyOnPc = com.point.core.flow.SpeechReadiness { emptyList() }
+
+    private val audibleOnPc = com.point.core.flow.AudioLevel { 0.4 }
+
+    private fun said(text: String) = object : com.point.core.flow.SpeechToText {
+        override suspend fun transcribe(obj: PointObject): com.point.core.flow.Transcription =
+            if (text.isBlank()) com.point.core.flow.Transcription.Silence else com.point.core.flow.Transcription.Heard(text)
+    }
+
+    private fun pcRealizer(
+        speech: com.point.core.flow.SpeechToText,
+        readiness: com.point.core.flow.SpeechReadiness = readyOnPc,
+        level: com.point.core.flow.AudioLevel = audibleOnPc,
+    ) = com.point.core.flow.TranscribeRealizer(speech, readiness, level, PcTextInTemp)
+
     @get:Rule val temp = TemporaryFolder()
 
     private var server: HttpServer? = null
@@ -46,7 +61,7 @@ class PcSpeechIsKnowledgeTest {
 
     private fun serve(code: Int, body: String): String {
         val s = HttpServer.create(InetSocketAddress(0), 0)
-        s.createContext("/transcriptions") { exchange ->
+        s.createContext("/audio/transcriptions") { exchange ->
             exchange.requestBody.readBytes()
             val bytes = body.toByteArray(Charsets.UTF_8)
             exchange.sendResponseHeaders(code, bytes.size.toLong())
@@ -54,7 +69,7 @@ class PcSpeechIsKnowledgeTest {
         }
         s.start()
         server = s
-        return "http://127.0.0.1:${s.address.port}/transcriptions"
+        return "http://127.0.0.1:${s.address.port}"
     }
 
     private fun recording(): PointObject {
@@ -69,10 +84,7 @@ class PcSpeechIsKnowledgeTest {
     }
 
     @Test fun `расшифровка ложится знанием на саму запись, а не рождает объект`() = runTest {
-        val realizer = PcTranscribeRealizer(
-            { SpeechConfig(key = "есть") },
-            askOutside = { _, _, _ -> "Встречаемся в четверг" },
-        )
+        val realizer = pcRealizer(said("Встречаемся в четверг"))
 
         val result = realizer.perform(recording(), null)
 
@@ -90,7 +102,7 @@ class PcSpeechIsKnowledgeTest {
 
     /** Обещание действия — то же, что у телефона: знание записи, а не новая вещь. */
     @Test fun `дверь обещает знание записи, а не рождение текста`() {
-        val cap = PcTranscribeCapability()
+        val cap = com.point.core.flow.TranscribeCapability(readyOnPc)
         val audio = ObjectState(ObjectKind.AUDIO)
 
         assertTrue("расшифровка снова обещает новый объект", cap.produces(audio)!!.has(Feature.HAS_TEXT))
@@ -105,7 +117,9 @@ class PcSpeechIsKnowledgeTest {
      */
     @Test fun `слишком часто — человек слышит про бесплатное, а не «попробуйте позже»`() = runTest {
         val url = serve(429, "slow down")
-        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть", url = url) })
+        val realizer = pcRealizer(
+            com.point.core.flow.GroqWhisperSpeechToText(com.point.core.flow.UrlConnectionHttpFiles(), { "есть" }, url, "m"),
+        )
 
         val said = (realizer.perform(recording(), null) as ActionResult.Failure).reason
 
@@ -125,15 +139,16 @@ class PcSpeechIsKnowledgeTest {
     @Test fun `медленная расшифровка едет телефону словами, а не путём на чужом диске`() {
         val heard = "Встречаемся в четверг"
         val outbox = Outbox(temp.newFolder("out-speech"))
-        val realizer = PcTranscribeRealizer(
-            { SpeechConfig(key = "есть") },
-            askOutside = { _, _, _ ->
-                Thread.sleep(300)
-                heard
+        val realizer = pcRealizer(
+            object : com.point.core.flow.SpeechToText {
+                override suspend fun transcribe(obj: PointObject): com.point.core.flow.Transcription {
+                    Thread.sleep(300)
+                    return com.point.core.flow.Transcription.Heard(heard)
+                }
             },
         )
         val state = DesktopState(
-            DesktopRegistry(setOf(PcTranscribeCapability())),
+            DesktopRegistry(setOf(com.point.core.flow.TranscribeCapability(readyOnPc))),
             object : com.point.core.flow.Resolver {
                 override fun realizerFor(capabilityId: com.point.core.model.CapabilityId) = realizer
             },
@@ -151,7 +166,8 @@ class PcSpeechIsKnowledgeTest {
         val meta = outbox.entries().single().meta
         val u = com.point.core.flow.PcResultFields.UNDERSTOOD
 
-        assertEquals("текста записи телефон не получил", heard, meta[u + com.point.core.flow.META_READ_TEXT])
+        // Слова едут в файле с переводом строки в конце — так их кладёт общий исполнитель (#1379).
+        assertEquals("текста записи телефон не получил", heard, meta[u + com.point.core.flow.META_READ_TEXT]?.trim())
         assertNull(
             "телефону отправлен путь к файлу на этом компьютере — там он не открывается",
             meta[u + META_OCR_TEXT_REF],
@@ -166,7 +182,9 @@ class PcSpeechIsKnowledgeTest {
     /** Ключ не принят — и подсказка про нужный сервис доходит, а не остаётся мёртвым текстом. */
     @Test fun `ключ не принят — сказано про ключ и про нужный сервис`() = runTest {
         val url = serve(401, "unauthorized")
-        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть", url = url) })
+        val realizer = pcRealizer(
+            com.point.core.flow.GroqWhisperSpeechToText(com.point.core.flow.UrlConnectionHttpFiles(), { "есть" }, url, "m"),
+        )
 
         val said = (realizer.perform(recording(), null) as ActionResult.Failure).reason
 

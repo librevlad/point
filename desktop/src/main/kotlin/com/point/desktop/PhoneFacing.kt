@@ -11,16 +11,23 @@ import com.point.core.flow.advertisedActions
  * [signedIn] — есть ли на компьютере аккаунт Point (#1022): «Дать ссылку» без него не
  * сработает, и человек узнаёт это по тапу, а не после согласия на отправку.
  */
-fun desktopCapabilities(signedIn: () -> Boolean = { true }): Set<Capability> = setOf(
+fun desktopCapabilities(
+    /** Есть ли на компьютере ключ для расшифровки (#1379): название действия само скажет, если нет. */
+    speechReady: com.point.core.flow.SpeechReadiness = com.point.core.flow.SpeechReadiness { emptyList() },
+
+    // Последним — чтобы `desktopCapabilities { signedIn }` по-прежнему читалось как раньше.
+    signedIn: () -> Boolean = { true },
+): Set<Capability> = setOf(
     PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
     PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
     PcOpenLinkCapability(),
 
-    // «Понять», «Перевести» и «AI» на компьютере есть (#1379, решение владельца 01.09.2026:
-    // «пк должен все уметь не хуже телефона»). Это отменило ограничительную часть #701
-    // («ПК — только исполнитель»): одна способность — один код в `:core:flow`, у каждой
-    // поверхности свои органы. Сам набор собирается в `Main.kt`, где эти органы и живут.
-    PcTranscribeCapability(),
+    // «Понять», «Перевести», «AI» и «Расшифровать» на компьютере есть (#1379, решение владельца
+    // 01.09.2026: «пк должен все уметь не хуже телефона»). Это отменило ограничительную часть
+    // #701 («ПК — только исполнитель»): одна способность — один код в `:core:flow`, у каждой
+    // поверхности свои органы. Органы живут в `Main.kt`; расшифровка объявлена здесь, потому
+    // что это же объявление едет телефону и читается сторожами.
+    com.point.core.flow.TranscribeCapability(speechReady),
 
     PcEntitiesCapability(),
 

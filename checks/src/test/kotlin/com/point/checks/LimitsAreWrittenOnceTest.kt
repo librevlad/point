@@ -30,10 +30,10 @@ class LimitsAreWrittenOnceTest {
 
     @Test
     fun `предел записи не набран числом второй раз`() {
+        // Клиент один на оба устройства и живёт рядом с пределом (#1379): зовёт его по имени.
         val guilty = listOf(
-            "data/src/main/kotlin/com/point/data/GroqWhisperSpeechToText.kt",
-            "desktop/src/main/kotlin/com/point/desktop/SpeechActions.kt",
-        ).filterNot { source(it).contains("com.point.core.flow.MAX_SPEECH_BYTES") }
+            "core/flow/src/main/kotlin/com/point/core/flow/GroqWhisperSpeechToText.kt",
+        ).filterNot { source(it).contains("MAX_SPEECH_BYTES") }
 
         assertTrue("предел объявлен заново: $guilty", guilty.isEmpty())
     }

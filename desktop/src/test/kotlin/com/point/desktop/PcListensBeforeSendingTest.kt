@@ -34,15 +34,23 @@ class PcListensBeforeSendingTest {
 
     @get:Rule val temp = TemporaryFolder()
 
-    private val config = { SpeechConfig(key = "k", model = "m", url = "https://example.invalid") }
+    private val readyOnPc = com.point.core.flow.SpeechReadiness { emptyList() }
+
+    /** Сервис, который считает, сколько раз его спросили, и отвечает заранее известным. */
+    private fun counting(answer: String, hit: () -> Unit) = object : com.point.core.flow.SpeechToText {
+        override suspend fun transcribe(obj: PointObject): com.point.core.flow.Transcription {
+            hit()
+            return if (answer.isBlank()) com.point.core.flow.Transcription.Silence else com.point.core.flow.Transcription.Heard(answer)
+        }
+    }
+
+    private fun pcRealizer(speech: com.point.core.flow.SpeechToText) =
+        com.point.core.flow.TranscribeRealizer(speech, readyOnPc, JvmAudioLevel(), PcTextInTemp)
 
     @Test
     fun `цифровая тишина в сервис не едет`() = runTest {
         var asked = 0
-        val realizer = PcTranscribeRealizer(
-            config = config,
-            askOutside = { _, _, _ -> asked++; "Thank you." },
-        )
+        val realizer = pcRealizer(counting("Thank you.") { asked++ })
 
         val result = realizer.perform(recording(wav(seconds = 1, loud = false)), null)
 
@@ -61,10 +69,7 @@ class PcListensBeforeSendingTest {
     @Test
     fun `запись со звуком едет в сервис, как и раньше`() = runTest {
         var asked = 0
-        val realizer = PcTranscribeRealizer(
-            config = config,
-            askOutside = { _, _, _ -> asked++; "Перезвони мне" },
-        )
+        val realizer = pcRealizer(counting("Перезвони мне") { asked++ })
 
         val result = realizer.perform(recording(wav(seconds = 1, loud = true)), null)
 
@@ -80,10 +85,7 @@ class PcListensBeforeSendingTest {
     fun `запись, которую компьютер не разобрал, идёт дальше обычным путём`() = runTest {
         var asked = 0
         val notAudio = temp.newFile("voice.mp3").apply { writeBytes(ByteArray(2048) { 7 }) }
-        val realizer = PcTranscribeRealizer(
-            config = config,
-            askOutside = { _, _, _ -> asked++; "Перезвони мне" },
-        )
+        val realizer = pcRealizer(counting("Перезвони мне") { asked++ })
 
         realizer.perform(recording(notAudio), null)
 

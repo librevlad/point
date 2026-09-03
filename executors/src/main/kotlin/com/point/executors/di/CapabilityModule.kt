@@ -114,8 +114,8 @@ import com.point.executors.ShareAllCapability
 import com.point.executors.ShareAllRealizer
 import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
-import com.point.executors.TranscribeCapability
-import com.point.executors.TranscribeRealizer
+import com.point.executors.TranscribeCapabilityOnPhone
+import com.point.executors.TranscribeRealizerOnPhone
 import com.point.executors.SaveContactCapability
 import com.point.executors.SaveContactRealizer
 import com.point.executors.VCardCapability
@@ -187,7 +187,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun readDocumentReal(r: ReadDocumentRealizer): Realizer
     @Binds @IntoSet @OwnCapabilities abstract fun translateCap(c: TranslateCapabilityOnPhone): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun speakCap(c: com.point.executors.SpeakCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapabilityOnPhone): Capability
@@ -251,7 +251,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizerOnPhone): Realizer
-    @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizer): Realizer
+    @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
