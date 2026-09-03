@@ -87,24 +87,3 @@ class DesktopDropLink(
         val MAX_DROP_BYTES = com.point.core.flow.MAX_DROP_BYTES
     }
 }
-
-class PcDropRealizer(
-    private val drop: DropLink,
-    private val clipboard: TextClipboard,
-) : Realizer {
-    override val capabilityId = com.point.core.flow.capabilities.DropLinkCapability.ID
-
-    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
-
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
-        val file = File(input.uri.value).takeIf(File::isFile)
-            ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
-        val name = input.metadata["name"] ?: file.name
-        val link = when (val outcome = drop.give(file.absolutePath, name, input.mime)) {
-            is DropOutcome.Given -> outcome.link
-            is DropOutcome.Refused -> return ActionResult.Failure(outcome.why, recoverable = true)
-        }
-        clipboard.copy(link)
-        ActionResult.Done("Ссылка в буфере — живёт сутки")
-    }.getOrElse { ActionResult.Failure("Ссылка не выдалась — проверьте интернет и повторите", recoverable = true) }
-}

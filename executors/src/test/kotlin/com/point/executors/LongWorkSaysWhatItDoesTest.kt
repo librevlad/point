@@ -40,7 +40,7 @@ class LongWorkSaysWhatItDoesTest {
                 com.point.core.flow.DropOutcome.Given("https://p.nt/abc")
         }
 
-        val heard = stagesHeard { DropLinkRealizer(store(), drop).perform(obj, null) }
+        val heard = stagesHeard { com.point.core.flow.DropLinkRealizer(drop, com.point.core.flow.TextKeeper { _, t -> java.io.File.createTempFile("link-", ".txt").apply { deleteOnExit(); writeText(t) }.absolutePath }).perform(obj, null) }
 
         assertEquals(listOf("Загружаю файл"), heard)
     }
