@@ -1,95 +1,45 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.EXTRACTED_KINDS
-import com.point.core.flow.META_ENTITY_PREFIX
-import com.point.core.flow.META_GRAPH_ROLE_PREFIX
-import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.GraphState
 import com.point.core.flow.Realizer
-import com.point.core.flow.isAnnotationKey
-import com.point.core.flow.isStateKey
-import com.point.core.flow.normConsensus
+
 import com.point.core.model.ActionResult
-import com.point.core.model.CapabilityId
-import com.point.core.model.Findings
+import com.point.core.model.ActionYield
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import com.point.core.model.Provenance
+import com.point.core.model.Preview
 import javax.inject.Inject
 
 /**
- * Явное исправление или подтверждение значения человеком — единственный путь, которым
- * знание получает `Provenance.HUMAN` (ADR-0001 §8).
- *
- * Ни Focus, ни crop, ни навигация, ни сам запуск действия HUMAN не ставят: провенанс
- * появляется только из введённого или подтверждённого здесь значения.
+ * Действие живёт в `:core:flow` — одно на телефон и компьютер (#1379). Здесь только двери Hilt.
+ * Члены переписаны руками, а не `by`-делегатом: kotlin-делегирование в `@Inject`-классе роняет
+ * KSP всего модуля россыпью «error.NonExistentClass» без указания на виновника.
  */
-class CorrectValueCapability @Inject constructor() : Capability {
-
-    override val id = ID
-
-    override val icon = "text"
-
-    override val meta = CapabilityMeta(priority = 82, localOnly = true)
-
-    override fun label(state: ObjectState) = "Исправить значение"
-
-    override fun accepts(state: ObjectState) = state.kind in EXTRACTED_KINDS
-
-    override fun produces(state: ObjectState) = state
-
-    override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
-
-    companion object {
-
-        val ID = CapabilityId("correct-value")
-    }
+class CorrectValueCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.CorrectValueCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }
 
-class CorrectValueRealizer @Inject constructor() : Realizer {
-
-    override val capabilityId = CorrectValueCapability.ID
-
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
-        val key = correctableKey(input.metadata)
-            ?: return ActionResult.Failure("Здесь нечего исправлять", recoverable = true)
-        val current = input.metadata[key].orEmpty()
-
-        if (amendment == null) {
-            return ActionResult.NeedsInput(
-                "Как правильно?",
-                suggestions = listOfNotNull(current.takeIf(String::isNotBlank)),
-            )
-        }
-        val value = amendment.trim()
-        if (value.isEmpty()) {
-            return ActionResult.Failure("Пустое значение — исправление отменено", recoverable = true)
-        }
-
-        // Знание, а не новый объект: правка уходит исходом «выполнено» (ADR-0001 §18)
-        // и сливается единым mergeKnowledge — там человеческое слово разрешает спор.
-        val findings = Findings(
-            metadata = mapOf(
-                key to value,
-                key + META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
-            ),
-        )
-        val confirmed = normConsensus(value) == normConsensus(current)
-        return ActionResult.Done(
-            if (confirmed) "Подтверждено вами" else "Исправлено: $value",
-            findings,
-        )
-    }
+class CorrectValueRealizerOnPhone @Inject constructor() : Realizer {
+    private val inner = com.point.core.flow.CorrectValueRealizer()
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
 }
-
-/**
- * Исправлять есть смысл только смысловой факт — не локализацию, не состояние исследования
- * и не аннотации.
- */
-internal fun correctableKey(metadata: Map<String, String>): String? =
-    metadata.keys.firstOrNull {
-        (it.startsWith(META_ENTITY_PREFIX) || it.startsWith(META_GRAPH_ROLE_PREFIX)) &&
-            !isAnnotationKey(it) && !isStateKey(it)
-    }

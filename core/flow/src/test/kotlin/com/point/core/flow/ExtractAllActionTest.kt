@@ -1,7 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.Entity
-import com.point.core.flow.EntityType
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState

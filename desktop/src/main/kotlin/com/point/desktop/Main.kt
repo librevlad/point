@@ -170,7 +170,14 @@ fun main(args: Array<String>) {
         com.point.core.flow.FixErrorsStrongerCapability(excelKeys) +
         com.point.core.flow.ShoppingListCapability(excelKeys) +
         com.point.core.flow.JobReplyCapability(excelKeys) +
-        com.point.core.flow.CloudOcrCapability()
+        com.point.core.flow.CloudOcrCapability() +
+        // Шесть чистых умений телефона, которым на компьютере не хватало только рук (#1379).
+        com.point.core.flow.PagesCapability() +
+        com.point.core.flow.SlidesCapability() +
+        com.point.core.flow.RenewPeriodCapability() +
+        com.point.core.flow.FindCapability() +
+        com.point.core.flow.ExtractAllCapability() +
+        com.point.core.flow.CorrectValueCapability()
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
@@ -204,6 +211,15 @@ fun main(args: Array<String>) {
                 pcCloudReader = cloudReader
                 cloudReader
             },
+            com.point.core.flow.PagesRealizer(PcPdfRasterizer()),
+            com.point.core.flow.SlidesRealizer(excelStore, com.point.core.flow.OoxmlOfficeTextExtractor()),
+            com.point.core.flow.RenewPeriodRealizer(
+                com.point.core.flow.OoxmlSpreadsheetReader(),
+                com.point.core.flow.OoxmlSpreadsheetWriter(excelStore),
+            ),
+            com.point.core.flow.FindRealizer(),
+            com.point.core.flow.ExtractAllRealizer(excelStore, entities),
+            com.point.core.flow.CorrectValueRealizer(),
             pcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(

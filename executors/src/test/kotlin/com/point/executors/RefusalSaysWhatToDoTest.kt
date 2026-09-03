@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.SlidesRealizer
+import com.point.core.flow.PagesCapability
 import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.FallbackRealizer
 

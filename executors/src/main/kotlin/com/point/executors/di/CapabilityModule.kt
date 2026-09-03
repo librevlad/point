@@ -1,5 +1,7 @@
 package com.point.executors.di
 
+import com.point.executors.CorrectValueCapabilityOnPhone
+import com.point.executors.CorrectValueRealizerOnPhone
 import com.point.core.flow.ActionAvailability
 import com.point.core.flow.BubblePolicy
 import com.point.core.flow.AppLauncher
@@ -9,7 +11,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.Resolver
-import com.point.executors.ExtractAllCapability
+import com.point.executors.ExtractAllCapabilityOnPhone
 import com.point.executors.AppCapability
 import com.point.executors.PcCapability
 import com.point.executors.PcRealizer
@@ -66,9 +68,9 @@ import com.point.executors.TranslateRealizerOnPhone
 import com.point.executors.UnderstandCapabilityOnPhone
 import com.point.executors.UnderstandRealizerOnPhone
 import com.point.executors.ExcelRealizerOnPhone
-import com.point.executors.ExtractAllRealizer
-import com.point.executors.FindCapability
-import com.point.executors.FindRealizer
+import com.point.executors.ExtractAllRealizerOnPhone
+import com.point.executors.FindCapabilityOnPhone
+import com.point.executors.FindRealizerOnPhone
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageRealizer
 import com.point.executors.MergePdfCapability
@@ -84,20 +86,20 @@ import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
 import com.point.executors.OpenUrlCapability
 import com.point.executors.OpenUrlRealizer
-import com.point.executors.PagesCapability
+import com.point.executors.PagesCapabilityOnPhone
 import com.point.executors.ReadDocumentCapabilityOnPhone
 import com.point.executors.ReadDocumentRealizerOnPhone
-import com.point.executors.PagesRealizer
-import com.point.executors.SlidesCapability
-import com.point.executors.SlidesRealizer
+import com.point.executors.PagesRealizerOnPhone
+import com.point.executors.SlidesCapabilityOnPhone
+import com.point.executors.SlidesRealizerOnPhone
 import com.point.executors.PdfRealizer
 import com.point.executors.ReplaceBgCapability
 import com.point.executors.ReplaceBgRealizer
 import com.point.executors.QrRealizer
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
-import com.point.executors.RenewPeriodCapability
-import com.point.executors.RenewPeriodRealizer
+import com.point.executors.RenewPeriodCapabilityOnPhone
+import com.point.executors.RenewPeriodRealizerOnPhone
 import com.point.executors.ScanCapability
 import com.point.executors.ScanRealizer
 import com.point.executors.ScanPlusCapability
@@ -144,8 +146,8 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizerOnPhone): Realizer
 
-    @Binds @IntoSet @OwnCapabilities abstract fun correctValueCap(c: com.point.executors.CorrectValueCapability): Capability
-    @Binds @IntoSet abstract fun correctValueReal(r: com.point.executors.CorrectValueRealizer): Realizer
+    @Binds @IntoSet @OwnCapabilities abstract fun correctValueCap(c: CorrectValueCapabilityOnPhone): Capability
+    @Binds @IntoSet abstract fun correctValueReal(r: CorrectValueRealizerOnPhone): Realizer
 
     @Binds @IntoSet @OwnCapabilities abstract fun pcCap(c: PcCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shareCap(c: ShareCapability): Capability
@@ -156,7 +158,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun scanPdfCap(c: ScanPdfCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shootMoreCap(c: ShootMoreCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openCap(c: OpenCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun extractAllCap(c: ExtractAllCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun extractAllCap(c: ExtractAllCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openInCap(c: OpenInCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openUrlCap(c: OpenUrlCapability): Capability
 
@@ -176,11 +178,11 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun saveContactCap(c: SaveContactCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun copyCap(c: CopyCapability): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun findCap(c: FindCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun pagesCap(c: PagesCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun findCap(c: FindCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun pagesCap(c: PagesCapabilityOnPhone): Capability
 
     // «Слайды» раскладывают презентацию так же, как «Страницы» — PDF (#1105).
-    @Binds @IntoSet @OwnCapabilities abstract fun slidesCap(c: SlidesCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun slidesCap(c: SlidesCapabilityOnPhone): Capability
 
     // Сканированный PDF читается одним действием (#1014): страницы → чтение → знание на PDF.
     @Binds @IntoSet @OwnCapabilities abstract fun readDocumentCap(c: ReadDocumentCapabilityOnPhone): Capability
@@ -191,7 +193,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun speakCap(c: com.point.executors.SpeakCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapabilityOnPhone): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun wordCap(c: WordCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun readQrCap(c: ReadQrCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanCap(c: ScanCapability): Capability
@@ -242,19 +244,19 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun vcardR(r: VCardRealizer): Realizer
     @Binds @IntoSet abstract fun saveContactR(r: SaveContactRealizer): Realizer
     @Binds @IntoSet abstract fun copyR(r: CopyRealizer): Realizer
-    @Binds @IntoSet abstract fun extractAllR(r: ExtractAllRealizer): Realizer
-    @Binds @IntoSet abstract fun findR(r: FindRealizer): Realizer
+    @Binds @IntoSet abstract fun extractAllR(r: ExtractAllRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun findR(r: FindRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
-    @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer
-    @Binds @IntoSet abstract fun slidesR(r: SlidesRealizer): Realizer
+    @Binds @IntoSet abstract fun pagesR(r: PagesRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun slidesR(r: SlidesRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizerOnPhone): Realizer
-    @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
+    @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun wordR(r: WordRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun readQrR(r: ReadQrRealizer): Realizer

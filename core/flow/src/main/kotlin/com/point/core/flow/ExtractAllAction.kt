@@ -1,0 +1,73 @@
+package com.point.core.flow
+
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
+import com.point.core.model.Intent
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ResultObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+
+internal fun formatEntities(entities: List<Entity>): String {
+    fun values(type: EntityType) =
+        entities.filter { it.type == type }.map { it.value.trim() }.filter { it.isNotBlank() }.distinct()
+
+    return buildString {
+        appendSection("Телефоны", values(EntityType.PHONE))
+        appendSection("Почты", values(EntityType.EMAIL))
+        appendSection("Ссылки", values(EntityType.URL))
+        appendSection("Адреса", values(EntityType.ADDRESS))
+    }.trim()
+}
+
+private fun StringBuilder.appendSection(title: String, items: List<String>) {
+    if (items.isEmpty()) return
+    if (isNotEmpty()) append("\n")
+    append(title).append(":\n")
+    items.forEach { append(it).append("\n") }
+}
+
+class ExtractAllCapability : Capability {
+    override val id = ID
+    override val icon = "list"
+
+    override val meta = CapabilityMeta(priority = 30, latency = Latency.FAST)
+    override fun label(state: ObjectState) = "Собрать данные"
+
+    // Собирать имеет смысл там, где есть ЧТО собирать: на узле-одиночке действие
+    // возвращало копию самого себя новым объектом (#676, охота 2026-08-09).
+    override fun accepts(state: ObjectState) =
+        state.kind !in com.point.core.flow.EXTRACTED_KINDS &&
+            listOf(Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_URL, Feature.HAS_ADDRESS)
+                .count(state::has) >= 2
+    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+    override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
+
+    companion object { val ID = CapabilityId("extract-all") }
+}
+
+class ExtractAllRealizer(
+    private val store: ObjectStore,
+    private val extractor: EntityExtractor,
+) : Realizer {
+    override val capabilityId = ExtractAllCapability.ID
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val text = com.point.core.flow.entitySourceText(input)
+                val list = formatEntities(extractor.extract(text))
+                if (list.isBlank()) {
+                    ActionResult.Failure("Не удалось собрать данные", recoverable = true)
+                } else {
+                    val ref = store.newScratchFile("txt")
+                    File(ref.value).writeText(list)
+                    ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ref, mapOf("op" to "extract-all")))
+                }
+            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось собрать данные", recoverable = true) }
+        }
+}
