@@ -443,7 +443,10 @@ class FlowViewModel @Inject constructor(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { known -> _ui.update { it.copy(busy = "Открываю $known…") } }
             val obj = runCatching {
-                store.clear()
+                // Свой же файл (адрес нашего FileProvider) не стирается до того, как прочитан
+                // (#1419): очистка перед приёмом уносила источник, и «Не удалось открыть объект»
+                // говорилось про файл, который Point сам только что раздал.
+                if (!store.isOwn(sourceUri)) store.clear()
                 store.ingest(sourceUri, mime)
             }.getOrNull()?.let { ingested ->
                 if (carried.isEmpty()) {

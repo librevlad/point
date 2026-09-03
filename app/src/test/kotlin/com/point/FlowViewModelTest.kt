@@ -203,6 +203,23 @@ class FlowViewModelTest {
     }
 
     /**
+     * #1419 (живьём на эмуляторе 03.09.2026): «Открыть» документ без стороннего приложения
+     * запускало сам Point как открывалку его же файла, а приём начинался с очистки рабочей папки
+     * — источник стирался до чтения, и человек читал «Не удалось открыть объект» про целый файл.
+     * Своё перед приёмом не стирается; чужое — как и раньше.
+     */
+    @Test fun `свой же файл не стирается до того, как прочитан`() = runTest(dispatcher) {
+        val vm = vm()
+        store.own = setOf("content://com.point.fileprovider/scratch/own")
+
+        vm.onShared("content://com.point.fileprovider/scratch/own", "application/pdf"); advanceUntilIdle()
+        assertEquals("очистка перед приёмом стёрла бы источник", 0, store.clearedTimes)
+
+        vm.onShared("content://other.app/doc", "application/pdf"); advanceUntilIdle()
+        assertEquals("чужой источник — папка очищается, как и раньше", 1, store.clearedTimes)
+    }
+
+    /**
      * #1033 (живьём на эмуляторе 19.08.2026): PDF с целым заголовком и мусорным телом. Первая
      * страница не отрисовалась, и подзаголовок объяснял поломку словами про картинку — «или
      * это не изображение» — прямо под подписью «PDF». Головной путь карточки идёт здесь: чем
@@ -5931,6 +5948,11 @@ private class FakeStore : ObjectStore {
     var path = "/in"
 
     var clearedTimes = 0
+
+    /** Адреса, указывающие внутрь этой же рабочей папки (#1419): своё перед приёмом не стирается. */
+    var own: Set<String> = emptySet()
+    override fun isOwn(sourceUri: String): Boolean = sourceUri in own
+
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
         if (failIngest) error("boom") else PointObject("in", mime, ScratchRef(path), ObjectState(kind))
     override suspend fun ingestMultiple(sources: List<String>): PointObject =

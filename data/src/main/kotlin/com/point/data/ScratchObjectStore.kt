@@ -45,6 +45,10 @@ class ScratchObjectStore @Inject constructor(
         runCatching { displayName(Uri.parse(sourceUri)) }.getOrNull()
     }
 
+    /** Адрес нашего же `FileProvider` — файл лежит в этой папке, и очистка перед приёмом стёрла бы его (#1419). */
+    override fun isOwn(sourceUri: String): Boolean =
+        runCatching { Uri.parse(sourceUri).authority == "${context.packageName}.fileprovider" }.getOrDefault(false)
+
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
         withContext(Dispatchers.IO) {
 
