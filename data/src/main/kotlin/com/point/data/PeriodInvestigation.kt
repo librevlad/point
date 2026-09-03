@@ -51,9 +51,14 @@ class PeriodInvestigationRealizer @Inject constructor(
 
     private suspend fun findings(obj: PointObject): Findings {
 
-        val rows = sheets.readRows(obj)
-        readPeriod(rows) ?: return Findings()
-        return Findings(features = setOf(Feature.HAS_PERIOD))
+        // Период ищется на каждом листе книги (#1417): у книг владельца первый лист часто шапка
+        // или шаблон, и «периода нет» по нему было ответом за листы, которых не открывали
+        // (`not investigated`, а не `not found`). Найденный лист называется — по нему и продлевают.
+        val sheet = sheets.readSheets(obj).firstOrNull { readPeriod(it.rows) != null } ?: return Findings()
+        return Findings(
+            features = setOf(Feature.HAS_PERIOD),
+            metadata = if (sheet.name.isBlank()) emptyMap() else mapOf(com.point.core.flow.META_PERIOD_SHEET to sheet.name),
+        )
     }
 }
 

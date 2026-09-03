@@ -33,6 +33,41 @@ class PeriodInvestigationTest {
         },
     )
 
+    private fun enricherOverSheets(vararg sheets: com.point.core.flow.NamedSheet) = PeriodInvestigationRealizer(
+        object : SpreadsheetReader {
+            override suspend fun readRows(obj: PointObject): List<List<String>> = sheets.first().rows
+            override suspend fun readSheets(obj: PointObject): List<com.point.core.flow.NamedSheet> = sheets.toList()
+        },
+    )
+
+    private val schedule: List<List<String>> = listOf(listOf("Захід", "Дата")) +
+        (16..29).map { day -> listOf("Захід $day", "%02d.07.2026".format(day)) }
+
+    /**
+     * Живая охота 03.09.2026 (#1417), книга владельца «Їдальня»: первый лист — шаблон без дат,
+     * 184 даты подряд — на втором. Исследование смотрело один лист и отвечало «не найдено» за книгу.
+     */
+    @Test
+    fun `период на втором листе находится и лист называется`() = runTest {
+        val template = com.point.core.flow.NamedSheet("template", listOf(listOf("Шапка"), listOf("Код номенклатури")))
+        val daily = com.point.core.flow.NamedSheet("daily-2025", schedule)
+
+        val delta = enricherOverSheets(template, daily).look(table)
+
+        assertEquals(setOf(Feature.HAS_PERIOD), delta.features)
+        assertEquals(daily.name, delta.metadata[com.point.core.flow.META_PERIOD_SHEET])
+    }
+
+    @Test
+    fun `период на двух листах — назван первый из них`() = runTest {
+        val july = com.point.core.flow.NamedSheet("july", schedule)
+        val august = com.point.core.flow.NamedSheet("august", schedule)
+
+        val delta = enricherOverSheets(july, august).look(table)
+
+        assertEquals(july.name, delta.metadata[com.point.core.flow.META_PERIOD_SHEET])
+    }
+
     @Test
     fun `график за две недели получает признак периода`() = runTest {
         val rows = listOf(listOf("Захід", "Дата")) +

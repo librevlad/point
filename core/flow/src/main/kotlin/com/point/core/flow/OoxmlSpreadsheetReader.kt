@@ -30,6 +30,38 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
 
     /** Одна таблица документа — первый лист книги. Весь её текст спрашивают у [rowsOf]. */
     override suspend fun readRows(obj: PointObject): List<List<String>> = withContext(Dispatchers.IO) {
+        val book = open(obj)
+        val first = inBookOrder(book.sheets.keys, book.order).firstOrNull()
+        rowsOf(book.sheets.filterKeys { it == first }, book.shared, book.order, book.styles)
+    }
+
+    /**
+     * Все листы книги порознь, в порядке вкладок и с именами (#1417): период ищется на каждом.
+     * Имя — из самой книги (`xl/workbook.xml`); книга без имён отдаёт имя части архива.
+     */
+    override suspend fun readSheets(obj: PointObject): List<NamedSheet> = withContext(Dispatchers.IO) {
+        val book = open(obj)
+        val names = sheetNames(book.workbook, book.relations)
+        inBookOrder(book.sheets.keys, book.order).map { entry ->
+            NamedSheet(
+                names[entry] ?: entry.removePrefix(WORKSHEETS).removeSuffix(".xml"),
+                rowsOf(mapOf(entry to book.sheets.getValue(entry)), book.shared, book.order, book.styles),
+            )
+        }
+    }
+
+    /** Части книги, прочитанные за один проход по архиву. */
+    private class Book(
+        val sheets: Map<String, String>,
+        val shared: String?,
+        val workbook: String?,
+        val relations: String?,
+        val styles: String?,
+    ) {
+        val order: List<String> get() = sheetOrder(workbook, relations)
+    }
+
+    private fun open(obj: PointObject): Book {
         var shared: String? = null
         var workbook: String? = null
         var relations: String? = null
@@ -54,9 +86,7 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
                 }
             }
         }
-        val order = sheetOrder(workbook, relations)
-        val first = inBookOrder(sheets.keys, order).firstOrNull()
-        rowsOf(sheets.filterKeys { it == first }, shared, order, styles)
+        return Book(sheets, shared, workbook, relations, styles)
     }
 
     companion object {
@@ -107,6 +137,21 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
             return SHEET.findAll(workbookXml).mapNotNull { sheet ->
                 REL_ID.find(sheet.groupValues[1])?.groupValues?.get(1)?.let(target::get)
             }.filter(::isWorksheet).toList()
+        }
+
+        /** Имена вкладок по частям архива (#1417): книга сама говорит, как зовётся каждый лист. */
+        fun sheetNames(workbookXml: String?, relsXml: String?): Map<String, String> {
+            if (workbookXml == null || relsXml == null) return emptyMap()
+            val target = RELATION.findAll(relsXml).associate { rel ->
+                rel.groupValues[1] to partName(rel.groupValues[2])
+            }
+            return SHEET.findAll(workbookXml).mapNotNull { sheet ->
+                val part = REL_ID.find(sheet.groupValues[1])?.groupValues?.get(1)?.let(target::get)
+                    ?: return@mapNotNull null
+                val name = NAME.find(sheet.groupValues[1])?.groupValues?.get(1)?.let(::unescape)
+                    ?: return@mapNotNull null
+                part to name
+            }.toMap()
         }
 
         /**
@@ -216,6 +261,7 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
 
         private val WORKSHEET = Regex("""xl/worksheets/sheet(\d+)\.xml""")
         private val SHEET = Regex("""<sheet\b([^>]*)>""")
+        private val NAME = Regex("""\bname="([^"]*)"""")
 
         // Ссылка листа на его файл: пространство имён связей зовут обычно `r`, но имя
         // приставки — дело того, кто записал книгу, а не наше.

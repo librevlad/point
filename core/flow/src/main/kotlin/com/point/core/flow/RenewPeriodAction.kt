@@ -40,8 +40,14 @@ class RenewPeriodRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 reportStage(OFFICE_READ_STAGE)
-                val rows = sheets.readRows(input)
-                val renewed = renewPeriod(rows)
+
+                // Продлевается лист, на котором период нашли (#1417): его назвало исследование
+                // (`period.sheet`); без имени — первый лист с датами подряд.
+                val book = sheets.readSheets(input)
+                val wanted = input.metadata[META_PERIOD_SHEET]
+                val sheet = book.firstOrNull { it.name == wanted && readPeriod(it.rows) != null }
+                    ?: book.firstOrNull { readPeriod(it.rows) != null }
+                val renewed = sheet?.let { renewPeriod(it.rows) }
 
                     ?: return@runCatching ActionResult.Failure(
                         "В таблице нет столбца с датами подряд — продлевать нечего",
@@ -59,7 +65,7 @@ class RenewPeriodRealizer(
                             "name" to "бланк ${fileStamp(renewed.period)}.xlsx",
                             "rows" to renewed.rows.size.toString(),
                             "shifted" to renewed.shifted.toString(),
-                            META_SEMANTIC_SUMMARY to renewalSummary(renewed),
+                            META_SEMANTIC_SUMMARY to renewalSummary(renewed, sheet.name.takeIf { book.size > 1 }),
                         ),
                     ),
                 )
@@ -73,10 +79,14 @@ class RenewPeriodRealizer(
     }
 }
 
-internal fun renewalSummary(renewed: RenewedTable): String = buildString {
+/** [sheetName] — какой лист книги продлён; называется, когда листов несколько (#1417). */
+internal fun renewalSummary(renewed: RenewedTable, sheetName: String? = null): String = buildString {
     append("Бланк на ").append(human(renewed.period.from)).append(" – ").append(human(renewed.period.to))
     append(" (был ").append(short(renewed.previous.from)).append(" – ")
     append(short(renewed.previous.to)).append(")")
+    if (!sheetName.isNullOrBlank()) {
+        append(" · лист «").append(sheetName).append("»")
+    }
     if (renewed.cleared.isNotEmpty()) {
         append(" · очищено, у каждой даты своё: ").append(names(renewed.cleared))
     }
