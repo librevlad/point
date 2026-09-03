@@ -237,6 +237,53 @@ class RelayRequestsTest {
         assertEquals(2, received.size)
     }
 
+    /**
+     * #1409 (живая охота 03.09.2026): номер письма записывался до приёма — сорвавшийся приём
+     * делал письмо навсегда «уже полученным», сохранённая копия (#680) отвергалась повтором,
+     * телефону уходило «уже получено», объекта не было нигде.
+     */
+    @Test
+    fun `сорвавшийся приём не делает письмо полученным — повтор принимается`() {
+        val memory = File(tmp.newFolder(), "seen")
+        var attempts = 0
+        val accepted = mutableListOf<String>()
+        fun requestsThatBreakOnce() = RelayRequests(
+            remoteActions = { actions },
+            outbox = Outbox(tmp.newFolder()),
+            onPhoneCaps = { },
+            clipboardGet = { null },
+            clipboardSet = { },
+            onObject = { name, _, _, _, _, _ ->
+                attempts++
+                if (attempts == 1) error("NoClassDefFoundError: jar сменили под живым Point")
+                accepted += name
+                null
+            },
+            seen = SeenLetters(memory),
+        )
+        val letter = mapOf("name" to "Встречи.txt", "mime" to "text/plain", RelayRpc.ID to "письмо-1")
+
+        val first = requestsThatBreakOnce().answer(RelayRpc.OBJECT, letter, "встречи".toByteArray(Charsets.UTF_8))
+        val second = requestsThatBreakOnce().answer(RelayRpc.OBJECT, letter, "встречи".toByteArray(Charsets.UTF_8))
+
+        assertEquals("первый приём сорвался — телефону об этом сказано", PcActionOutcome.Failed("компьютер не смог принять объект"), decodePcReceiveReply(String(first!!.body, Charsets.UTF_8)))
+        assertEquals("повтор принят, а не отвергнут как дубль", listOf("Встречи.txt"), accepted)
+        assertTrue(
+            "повтору ответили «уже получено», хотя объекта в первый раз не было",
+            decodePcReceiveReply(String(second!!.body, Charsets.UTF_8)) != PcActionOutcome.Done("уже получено"),
+        )
+    }
+
+    @Test
+    fun `проверка «приносили ли» сама письмо не запоминает`() {
+        val seen = SeenLetters(File(tmp.newFolder(), "seen"))
+
+        assertTrue(!seen.knows("письмо-1"))
+        assertTrue("взгляд в память записал письмо как принятое", !seen.knows("письмо-1"))
+        seen.remember("письмо-1")
+        assertTrue(seen.knows("письмо-1"))
+    }
+
     @Test
     fun `память о письмах не растёт без предела`() {
         val memory = File(tmp.newFolder(), "seen")

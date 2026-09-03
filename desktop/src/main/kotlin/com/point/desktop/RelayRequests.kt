@@ -63,7 +63,7 @@ class RelayRequests(
     fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray, askedAgoMs: Long? = 0): Reply? = when (kind) {
         RelayRpc.OBJECT -> {
             val letterId = meta[RelayRpc.ID].orEmpty()
-            if (letterId.isNotBlank() && seen?.firstTime(letterId) == false) {
+            if (seen?.knows(letterId) == true) {
                 // Сервер доставляет «хотя бы раз» — повтор письма не рождает второй объект.
                 log("письмо уже приносили — принято не будет")
                 Reply(
@@ -82,7 +82,12 @@ class RelayRequests(
                         bytes,
                         meta["action"],
                         askedAgoMs,
-                    )
+                    ).also {
+                        // Принято — теперь и только теперь письмо считается полученным (#1409):
+                        // сорвавшийся приём оставляет его новым, и сохранённая копия (#680)
+                        // будет принята повтором, а не отвергнута как дубль.
+                        seen?.remember(letterId)
+                    }
                 }.getOrElse { e ->
                     log("объект не принят: ${e.javaClass.simpleName}")
                     com.point.core.model.ActionResult.Failure("компьютер не смог принять объект", recoverable = true)
