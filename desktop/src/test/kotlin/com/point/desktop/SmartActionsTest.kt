@@ -448,6 +448,15 @@ class SmartActionsTest {
         // Поиск значений в тексте зовётся так же, как на телефоне (#840): работа одна,
         // исполнители разные.
         "entities",
+
+        // Общие действия из `:core:flow` с органами компьютера (#1369, #1379): модель, Word,
+        // облачное чтение — исполнители в `Main.kt`.
+        "excel", "understand", "translate", "ai", "word", "word-plus",
+        "fix-errors", "fix-errors-stronger", "shopping-list", "job-reply", "ocr-cloud",
+
+        // Шесть чистых умений телефона с руками компьютера (#1379, #1415): реестр компьютера
+        // теперь собирается в `desktopCapabilities`, и список исполнителей здесь идёт за ним.
+        "pdf-pages", "slides", "renew-period", "find", "extract-all", "correct-value",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

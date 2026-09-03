@@ -19,16 +19,23 @@ class YoloTakesTheStrongPathTest {
         name: String,
         kind: RealizerKind,
         priority: Int = 50,
+        leavesCircle: Boolean = kind == RealizerKind.CLOUD,
     ) : Realizer {
         override val capabilityId = CapabilityId("read")
-        override val meta = RealizerMeta(priority = priority, kind = kind)
+        override val meta = RealizerMeta(priority = priority, kind = kind, leavesCircle = leavesCircle)
         val name = name
         override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
             ActionResult.Done(name)
     }
 
     private val onPhone = Path("телефон", RealizerKind.LOCAL, priority = 10)
+
+    /** Компьютер круга делает работу у себя: результат тот же, что у телефона (#1415). */
     private val onComputer = Path("компьютер", RealizerKind.REMOTE, priority = 40)
+
+    /** Компьютер круга отправит объект дальше, в чужой сервис — как облако, но через соседа. */
+    private val throughComputer = Path("компьютер-наружу", RealizerKind.REMOTE, priority = 40, leavesCircle = true)
+
     private val inCloud = Path("облако", RealizerKind.CLOUD, priority = 90)
 
     private val anything = ObjectState(ObjectKind.IMAGE)
@@ -51,9 +58,33 @@ class YoloTakesTheStrongPathTest {
     fun `в режиме первым идёт сильный путь`() {
         val policy = DefaultExecutionPolicy(yolo(on = true))
 
-        val chosen = policy.choose(anything, listOf(onPhone, onComputer, inCloud))
+        val chosen = policy.choose(anything, listOf(onPhone, throughComputer, inCloud))
 
-        assertEquals(listOf("облако", "компьютер", "телефон"), names(chosen))
+        assertEquals(listOf("облако", "компьютер-наружу", "телефон"), names(chosen))
+    }
+
+    /**
+     * #1415: до #1407 компьютер не объявлял «Страницы», «Слайды», «Найти» — телефон делал их
+     * сам; объявил — и в режиме каждое уезжало на компьютер только за то, что он сосед, хотя
+     * результат у него ровно тот же. Сильный путь — у того, кто дотягивается до сильного
+     * движка снаружи; сосед, работающий у себя, идёт после телефона, как и без режима.
+     */
+    @Test
+    fun `компьютер, делающий работу у себя, не сильнее телефона — телефон идёт первым`() {
+        val policy = DefaultExecutionPolicy(yolo(on = true))
+
+        val chosen = policy.choose(anything, listOf(onComputer, onPhone))
+
+        assertEquals(listOf("телефон", "компьютер"), names(chosen))
+    }
+
+    @Test
+    fun `сильный путь — тот, кто отправит наружу, а не всякий, кто не здешний`() {
+        val policy = DefaultExecutionPolicy(yolo(on = true))
+
+        val chosen = policy.choose(anything, listOf(onComputer, onPhone, throughComputer, inCloud))
+
+        assertEquals(listOf("облако", "компьютер-наружу", "телефон", "компьютер"), names(chosen))
     }
 
     @Test

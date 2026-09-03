@@ -5,8 +5,15 @@ import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.advertisedActions
 
 /**
- * Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии; дорогу
- * чтения снимка в общем словаре называет сам (#1021) — словарь общий, слово — исполнителя.
+ * Умения компьютера — все, что лежат в его реестре и едут телефону объявлением. Общие
+ * способности он делит с телефоном, а не заводит свои копии; дорогу чтения снимка в общем
+ * словаре называет сам (#1021) — словарь общий, слово — исполнителя.
+ *
+ * Одно место и для реестра окна (`Main`), и для снимка объявления в тестах (#1415): пока часть
+ * умений прибавлялась к этому набору уже в `Main`, объявление росло молча — снимок
+ * `phone-facing-actions.txt` их не видел, а телефон получал и, в режиме YOLO, отдавал соседу
+ * работу, которую делал сам. Новое умение компьютера прибавляется здесь — и сразу видно в
+ * диффе снимка.
  *
  * [signedIn] — есть ли на компьютере аккаунт Point (#1022): «Дать ссылку» без него не
  * сработает, и человек узнаёт это по тапу, а не после согласия на отправку.
@@ -14,6 +21,9 @@ import com.point.core.flow.advertisedActions
 fun desktopCapabilities(
     /** Есть ли на компьютере ключ для расшифровки (#1379): название действия само скажет, если нет. */
     speechReady: com.point.core.flow.SpeechReadiness = com.point.core.flow.SpeechReadiness { emptyList() },
+
+    /** Есть ли на компьютере ключ модели: без него имена «В Excel», «Понять» и прочих сами скажут об этом. */
+    aiKeys: com.point.core.flow.AiReadiness = com.point.core.flow.AiReadiness { true },
 
     // Последним — чтобы `desktopCapabilities { signedIn }` по-прежнему читалось как раньше.
     signedIn: () -> Boolean = { true },
@@ -34,6 +44,28 @@ fun desktopCapabilities(
     // Сканированный PDF читается одним действием и здесь (#1014): страницы рисует pdfbox,
     // читает существующее облачное чтение, знание ложится на сам PDF.
     pcReadDocument(),
+
+    // Общие действия из `:core:flow` с органами компьютера (#1369, #1379): ключи модели —
+    // те же, что человек вписал на телефоне; без ключа имя действия само скажет об этом.
+    com.point.core.flow.ExcelCapability(aiKeys),
+    com.point.core.flow.UnderstandCapability(aiKeys),
+    com.point.core.flow.TranslateCapability(aiKeys),
+    com.point.core.flow.AiCapability(aiKeys),
+    com.point.core.flow.WordCapability(),
+    com.point.core.flow.WordPlusCapability(aiKeys),
+    com.point.core.flow.FixErrorsCapability(aiKeys),
+    com.point.core.flow.FixErrorsStrongerCapability(aiKeys),
+    com.point.core.flow.ShoppingListCapability(aiKeys),
+    com.point.core.flow.JobReplyCapability(aiKeys),
+    com.point.core.flow.CloudOcrCapability(),
+
+    // Шесть чистых умений телефона, которым на компьютере не хватало только рук (#1379).
+    com.point.core.flow.PagesCapability(),
+    com.point.core.flow.SlidesCapability(),
+    com.point.core.flow.RenewPeriodCapability(),
+    com.point.core.flow.FindCapability(),
+    com.point.core.flow.ExtractAllCapability(),
+    com.point.core.flow.CorrectValueCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,
