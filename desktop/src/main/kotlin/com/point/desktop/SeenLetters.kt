@@ -20,14 +20,31 @@ class SeenLetters(private val file: File, private val keep: Int = 200) {
     /** true — письмо новое (и теперь запомнено); false — уже приносили. */
     @Synchronized
     fun firstTime(id: String): Boolean {
-        if (id.isBlank()) return true
-        if (id in ids) return false
+        if (knows(id)) return false
+        remember(id)
+        return true
+    }
+
+    /** Приносили ли это письмо. Письмо без номера — всегда новое: дедупу не за что зацепиться. */
+    @Synchronized
+    fun knows(id: String): Boolean = id.isNotBlank() && id in ids
+
+    /**
+     * Запомнить письмо принятым — **после** того, как объект принят (#1409).
+     *
+     * Пока номер записывался до приёма, сорвавшийся приём (смерть процесса, замена jar под
+     * живым Point, ошибка диска) делал письмо навсегда «уже полученным»: сохранённая копия
+     * (#680) на повторе отвергалась как дубль, телефону уходило «уже получено», объекта не
+     * было нигде. Признак идемпотентности выставляется по совершённой работе, не по начатой.
+     */
+    @Synchronized
+    fun remember(id: String) {
+        if (id.isBlank() || id in ids) return
         ids.addLast(id)
         while (ids.size > keep) ids.removeFirst()
         runCatching {
             file.parentFile?.mkdirs()
             file.writeText(ids.joinToString("\n"))
         }
-        return true
     }
 }
