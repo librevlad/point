@@ -25,7 +25,9 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
             // Одним куском было не разобрать, где кончился первый слайд и начался второй.
             read.slides.isNotEmpty() -> read.slides.values.filter { it.isNotBlank() }.joinToString("\n")
 
-            else -> read.words.toString().replace(MULTISPACE, " ").trim()
+            // Документ Word уже разобран по абзацам и строкам таблиц ([wordText]): строки и
+            // табуляции здесь — знание документа, и сжимать их в один пробел нельзя.
+            else -> read.words.toString().trim()
         }
     }
 
@@ -66,7 +68,7 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                         val slide = slideNumberOf(entry.name)
                         when {
                             entry.name == WORD_DOCUMENT ->
-                                appendTagText(zis.readBytes().toString(Charsets.UTF_8), "w:t", parts.words)
+                                parts.words.append(wordText(zis.readBytes().toString(Charsets.UTF_8)))
 
                             // Слайды складываются по своему номеру, а не по порядку в архиве:
                             // `slide10.xml` лежит там раньше `slide2.xml`, и текст выходил
@@ -106,6 +108,38 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
 
     private fun tagText(xml: String, tag: String): String =
         StringBuilder().also { appendTagText(xml, tag, it) }.toString().replace(MULTISPACE, " ").trim()
+
+    /**
+     * Текст документа Word по его разметке (#1420).
+     *
+     * Куски одного абзаца (`w:t`) склеиваются как есть — пробелы уже внутри них: Word режет слово
+     * на куски при проверке правописания и форматировании, и пробел после каждого куска давал
+     * «г рафік». Конец абзаца — строка, ячейка таблицы — табуляция, конец строки таблицы —
+     * строка; `w:tab` без атрибутов — табуляция в тексте (с атрибутами это позиция табуляции в
+     * свойствах абзаца), `w:br`/`w:cr` — перенос. Пустые абзацы пустых строк не множат: между
+     * строками текста не бывает пустых.
+     */
+    internal fun wordText(documentXml: String): String {
+        val out = StringBuilder()
+        for (token in WORD_TOKEN.findAll(documentXml)) {
+            val text = token.groups[1]
+            when {
+                text != null -> out.append(unescape(text.value))
+                token.value.startsWith("<w:tab") -> out.append('\t')
+                token.value.startsWith("<w:br") || token.value.startsWith("<w:cr") -> out.append('\n')
+                token.value == "</w:p>" -> out.append('\n')
+                // Ячейка кончилась: её абзац уже закрыл строку, а строку таблицы закроет `</w:tr>`.
+                token.value == "</w:tc>" -> out.endWith('\t')
+                token.value == "</w:tr>" -> out.endWith('\n')
+            }
+        }
+        return out.split('\n').map { it.trimEnd() }.filter { it.isNotBlank() }.joinToString("\n")
+    }
+
+    /** Последний разделитель заменяется, а не добавляется: `\n` абзаца в ячейке становится `\t`. */
+    private fun StringBuilder.endWith(separator: Char) {
+        if (isNotEmpty() && last() in "\t\n") setCharAt(length - 1, separator) else append(separator)
+    }
 
     private fun appendTagText(xml: String, tag: String, out: StringBuilder) {
         val regex = Regex("<$tag(?:\\s[^>]*)?>(.*?)</$tag>", RegexOption.DOT_MATCHES_ALL)
@@ -149,6 +183,12 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
         val SLIDE_ENTRY = Regex("ppt/slides/slide(\\d+)\\.xml")
 
         val MULTISPACE = Regex("\\s{2,}")
+
+        /** Разметка текста Word: кусок текста, знак табуляции, перенос, конец абзаца, ячейки, строки. */
+        val WORD_TOKEN = Regex(
+            """<w:t(?:\s[^>]*)?>(.*?)</w:t>|<w:tab\s*/>|<w:br\b[^>]*/?>|<w:cr\s*/>|</w:p>|</w:tc>|</w:tr>""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
 
         val NUMERIC_ENTITY = Regex("&#(x?[0-9A-Fa-f]+);")
     }
