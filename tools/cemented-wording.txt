@@ -111,7 +111,7 @@
 10 executors/src/test/kotlin/com/point/executors/ActionsSayTheirPriceTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/AiChatResponderImplTest.kt
 1 executors/src/test/kotlin/com/point/executors/CopyActionTest.kt
-1 executors/src/test/kotlin/com/point/executors/CorrectValueActionTest.kt
+1 core/flow/src/test/kotlin/com/point/core/flow/CorrectValueActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/CutoutActionTest.kt
 3 executors/src/test/kotlin/com/point/executors/DefaultCapabilityRegistryTest.kt
 3 executors/src/test/kotlin/com/point/executors/DefaultResolverTest.kt
@@ -120,13 +120,13 @@
 4 core/flow/src/test/kotlin/com/point/core/flow/ExcelLayoutTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
-6 executors/src/test/kotlin/com/point/executors/FindActionTest.kt
+6 core/flow/src/test/kotlin/com/point/core/flow/FindActionTest.kt
 3 core/flow/src/test/kotlin/com/point/core/flow/FixErrorsRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/HumanSendNameTest.kt
 1 executors/src/test/kotlin/com/point/executors/LongWorkSaysWhatItDoesTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/OfficeActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/OfflineSaysWhyTest.kt
-2 executors/src/test/kotlin/com/point/executors/PagesActionTest.kt
+2 core/flow/src/test/kotlin/com/point/core/flow/PagesActionTest.kt
 7 executors/src/test/kotlin/com/point/executors/PcActionTest.kt
 2 executors/src/test/kotlin/com/point/executors/PcKnowledgeComesBackTest.kt
 1 executors/src/test/kotlin/com/point/executors/PdfRealizerTest.kt
@@ -135,7 +135,7 @@
 2 executors/src/test/kotlin/com/point/executors/ReadinessActionTest.kt
 3 executors/src/test/kotlin/com/point/executors/RealizerAvailabilityTest.kt
 7 executors/src/test/kotlin/com/point/executors/RemotePcActionTest.kt
-1 executors/src/test/kotlin/com/point/executors/RenewPeriodRealizerTest.kt
+1 core/flow/src/test/kotlin/com/point/core/flow/RenewPeriodRealizerTest.kt
 3 executors/src/test/kotlin/com/point/executors/ResultComesBackTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/RoleNamePlausibilityTest.kt
 1 executors/src/test/kotlin/com/point/executors/SaveAllActionTest.kt

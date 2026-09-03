@@ -1,116 +1,49 @@
 package com.point.executors
 
-import com.point.core.flow.OFFICE_READ_STAGE
 import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.DocumentPeriod
-import com.point.core.flow.Latency
-import com.point.core.flow.META_SEMANTIC_SUMMARY
+import com.point.core.flow.GraphState
 import com.point.core.flow.Realizer
-import com.point.core.flow.RenewedTable
 import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.SpreadsheetWriter
-import com.point.core.flow.renewPeriod
-import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
-import com.point.core.model.Feature
-import com.point.core.model.ObjectKind
+import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import com.point.core.model.ResultObject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import com.point.core.model.Preview
 import javax.inject.Inject
 
-class RenewPeriodCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "renew"
-
-    override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "На новый период"
-    override fun accepts(state: ObjectState) =
-        state.kind == ObjectKind.OFFICE && state.has(Feature.HAS_PERIOD)
-
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
-
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
-
-    companion object { val ID = CapabilityId("renew-period") }
+/**
+ * Действие живёт в `:core:flow` — одно на телефон и компьютер (#1379). Здесь только двери Hilt.
+ * Члены переписаны руками, а не `by`-делегатом: kotlin-делегирование в `@Inject`-классе роняет
+ * KSP всего модуля россыпью «error.NonExistentClass» без указания на виновника.
+ */
+class RenewPeriodCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.RenewPeriodCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }
 
-class RenewPeriodRealizer @Inject constructor(
-    private val sheets: SpreadsheetReader,
-    private val writer: SpreadsheetWriter,
+class RenewPeriodRealizerOnPhone @Inject constructor(
+    sheets: SpreadsheetReader,
+    writer: SpreadsheetWriter,
 ) : Realizer {
-
-    override val capabilityId = RenewPeriodCapability.ID
-
+    private val inner = com.point.core.flow.RenewPeriodRealizer(sheets, writer)
+    override val capabilityId get() = inner.capabilityId
+    override val meta get() = inner.meta
+    override fun isAvailable(): Boolean = inner.isAvailable()
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun unavailableReason(): String? = inner.unavailableReason()
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                reportStage(OFFICE_READ_STAGE)
-                val rows = sheets.readRows(input)
-                val renewed = renewPeriod(rows)
-
-                    ?: return@runCatching ActionResult.Failure(
-                        "В таблице нет столбца с датами подряд — продлевать нечего",
-                        recoverable = false,
-                    )
-                reportStage("Собираю бланк")
-                val ref = writer.write(renewed.rows)
-                ActionResult.Success(
-                    ResultObject(
-                        ObjectKind.OFFICE,
-                        XLSX_MIME,
-                        ref,
-                        mapOf(
-                            "op" to "renew-period",
-                            "name" to "бланк ${fileStamp(renewed.period)}.xlsx",
-                            "rows" to renewed.rows.size.toString(),
-                            "shifted" to renewed.shifted.toString(),
-                            META_SEMANTIC_SUMMARY to renewalSummary(renewed),
-                        ),
-                    ),
-                )
-            }.getOrElse {
-                ActionResult.Failure(it.message ?: "Не удалось продлить таблицу", recoverable = true)
-            }
-        }
-
-    private companion object {
-        const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    }
+        inner.perform(input, amendment)
+    override suspend fun preview(input: PointObject): Preview? = inner.preview(input)
 }
-
-internal fun renewalSummary(renewed: RenewedTable): String = buildString {
-    append("Бланк на ").append(human(renewed.period.from)).append(" – ").append(human(renewed.period.to))
-    append(" (был ").append(short(renewed.previous.from)).append(" – ")
-    append(short(renewed.previous.to)).append(")")
-    if (renewed.cleared.isNotEmpty()) {
-        append(" · очищено, у каждой даты своё: ").append(names(renewed.cleared))
-    }
-    if (renewed.kept.isNotEmpty()) {
-        append(" · оставлено: ").append(names(renewed.kept))
-    }
-}
-
-private fun names(columns: List<String>): String =
-    if (columns.size <= MAX_NAMED_COLUMNS) columns.joinToString(", ")
-    else columns.take(MAX_NAMED_COLUMNS).joinToString(", ") + " и ещё ${columns.size - MAX_NAMED_COLUMNS}"
-
-private const val MAX_NAMED_COLUMNS = 3
-
-private fun fileStamp(period: DocumentPeriod): String =
-    "${human(period.from)}-${human(period.to)}"
-
-private fun human(date: LocalDate): String = date.format(HUMAN_DATE)
-
-private fun short(date: LocalDate): String = date.format(SHORT_DATE)
-
-private val HUMAN_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-
-private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")

@@ -75,7 +75,7 @@ import com.point.core.model.ObjectRef
 import com.point.core.model.PointObject
 import com.point.executors.Bitmaps
 import com.point.core.flow.AiCapability
-import com.point.executors.FindCapability
+import com.point.core.flow.FindCapability
 import com.point.executors.OpenInCapability
 import com.point.core.flow.aiSuggestions
 import com.point.core.flow.aiTransformTarget

@@ -1,6 +1,8 @@
 package com.point
 
 
+import com.point.core.flow.CorrectValueRealizer
+import com.point.core.flow.CorrectValueCapability
 import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.AppLauncher
@@ -70,8 +72,6 @@ import com.point.data.PdfImageInvestigationRealizer
 import com.point.data.QrInvestigation
 import com.point.data.QrInvestigationRealizer
 import com.point.executors.CallCapability
-import com.point.executors.CorrectValueCapability
-import com.point.executors.CorrectValueRealizer
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.LearningBubblePolicy

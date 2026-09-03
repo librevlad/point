@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.RenewPeriodCapability
+import com.point.core.flow.PagesCapability
 import com.point.core.flow.WordCapability
 
 import com.point.core.flow.capabilities.PdfCapability

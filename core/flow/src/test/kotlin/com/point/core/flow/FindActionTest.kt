@@ -1,10 +1,5 @@
-package com.point.executors
+package com.point.core.flow
 
-import com.point.core.flow.Atom
-import com.point.core.flow.AtomCodec
-import com.point.core.flow.AtomLayer
-import com.point.core.flow.Box
-import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind

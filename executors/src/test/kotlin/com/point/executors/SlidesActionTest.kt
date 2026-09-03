@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.SlidesRealizer
+import com.point.core.flow.SlidesCapability
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.OoxmlOfficeTextExtractor
 import com.point.core.flow.capabilities.OfficeCapability
