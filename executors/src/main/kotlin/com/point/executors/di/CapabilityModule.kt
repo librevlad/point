@@ -85,8 +85,8 @@ import com.point.executors.OpenRealizer
 import com.point.executors.OpenUrlCapability
 import com.point.executors.OpenUrlRealizer
 import com.point.executors.PagesCapability
-import com.point.executors.ReadDocumentCapability
-import com.point.executors.ReadDocumentRealizer
+import com.point.executors.ReadDocumentCapabilityOnPhone
+import com.point.executors.ReadDocumentRealizerOnPhone
 import com.point.executors.PagesRealizer
 import com.point.executors.SlidesCapability
 import com.point.executors.SlidesRealizer
@@ -183,8 +183,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun slidesCap(c: SlidesCapability): Capability
 
     // Сканированный PDF читается одним действием (#1014): страницы → чтение → знание на PDF.
-    @Binds @IntoSet @OwnCapabilities abstract fun readDocumentCap(c: ReadDocumentCapability): Capability
-    @Binds @IntoSet abstract fun readDocumentReal(r: ReadDocumentRealizer): Realizer
+    @Binds @IntoSet @OwnCapabilities abstract fun readDocumentCap(c: ReadDocumentCapabilityOnPhone): Capability
+    @Binds @IntoSet abstract fun readDocumentReal(r: ReadDocumentRealizerOnPhone): Realizer
     @Binds @IntoSet @OwnCapabilities abstract fun translateCap(c: TranslateCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapabilityOnPhone): Capability

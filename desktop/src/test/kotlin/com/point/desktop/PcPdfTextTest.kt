@@ -109,7 +109,7 @@ class PcPdfTextTest {
     fun `отказ зовёт чтение документа, а не два действия`() {
         val said = com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER
 
-        assertTrue(said, PcReadDocumentCapability().label(ObjectState(ObjectKind.PDF)) in said)
+        assertTrue(said, pcReadDocument().label(ObjectState(ObjectKind.PDF)) in said)
     }
 
     @Test
@@ -159,7 +159,7 @@ class PcPdfTextTest {
         )
         assertTrue(
             "дверь, которую называет отказ, у документа отсутствует",
-            PcReadDocumentCapability().accepts(item.obj.state),
+            pcReadDocument().accepts(item.obj.state),
         )
     }
 

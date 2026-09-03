@@ -33,7 +33,7 @@ fun desktopCapabilities(
 
     // Сканированный PDF читается одним действием и здесь (#1014): страницы рисует pdfbox,
     // читает существующее облачное чтение, знание ложится на сам PDF.
-    PcReadDocumentCapability(),
+    pcReadDocument(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,

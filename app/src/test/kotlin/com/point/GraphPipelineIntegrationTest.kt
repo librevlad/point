@@ -1,6 +1,7 @@
 package com.point
 
 
+import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
@@ -74,7 +75,6 @@ import com.point.executors.CorrectValueRealizer
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.LearningBubblePolicy
-import com.point.executors.ReadDocumentCapability
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
 import com.point.core.flow.UnderstandCapability

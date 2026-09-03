@@ -49,7 +49,7 @@ class ScannedPdfReadsTest {
 
     @Test fun `текст страниц ложится знанием на сам PDF`() = runBlocking {
         val pagesRead = mutableListOf<String>()
-        val realizer = PcReadDocumentRealizer(readPage = { page ->
+        val realizer = pcReadDocumentRealizer(readPage = { page ->
             pagesRead += page.name
             "страница ${pagesRead.size}"
         })
@@ -71,7 +71,7 @@ class ScannedPdfReadsTest {
 
     @Test fun `прочитана часть страниц — вопрос не закрыт находкой целиком`() = runBlocking {
         var page = 0
-        val realizer = PcReadDocumentRealizer(readPage = {
+        val realizer = pcReadDocumentRealizer(readPage = {
             page++
             if (page == 1) "только первая" else ""
         })
@@ -92,7 +92,7 @@ class ScannedPdfReadsTest {
      * на пустой документ, и на молчащий сервис.
      */
     @Test fun `страницы пусты — это ответ «текста нет», а не сбой чтения`() = runBlocking {
-        val realizer = PcReadDocumentRealizer(readPage = { "" })
+        val realizer = pcReadDocumentRealizer(readPage = { "" })
 
         val result = realizer.perform(scannedPdf(pages = 1), null)
 
@@ -113,7 +113,7 @@ class ScannedPdfReadsTest {
      * шёл переснимать документ вместо того, чтобы поправить ключ.
      */
     @Test fun `сервис отказал на всех страницах — сказано про сервис, а не про документ`() = runBlocking {
-        val realizer = PcReadDocumentRealizer(readPage = {
+        val realizer = pcReadDocumentRealizer(readPage = {
             com.point.core.flow.ownWords(com.point.core.flow.serviceRefusal(401))
         })
 
@@ -130,7 +130,7 @@ class ScannedPdfReadsTest {
      */
     @Test fun `часть страниц сорвалась — счёт назван вместе с причиной`() = runBlocking {
         var page = 0
-        val realizer = PcReadDocumentRealizer(readPage = {
+        val realizer = pcReadDocumentRealizer(readPage = {
             page++
             if (page == 1) "только первая" else com.point.core.flow.ownWords(com.point.core.flow.serviceRefusal(429))
         })
@@ -161,7 +161,7 @@ class ScannedPdfReadsTest {
         // Тот же сервис, что у снимка, на пустой странице отвечает не пустотой, а пометкой
         // (#1054): без сторожа она уходила в текст документа и шла в счёт прочитанных.
         var page = 0
-        val realizer = PcReadDocumentRealizer(readPage = {
+        val realizer = pcReadDocumentRealizer(readPage = {
             page++
             if (page == 1) "только первая" else "*[No text detected]*"
         })
@@ -190,7 +190,7 @@ class ScannedPdfReadsTest {
      */
     @Test fun `страница тяжелее предела ужимается, а не получает отказ`() = runBlocking {
         val reader = PcCloudOcrRealizer({ OcrConfig(url = serveLikeOcrSpace()) })
-        val realizer = PcReadDocumentRealizer(readPage = { page -> reader.readFrame(page, "image/png") })
+        val realizer = pcReadDocumentRealizer(readPage = { page -> reader.readFrame(page, "image/png") })
 
         val result = realizer.perform(scannedPhoto(), null)
 
@@ -205,7 +205,7 @@ class ScannedPdfReadsTest {
     }
 
     @Test fun `дверь открыта только скан-PDF без текста`() {
-        val cap = PcReadDocumentCapability()
+        val cap = pcReadDocument()
 
         assertTrue(cap.accepts(ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF))))
         assertTrue(!cap.accepts(ObjectState(ObjectKind.PDF)))

@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.model.ActionResult
