@@ -159,25 +159,11 @@ fun main(args: Array<String>) {
     // Речь (#1379): общий клиент Whisper с ключом компьютера; готовность — есть ли ключ.
     val pcSpeech = pcSpeechEngine { speechCall(FilePcConfig(pointDir).load()) }
     val pcSpeechReady = com.point.core.flow.SpeechReadiness { com.point.core.flow.speechKeyNeeds(listOf(pcSpeech)) }
-    val capabilities = desktopCapabilities(speechReady = pcSpeechReady) { accountStore.current() != null } +
-        com.point.core.flow.ExcelCapability(excelKeys) +
-        com.point.core.flow.UnderstandCapability(excelKeys) +
-        com.point.core.flow.TranslateCapability(excelKeys) +
-        com.point.core.flow.AiCapability(excelKeys) +
-        com.point.core.flow.WordCapability() +
-        com.point.core.flow.WordPlusCapability(excelKeys) +
-        com.point.core.flow.FixErrorsCapability(excelKeys) +
-        com.point.core.flow.FixErrorsStrongerCapability(excelKeys) +
-        com.point.core.flow.ShoppingListCapability(excelKeys) +
-        com.point.core.flow.JobReplyCapability(excelKeys) +
-        com.point.core.flow.CloudOcrCapability() +
-        // Шесть чистых умений телефона, которым на компьютере не хватало только рук (#1379).
-        com.point.core.flow.PagesCapability() +
-        com.point.core.flow.SlidesCapability() +
-        com.point.core.flow.RenewPeriodCapability() +
-        com.point.core.flow.FindCapability() +
-        com.point.core.flow.ExtractAllCapability() +
-        com.point.core.flow.CorrectValueCapability()
+    // Весь реестр умений компьютера собирается в одном месте (#1415): то же множество едет
+    // телефону объявлением и снимается тестом — новое умение прибавляется там, а не здесь.
+    val capabilities = desktopCapabilities(speechReady = pcSpeechReady, aiKeys = excelKeys) {
+        accountStore.current() != null
+    }
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend (com.point.core.model.PointObject) -> Unit = {}
