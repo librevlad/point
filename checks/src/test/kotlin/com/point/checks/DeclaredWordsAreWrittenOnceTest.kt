@@ -72,12 +72,17 @@ class DeclaredWordsAreWrittenOnceTest {
 
     @Test
     fun `обещание расшифровки объявлено один раз на оба устройства`() {
+        // Способность одна на оба устройства (#1379): обещание стоит в ней, а устройства своего
+        // обещания не пишут — у их файлов нет собственного `yields`.
+        val shared = "core/flow/src/main/kotlin/com/point/core/flow/TranscribeAction.kt"
+        assertTrue("общая способность не зовёт общее слово", File(repo, shared).readText().contains("SPEECH_PROMISE"))
+
         val guilty = listOf(
             "executors/src/main/kotlin/com/point/executors/TranscribeAction.kt",
             "desktop/src/main/kotlin/com/point/desktop/SpeechActions.kt",
-        ).filterNot { File(repo, it).readText().contains("SPEECH_PROMISE") }
+        ).filter { File(repo, it).readText().contains("ActionYield.Same(") }
 
-        assertTrue("обещание написано мимо общего слова: $guilty", guilty.isEmpty())
+        assertTrue("устройство завело своё обещание расшифровки: $guilty", guilty.isEmpty())
     }
 
     private companion object {
