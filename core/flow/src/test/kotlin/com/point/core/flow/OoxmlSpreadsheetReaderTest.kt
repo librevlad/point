@@ -109,6 +109,46 @@ class OoxmlSpreadsheetReaderTest {
         assertEquals("01.07.2025\t1680", OoxmlOfficeTextExtractor().extractText(book))
     }
 
+    /**
+     * #1417: у книг владельца первый лист — шапка или шаблон, период живёт на втором. Листы
+     * отдаются порознь, с именами и в порядке вкладок; одна таблица (`readRows`) — по-прежнему первый.
+     */
+    @Test
+    fun `листы книги читаются порознь, с именами и в порядке вкладок`() = runTest {
+        val file = File(tmp.newFolder(), "book.xlsx")
+        ZipOutputStream(file.outputStream()).use { zip ->
+            fun part(name: String, body: String) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(body.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+            // Вкладки в книге идут «Однор_0», затем «ШАБЛОН», хотя в архиве шаблон — sheet1.
+            part(
+                "xl/workbook.xml",
+                """<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>""" +
+                    """<sheet name="Однор_0" sheetId="2" r:id="rId2"/><sheet name="ШАБЛОН" sheetId="1" r:id="rId1"/></sheets></workbook>""",
+            )
+            part(
+                "xl/_rels/workbook.xml.rels",
+                """<Relationships><Relationship Id="rId1" Type="worksheet" Target="worksheets/sheet1.xml"/>""" +
+                    """<Relationship Id="rId2" Type="worksheet" Target="worksheets/sheet2.xml"/></Relationships>""",
+            )
+            part("xl/worksheets/sheet1.xml", """<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>шапка</t></is></c></row></sheetData></worksheet>""")
+            part("xl/worksheets/sheet2.xml", """<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>дата</t></is></c></row></sheetData></worksheet>""")
+        }
+        val book = PointObject(
+            "book", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ScratchRef(file.absolutePath), ObjectState(ObjectKind.OFFICE),
+        )
+
+        val sheets = OoxmlSpreadsheetReader().readSheets(book)
+
+        assertEquals(listOf("Однор_0", "ШАБЛОН"), sheets.map { it.name })
+        assertEquals(listOf(listOf("дата")), sheets[0].rows)
+        assertEquals(listOf(listOf("шапка")), sheets[1].rows)
+        assertEquals("одна таблица — первый лист книги, а не первый файл архива", listOf(listOf("дата")), OoxmlSpreadsheetReader().readRows(book))
+    }
+
     private fun stylesWithDateAt(index: Int, numFmtId: Int): String {
         val xfs = (0..index).joinToString("") { i ->
             if (i == index) """<xf numFmtId="$numFmtId" applyNumberFormat="1"/>""" else """<xf numFmtId="0"/>"""

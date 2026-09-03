@@ -110,8 +110,22 @@ interface SpreadsheetWriter {
 }
 
 interface SpreadsheetReader {
+
+    /** Одна таблица документа — первый лист книги (#995): в неё не подмешиваются другие листы. */
     suspend fun readRows(obj: PointObject): List<List<String>>
+
+    /**
+     * Все листы книги порознь, в порядке вкладок и с именами (#1417).
+     *
+     * Период ищется на каждом листе, а не только на первом: у книг владельца первый лист часто
+     * шапка или шаблон, и «периода нет» по нему было ответом за листы, которых не открывали.
+     * Читатель, знающий один лист, отдаёт его безымянным.
+     */
+    suspend fun readSheets(obj: PointObject): List<NamedSheet> = listOf(NamedSheet("", readRows(obj)))
 }
+
+/** Лист книги: имя вкладки и его строки. */
+data class NamedSheet(val name: String, val rows: List<List<String>>)
 
 enum class DocStyle { TITLE, HEADING, BULLET, NORMAL }
 

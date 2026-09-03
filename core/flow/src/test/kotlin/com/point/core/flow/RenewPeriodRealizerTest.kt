@@ -34,6 +34,43 @@ class RenewPeriodRealizerTest {
         override suspend fun readRows(obj: PointObject): List<List<String>> = rows
     }
 
+    private fun readerOf(vararg sheets: NamedSheet) = object : SpreadsheetReader {
+        override suspend fun readRows(obj: PointObject): List<List<String>> = sheets.first().rows
+        override suspend fun readSheets(obj: PointObject): List<NamedSheet> = sheets.toList()
+    }
+
+    /** #1417: продлевается лист, названный исследованием, а не первый лист книги. */
+    @Test
+    fun `продлевается названный лист книги, и лист назван в сводке`() = runTest {
+        val book = readerOf(
+            NamedSheet("ШАБЛОН", listOf(listOf("Шапка"), listOf("Код номенклатури"))),
+            NamedSheet("Однор_0", sheet),
+        )
+        val named = table.copy(metadata = mapOf(META_PERIOD_SHEET to "Однор_0"))
+
+        val result = RenewPeriodRealizer(book, writer).perform(named, null)
+
+        val success = result as ActionResult.Success
+        assertEquals("30.07.2026", checkNotNull(written)[1][1])
+        assertTrue(
+            "лист не назван: " + success.result.metadata["semantic.summary"],
+            "лист «Однор_0»" in checkNotNull(success.result.metadata["semantic.summary"]),
+        )
+    }
+
+    @Test
+    fun `без имени листа продлевается первый лист с датами подряд`() = runTest {
+        val book = readerOf(
+            NamedSheet("ШАБЛОН", listOf(listOf("Шапка"))),
+            NamedSheet("Однор_0", sheet),
+        )
+
+        val result = RenewPeriodRealizer(book, writer).perform(table, null)
+
+        assertTrue("лист с датами не найден: $result", result is ActionResult.Success)
+        assertEquals("30.07.2026", checkNotNull(written)[1][1])
+    }
+
     private var written: List<List<String>>? = null
     private val writer = object : SpreadsheetWriter {
         override suspend fun write(
