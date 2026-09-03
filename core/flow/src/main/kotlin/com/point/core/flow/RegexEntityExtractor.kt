@@ -6,6 +6,10 @@ class RegexEntityExtractor(
 
     override suspend fun extract(text: String): List<Entity> {
         if (text.isBlank()) return emptyList()
+
+        // Речь пишется словами, а не знаками (#1426): расшифровка отдаёт «call plus 380671234567»,
+        // и номер без «+» в правило не проходил. Устный «плюс» перед цифрами — тот же знак.
+        val spoken = SPOKEN_PLUS.replace(text, "+")
         val found = buildList {
 
             EMAIL.findAll(text).forEach { add(Entity(EntityType.EMAIL, it.value)) }
@@ -14,7 +18,7 @@ class RegexEntityExtractor(
                 val digits = m.value.filter(Char::isDigit)
                 if (luhn(digits)) add(Entity(EntityType.PAYMENT_CARD, m.value.trim()))
             }
-            PHONE.findAll(text).forEach { add(Entity(EntityType.PHONE, it.value.trim())) }
+            PHONE.findAll(spoken).forEach { add(Entity(EntityType.PHONE, it.value.trim())) }
             MONEY.findAll(text).forEach { add(Entity(EntityType.MONEY, it.value.trim())) }
             DATE.findAll(text).forEach { add(Entity(EntityType.DATE_TIME, it.value.trim())) }
         }
@@ -30,20 +34,33 @@ class RegexEntityExtractor(
 
         val CARD = Regex("""\b(?:\d[ -]?){13,19}\b""")
 
-        val PHONE = Regex("""(?<![\w.])\+?\d[\d\s()\-]{8,17}\d(?![\w.])""")
+        // Точка в конце предложения номеру не мешает («call plus 380671234567.», #1426); точка с
+        // цифрой за ней — продолжение числа, а не конец фразы.
+        val PHONE = Regex("""(?<![\w.])\+?\d[\d\s()\-]{8,17}\d(?!\w|\.\d)""")
+
+        /** «plus 380…», «плюс 380…» — устный знак «+» перед номером; в Whisper он приходит словом. */
+        val SPOKEN_PLUS = Regex("""(?iu)(?<!\p{L})(?:plus|плюс)\s+(?=\d)""")
 
         val MONEY = Regex(
             """(?iu)\b\d[\d\s.,]{0,12}\s?(?:₽|руб\.?|грн\.?|₴|\$|€|USD|EUR|UAH|RUB)\b""" +
                 """|(?:[$€₽₴])\s?\d[\d\s.,]{0,12}""",
         )
 
+        // Месяц словом — по-русски и по-украински с любым окончанием, по-английски полным именем
+        // или принятым сокращением (`ENGLISH_MONTH`), днём вперёд или месяцем вперёд
+        // («September 11, 2026» — так пишет расшифровка английской речи, #1426). Без года дня
+        // нет — правило прежнее: «September 11 at 3 p.m.» остаётся текстом.
         val DATE = Regex(
             """(?iu)\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b""" +
                 """|\b\d{4}-\d{2}-\d{2}\b""" +
-                """|\b\d{1,2}\s+(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)[а-яё]*\s+\d{4}\b""",
+                """|\b\d{1,2}\s+(?:$MONTH_WORD)\p{L}*\s+\d{4}\b""" +
+                """|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:$ENGLISH_MONTH)(?!\p{L})\.?,?\s+\d{4}\b""" +
+                """|(?<!\p{L})(?:$ENGLISH_MONTH)(?!\p{L})\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b""",
         )
 
-
+        private const val MONTH_WORD =
+            "январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр|" +
+                "січн|лют|берез|квітн|травн|червн|липн|серпн|вересн|жовтн|листопад|грудн"
     }
 }
 
