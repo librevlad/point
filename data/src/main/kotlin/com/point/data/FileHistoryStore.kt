@@ -222,7 +222,9 @@ class FileHistoryStore @Inject constructor(
         .put("id", id)
         .put("mime", mime)
         .put("kind", kind)
-        .put("name", name ?: JSONObject.NULL)
+        // Имени нет — ключ не пишем вовсе (#1437): `JSONObject.NULL` читался обратно строкой «null»,
+        // а сама строка «null» именем быть не может (её и роняем, не цементируем дальше).
+        .apply { if (!name.isNullOrBlank() && !name.equals("null", ignoreCase = true)) put("name", name) }
         .put("t", t)
         .put("path", path)
         .put("features", JSONArray(features.map { it.name }))
@@ -249,7 +251,11 @@ class FileHistoryStore @Inject constructor(
                     id = id,
                     mime = json.getString("mime"),
                     kind = runCatching { ObjectKind.valueOf(json.getString("kind")) }.getOrDefault(ObjectKind.UNKNOWN),
-                    name = json.optString("name").ifBlank { null },
+                    // #1437: у безымянного объекта имя выходило строкой «null». Причин две и обе
+                    // тут закрыты: `optString` на записанном `JSONObject.NULL` отдаёт на Android
+                    // «null» (в JVM — «»), а уплотнение перечня цементировало это в файл строкой
+                    // `"name":"null"`. И пустое, и литерал «null» — «имени нет».
+                    name = json.optString("name").trim().takeUnless { it.isEmpty() || it.equals("null", ignoreCase = true) },
                     epochMillis = json.getLong("t"),
                     ref = ScratchRef(json.getString("path")),
                     features = json.optJSONArray("features")?.let { arr ->
