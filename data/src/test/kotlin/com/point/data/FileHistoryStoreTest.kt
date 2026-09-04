@@ -55,6 +55,39 @@ class FileHistoryStoreTest {
     }
 
     @Test
+    fun `безымянный объект не пишет в перечень null-имя`() = runTest {
+        // #1437: обрезок картинки (Focus) имени не несёт. На Android `optString` на записанном
+        // `JSONObject.NULL` отдаёт строку «null» (в JVM-тесте — «», поэтому судим по файлу, а не
+        // по чтению): значит ключ имени вовсе не должен попадать в строку без имени.
+        val file = File.createTempFile("src-", ".jpg").apply { writeBytes(byteArrayOf(1, 2, 3)); deleteOnExit() }
+        val nameless = PointObject(
+            id = "crop",
+            mime = "image/jpeg",
+            uri = ScratchRef(file.absolutePath),
+            state = ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf("selection.source" to "orig", "size" to "3"),
+        )
+        store.record(nameless)
+
+        val row = File(dir, "index.jsonl").readText()
+        assertTrue("в перечень записано null-имя: $row", !row.contains("\"name\":null") && !row.contains("\"name\":\"null\""))
+        assertNull(store.recent().single().name)
+    }
+
+    @Test
+    fun `старая строка с именем-строкой null читается как отсутствие имени`() = runTest {
+        // На устройстве уплотнение перечня уже зацементировало `"name":"null"` (строкой):
+        // читатель обязан вернуть отсутствие имени, а не показать «null» человеку.
+        val legacy = File.createTempFile("src-", ".jpg").apply { writeBytes(byteArrayOf(9)); deleteOnExit() }
+        File(dir, "index.jsonl").appendText(
+            """{"id":"old","mime":"image/jpeg","kind":"IMAGE","name":"null","t":1,""" +
+                """"path":${org.json.JSONObject.quote(legacy.absolutePath)},"features":[],"meta":{}}""" + "\n",
+        )
+
+        assertNull("строка «null» показана как имя", store.recent().single { it.id == "old" }.name)
+    }
+
+    @Test
     fun `recent is newest-first even when records share a timestamp`() = runTest {
 
         repeat(6) { i -> store.record(textObject("id$i", "c$i", "$i.txt")) }
