@@ -199,19 +199,13 @@ class EventRealizer @Inject constructor(
         }
 
     /**
-     * День события — из знания объекта, ближайший к сегодня из найденных.
-     *
-     * Дата в прошлом дверь события не открывает (#651), поэтому берётся первый день, который
-     * ещё впереди; если такого нет — день не называется вовсе, и календарь решит сам.
+     * День события — из знания объекта, ближайший к сегодня из найденных (#651). Тот же
+     * [com.point.core.flow.eventDays], что открывает дверь события, чтобы продиктованная
+     * «11 сентября в 15:00» и в календарь поехала днём, а не сегодняшним числом (#1426 ч.2).
+     * Если ближайшего дня нет — день не называется, и календарь решит сам.
      */
-    private fun eventDay(input: PointObject): java.time.LocalDate? {
-        val today = java.time.LocalDate.now()
-        val hint = com.point.core.flow.dayOrderOf(com.point.core.flow.entitySourceText(input))
-        return com.point.core.flow.datesKnown(input.metadata)
-            .mapNotNull { com.point.core.flow.humanDayOf(it, hint) }
-            .filterNot { it.isBefore(today) }
-            .minOrNull()
-    }
+    private fun eventDay(input: PointObject): java.time.LocalDate? =
+        com.point.core.flow.eventDays(input.metadata, java.time.LocalDate.now()).minOrNull()
 
     private fun eventTitle(input: PointObject): String =
         com.point.core.flow.entitySourceText(input).lineSequence().map { it.trim() }
