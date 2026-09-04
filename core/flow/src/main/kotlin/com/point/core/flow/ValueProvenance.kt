@@ -44,8 +44,12 @@ fun isDisputed(metadata: Map<String, String>, key: String): Boolean {
 
     // Спор, разрешённый человеком, — больше не спор (RFC §19): альтернативы остаются историей.
     if (provenanceOf(metadata, key) == Provenance.HUMAN) return false
-    val value = metadata[key]?.trim()
-    return alternativesOf(metadata, key).any { it.trim() != value }
+    val value = metadata[key]?.trim() ?: return false
+
+    // Прочтение, сошедшееся с основным по существу, — не спор, а то же знание другими словами
+    // (#660, #1122): «11 September 2026» и «September 11, 2026» — один день, «067…» и «+38067…»
+    // — один номер. Спорят только разные факты; совпавшие по `sameFact` согласны между собой.
+    return alternativesOf(metadata, key).any { it.trim() != value && !sameFact(key, value, it.trim()) }
 }
 
 fun isDoubtful(metadata: Map<String, String>): Boolean {
