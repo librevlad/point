@@ -129,6 +129,44 @@ class ValueProvenanceTest {
     }
 
     @Test
+    fun `тот же день двумя написаниями — согласие, а не спор прочтений`() {
+
+        // #1436, живая охота 04.09.2026: «Meet on September 11, 2026 … deadline 11 September 2026».
+        // Один день записан двумя способами — это не спор, объекту нельзя приписывать «спорят».
+        val dateKey = META_ENTITY_PREFIX + "date"
+        val sameDay = facts(
+            dateKey to "September 11, 2026",
+            dateKey + META_ALT_SUFFIX to altValue(listOf("11 September 2026")),
+        )
+
+        assertFalse("два написания одного дня выданы за спор", isDisputed(sameDay, dateKey))
+        assertFalse(isDoubtful(sameDay))
+    }
+
+    @Test
+    fun `тот же номер в разной записи — согласие, а не спор`() {
+        val phoneKey = META_ENTITY_PREFIX + "phone"
+        val sameNumber = facts(
+            phoneKey to "+380671234567",
+            phoneKey + META_ALT_SUFFIX to altValue(listOf("067 123 4567")),
+        )
+
+        assertFalse("один номер в двух записях выдан за спор", isDisputed(sameNumber, phoneKey))
+    }
+
+    @Test
+    fun `разные дни — настоящий спор, его не глушим`() {
+        val dateKey = META_ENTITY_PREFIX + "date"
+        val twoDays = facts(
+            dateKey to "16.04.2026",
+            dateKey + META_ALT_SUFFIX to altValue(listOf("18.04.2026")),
+        )
+
+        assertTrue("настоящий спор дней перестал считаться спором", isDisputed(twoDays, dateKey))
+        assertTrue(isDoubtful(twoDays))
+    }
+
+    @Test
     fun `один победитель в alt спором не является — конвенция «победитель включён»`() {
         val alone = facts(
             META_ENTITY_PREFIX + "address" to "вул. Хрещатик, 1",
