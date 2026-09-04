@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import java.time.LocalDate
+import java.time.MonthDay
 
 /**
  * Человеческие даты знания (#651). Голое время датой не является — это отдельно
@@ -114,6 +115,63 @@ private val MONTH_ORDER_UA: List<String> = listOf(
     "січн", "лют", "берез", "квітн", "травн", "червн",
     "липн", "серпн", "вересн", "жовтн", "листопад", "грудн",
 )
+
+/**
+ * Продиктованная дата без года, но со временем рядом (#1426 ч.2, решение владельца 04.09.2026:
+ * «ближайший день от даты объекта», охват «только с временем рядом»).
+ *
+ * «11 сентября» само по себе днём не становится — год выдумывать нельзя (#802), и «родился
+ * 5 мая» в тексте не должен уезжать в календарь. Но «September 11 at 3 p.m.» / «11 сентября в
+ * 15:00» — продиктованная встреча: время рядом (в строке при значении) — условие, а год у неё
+ * ближайший такой день от даты объекта. Полная дата с годом сюда не заходит — её читает
+ * [humanDayOf] обычным путём.
+ */
+fun spokenDay(value: String, line: String?, anchor: LocalDate): LocalDate? {
+    if (humanDayOf(value) != null) return null
+    if (line == null || !hasClock(line)) return null
+    val md = monthDayOf(value) ?: return null
+    val thisYear = md.atYear(anchor.year)
+    return if (!thisYear.isBefore(anchor)) thisYear else md.atYear(anchor.year + 1)
+}
+
+/** Месяц словом и день без года: «September 11», «11 сентября», «11 September». «market 3» — нет. */
+private fun monthDayOf(value: String): MonthDay? {
+    val (dayText, word) = MONTH_DAY_DAY_FIRST.find(value)?.let { it.groupValues[1] to it.groupValues[2] }
+        ?: MONTH_DAY_MONTH_FIRST.find(value)?.let { it.groupValues[2] to it.groupValues[1] }
+        ?: return null
+    val day = dayText.toIntOrNull() ?: return null
+    val month = monthIndex(word.lowercase()) ?: return null
+    return runCatching { MonthDay.of(month + 1, day) }.getOrNull()
+}
+
+private val MONTH_DAY_DAY_FIRST = Regex("""(?iu)(?<!\d)(\d{1,2})(?:st|nd|rd|th)?\s+(\p{L}+)\.?(?!\p{L})""")
+
+private val MONTH_DAY_MONTH_FIRST = Regex("""(?iu)(?<!\p{L})(\p{L}+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?!\d)""")
+
+/** Есть ли рядом время: «3 p.m.», «15:00», «в 9:30». Отделяет продиктованную встречу от даты. */
+fun hasClock(text: String): Boolean = CLOCK_NEAR.containsMatchIn(text)
+
+private val CLOCK_NEAR = Regex("""(?iu)\d{1,2}\s*[:.]\d{2}|\b\d{1,2}\s*[ap]\.?\s*m\.?""")
+
+/**
+ * Дни объекта, годные открыть событие: настоящие даты (через [humanDayOf]) и продиктованная
+ * дата без года, но со временем — ближайшая от даты объекта ([spokenDay]). Только те, что
+ * сегодня или впереди: дата в прошлом события не создаёт (#651). Якорь года — день съёмки
+ * объекта, если он известен, иначе переданное «сегодня».
+ */
+fun eventDays(metadata: Map<String, String>, today: LocalDate): List<LocalDate> {
+    val key = META_ENTITY_PREFIX + "date"
+    val values = datesKnown(metadata)
+    val hint = dayOrderOf((values + metadata.values).joinToString(" "))
+    val anchor = humanDayOf(metadata[META_SHOT_AT].orEmpty()) ?: today
+    val days = buildList {
+        values.forEach { v -> humanDayOf(v, hint)?.let { add(it) } }
+        metadata[key]?.let { primary ->
+            spokenDay(primary, metadata[key + META_LINE_SUFFIX], anchor)?.let { add(it) }
+        }
+    }
+    return days.filterNot { it.isBefore(today) }.distinct()
+}
 
 /**
  * Одно правило чтения даты на все входы знания (#782, решение владельца).
@@ -231,12 +289,10 @@ fun datesKnown(metadata: Map<String, String>): List<String> {
     return listOfNotNull(metadata[key]) + moreOf(metadata, key)
 }
 
-/** Есть ли среди дат знания (primary и «ещё») дата сегодня или позже. */
-fun hasUpcomingDate(metadata: Map<String, String>, today: LocalDate): Boolean {
-    val values = datesKnown(metadata)
-
-    // Порядок частей берётся у самого объекта, а не у телефона (#802): соседние даты и язык
-    // его текста. Спорная запись без такой опоры днём не становится.
-    val hint = dayOrderOf((values + metadata.values).joinToString(" "))
-    return values.any { humanDayOf(it, hint)?.let { d -> !d.isBefore(today) } == true }
-}
+/**
+ * Есть ли среди дат знания дата сегодня или позже — настоящая или продиктованная со временем.
+ * Дверь события открывают одни и те же дни, что и заполняют его, поэтому оба спрашивают
+ * [eventDays] (#1426): раньше «11 сентября в 15:00» дверь не открывало, хотя встреча названа.
+ */
+fun hasUpcomingDate(metadata: Map<String, String>, today: LocalDate): Boolean =
+    eventDays(metadata, today).isNotEmpty()
