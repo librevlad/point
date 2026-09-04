@@ -16,6 +16,24 @@ class MoneyAmountTest {
     }
 
     @Test
+    fun `сумма с точкой-разделителем тысяч читается — обе записи (#1440)`() {
+        // Живая охота 04.09.2026: «1.234,56 EUR» терялась, «2 450,00 грн» бралась. Решение
+        // владельца — читать однозначную запись: разряды точкой при копейках-запятой и наоборот.
+        assertEquals("1.234,56", amountFacts("Оплата 1.234,56 EUR")[META_ENTITY_AMOUNT])
+        assertEquals("1,234.56", amountFacts("Total 1,234.56 USD")[META_ENTITY_AMOUNT])
+    }
+
+    @Test
+    fun `одиночная точка тысячами не становится, а копейки читаются как есть (#1440)`() {
+        // «1.234» без другого разделителя неоднозначна — тысячами не делаем.
+        assertEquals(null, amountFacts("Ревизия 1.234 EUR")[META_ENTITY_AMOUNT])
+        // «3.14» — обычная дробь (2 знака), читается 3.14, а не 314.
+        assertEquals("3.14", amountFacts("Ставка 3.14 EUR")[META_ENTITY_AMOUNT])
+        // Пробел-тысячи как были.
+        assertEquals("2 450,00", amountFacts("До сплати 2 450,00 грн")[META_ENTITY_AMOUNT])
+    }
+
+    @Test
     fun `валюта переносом строки не отрывается от числа`() {
 
         assertEquals("320", amountFacts("Один комплект стоит 320\nгрн")[META_ENTITY_AMOUNT])
