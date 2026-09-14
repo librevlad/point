@@ -77,9 +77,7 @@ class EntityInvestigation @Inject constructor() : Capability {
      * заходом; второй проход по тому же слою дал бы те же узлы дважды. Область снимка под
      * Focus — ниже, по слою атомов.
      */
-    override fun accepts(state: ObjectState) =
-        state.kind == ObjectKind.TEXT ||
-            (state.kind != ObjectKind.IMAGE && state.has(Feature.HAS_TEXT))
+    override fun accepts(state: ObjectState) = com.point.core.flow.readsText(state)
 
     /**
      * Под Focus сущности извлекаются и из области изображения — по уже прочитанному слою
@@ -125,27 +123,10 @@ class EntityInvestigationRealizer(
         if (focus != null && atomsRef != null && obj.state.kind == ObjectKind.IMAGE) {
             return@withContext focusedFindings(obj, focus, atomsRef)
         }
-        val text = sourceText(obj).take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
+        // Тот же шов, что и у идентификаторов (#1444): текст берётся общим `investigationText`.
+        val text = com.point.core.flow.investigationText(obj).take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
         if (text.isBlank()) return@withContext Findings()
         entityDelta(obj, extractor.extract(text), text)
-    }
-
-    /**
-     * Текст объекта: у текстового файла — сам файл, у остального — сидекар чтения, куда
-     * расшифровка, чтение страниц и «Извлечь текст» кладут слова (`ocr.text.ref`, #1410).
-     * Байты записи или PDF текстом не являются и в извлекатель не идут.
-     *
-     * Нет ни того, ни другого — это срыв операции, а не «сущностей не нашлось»: знание о
-     * тексте было, а прочитать его нечем.
-     */
-    private fun sourceText(obj: PointObject): String {
-        val source = if (obj.state.kind == ObjectKind.TEXT) {
-            File(obj.uri.value)
-        } else {
-            obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.let(::File)
-        }
-        if (source == null || !source.isFile) com.point.core.flow.ownWords(com.point.core.flow.NO_TEXT_PAYLOAD)
-        return source.readText()
     }
 
     /**

@@ -25,7 +25,6 @@ import com.point.core.model.RelationType
 import com.point.core.model.ValueRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 class IdentifierInvestigation @Inject constructor() : Capability {
@@ -42,7 +41,9 @@ class IdentifierInvestigation @Inject constructor() : Capability {
 
     override fun label(state: ObjectState) = ""
 
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
+    // Один предикат с сущностями (#1444): суммы, счета и трек-номера ищутся везде, где есть
+    // текст, — акт, запись, PDF после чтения, — а не только на голом тексте.
+    override fun accepts(state: ObjectState) = com.point.core.flow.readsText(state)
 
     override fun produces(state: ObjectState) = state
 
@@ -62,10 +63,9 @@ class IdentifierInvestigationRealizer @Inject constructor() : Realizer {
         com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
-        val file = File(obj.uri.value)
-
-        if (!file.isFile) com.point.core.flow.ownWords(com.point.core.flow.NO_TEXT_PAYLOAD)
-        val text = file.readText().take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
+        // Текст берём тем же швом, что и сущности (#1444): у документа/записи — сидекар чтения
+        // `ocr.text.ref`, а не сырые байты файла (их чтение давало мусор и всё равно не запускалось).
+        val text = com.point.core.flow.investigationText(obj).take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
         if (text.isBlank()) return@withContext Findings()
 
         // Значение не бывает надёжнее источника: путь у него тот же, каким пришёл текст
