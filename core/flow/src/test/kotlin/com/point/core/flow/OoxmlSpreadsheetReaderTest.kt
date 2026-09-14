@@ -30,6 +30,30 @@ class OoxmlSpreadsheetReaderTest {
     @get:Rule val tmp = TemporaryFolder()
 
     @Test
+    fun `числовые XML-ссылки в строках книги раскодируются — кириллица читается словами`() = runTest {
+        // #1445, смоук 0.3.7 на A34: smeta.xlsx владельца хранит кириллицу как &#1055;&#1086;…
+        // (inline-строки, так пишут библиотеки), и «Позиция» приходила человеку сырой, а
+        // сущности в таком тексте не находились. Читатель Word это раскодировал, Excel — нет.
+        val position = "Позиция"
+        val hexP = "П"
+        val ampersand = "Кол & во"
+        val book = workbook(
+            sheet = """<row r="1">""" +
+                """<c r="A1" t="inlineStr"><is><t>&#1055;&#1086;&#1079;&#1080;&#1094;&#1080;&#1103;</t></is></c>""" +
+                """<c r="B1" t="inlineStr"><is><t>&#x41F;</t></is></c>""" +
+                """<c r="C1" t="inlineStr"><is><t>Кол &amp; во</t></is></c>""" +
+                """</row>""",
+            styles = "",
+        )
+
+        val row = OoxmlSpreadsheetReader().readRows(book).single()
+
+        assertEquals(position, row[0])
+        assertEquals("шестнадцатеричная ссылка", hexP, row[1])
+        assertEquals("именованная ссылка как была", ampersand, row[2])
+    }
+
+    @Test
     fun `дата в ячейке со стилем даты читается датой, а не числом дней`() = runTest {
         val book = workbook(
             sheet = """<row r="1"><c r="A1" s="1"><v>45839</v></c><c r="B1" s="0"><v>45839</v></c></row>""",
