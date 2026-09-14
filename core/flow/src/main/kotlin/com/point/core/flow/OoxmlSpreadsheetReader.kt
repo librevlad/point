@@ -252,9 +252,9 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
             return index - 1
         }
 
-        private fun unescape(s: String): String = s
-            .replace("&lt;", "<").replace("&gt;", ">")
-            .replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+        // Числовые ссылки (`&#1055;`) читаются тем же раскодированием, что у Word (#1445):
+        // раньше здесь были только именованные, и кириллица из inline-строк приходила сырой.
+        private fun unescape(s: String): String = unescapeXml(s)
 
         /** Папка листов пакета: всё, что лежит прямо в ней, — лист книги. */
         private const val WORKSHEETS = "xl/worksheets/"

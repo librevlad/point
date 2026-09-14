@@ -148,20 +148,8 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
         }
     }
 
-    private fun unescape(s: String): String = NUMERIC_ENTITY.replace(s) { m ->
-        val code = m.groupValues[1].let { body ->
-            if (body.startsWith("x") || body.startsWith("X")) {
-                body.drop(1).toIntOrNull(16)
-            } else {
-                body.toIntOrNull()
-            }
-        }
-
-        if (code != null && code in 1..0x10FFFF) String(Character.toChars(code)) else m.value
-    }
-        .replace("&lt;", "<").replace("&gt;", ">")
-        .replace("&quot;", "\"").replace("&apos;", "'")
-        .replace("&amp;", "&")
+    // Одно раскодирование на Word и Excel (#1445) — живёт в `unescapeXml`.
+    private fun unescape(s: String): String = unescapeXml(s)
 
     /** Части OOXML-файла, собранные за один проход по архиву. */
     private class OoxmlParts {
@@ -190,7 +178,6 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
             RegexOption.DOT_MATCHES_ALL,
         )
 
-        val NUMERIC_ENTITY = Regex("&#(x?[0-9A-Fa-f]+);")
     }
 }
 
