@@ -1,7 +1,10 @@
 package com.point.data
 
 import com.point.core.flow.KIND_IDENTIFIER
+import com.point.core.flow.META_ENTITY_AMOUNT
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.model.ActionResult
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -188,6 +191,38 @@ class IdentifierInvestigationTest {
         assertTrue(IdentifierInvestigation().accepts(ObjectState(ObjectKind.TEXT)))
         assertTrue(!IdentifierInvestigation().accepts(ObjectState(ObjectKind.IMAGE)))
         assertTrue(!IdentifierInvestigation().accepts(ObjectState(ObjectKind.PDF)))
+    }
+
+    /**
+     * #1444, смоук 0.3.7 на A34: в акте «Сумма к оплате: 7 800 грн» сущности находили дату и
+     * телефон, а суммы не было — путь идентификаторов бежал только на голом тексте, хотя #1410
+     * расширил сущности до документов. Теперь оба пути ищут в одних объектах.
+     */
+    @Test fun `accepts a document once its text has been read, like entities do`() {
+        val id = IdentifierInvestigation()
+        assertTrue(id.accepts(ObjectState(ObjectKind.OFFICE, setOf(Feature.HAS_TEXT))))
+        assertTrue(id.accepts(ObjectState(ObjectKind.PDF, setOf(Feature.HAS_TEXT))))
+        // Документ без прочитанного текста ещё не принимается; картинка — никогда.
+        assertTrue(!id.accepts(ObjectState(ObjectKind.OFFICE)))
+        assertTrue(!id.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT))))
+    }
+
+    @Test fun `an amount is found in a document through its read-text sidecar (#1444)`() = runTest {
+        val sidecar = File(tmp.root, "read.txt").apply {
+            writeText("Акт выполненных работ № 12-Б\nСумма к оплате: 7 800 грн")
+        }
+        val doc = PointObject(
+            "doc",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ScratchRef(File(tmp.root, "akt.docx").apply { writeText("<binary>") }.absolutePath),
+            ObjectState(ObjectKind.OFFICE, setOf(Feature.HAS_TEXT)),
+            metadata = mapOf(META_OCR_TEXT_REF to sidecar.absolutePath),
+            provenance = Provenance.OCR,
+        )
+
+        val amount = enricher.look(doc).metadata[META_ENTITY_AMOUNT]
+
+        assertEquals("7 800", amount)
     }
 
     @Test
