@@ -411,4 +411,4 @@ private fun FactRow(fact: UnderstoodFact) {
     }
 }
 
-private const val FACT_COPIED_SHOWN_MS = 1_600L
+internal const val FACT_COPIED_SHOWN_MS = 1_600L

@@ -49,6 +49,10 @@ class DesktopRegistry(
                     // действия попадали в одну группу.
                     intent = com.point.core.flow.primaryIntentOf(it, state),
                     yields = it.yields(state),
+
+                    // Какое найденное значение действие продолжает — то же правило, что на
+                    // телефоне: действие встаёт к значению, а не в группу вида функции.
+                    because = com.point.core.flow.becauseOf(it, graph),
                 )
             }
     }

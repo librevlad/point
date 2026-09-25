@@ -176,6 +176,15 @@ class FlowViewModelTest {
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
 
+    /** Сделанное последним действием — оно стоит у исходника (P4). */
+    private fun FlowViewModel.lastMade(): PointObject {
+        val frame = ui.value.frame!!
+        return com.point.core.flow.madeOf(frame.obj.id, frame.found, frame.relations).last()
+    }
+
+    /** Войти в сделанное: касание по записи «Получилось» у исходника. */
+    private fun FlowViewModel.enterMade() = onFound(lastMade())
+
     /**
      * #570: у документа без единой страницы предпросмотр не выходит — и человек читал общее
      * «файл не открылся — он повреждён или это не изображение». Пустой документ обязан
@@ -781,6 +790,7 @@ class FlowViewModelTest {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble(title = "Шаг")); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
 
         assertEquals(2, snapshot.saved.last().size)
         assertEquals("Шаг", snapshot.saved.last().last().viaTitle)
@@ -1977,15 +1987,50 @@ class FlowViewModelTest {
         assertFalse(vm.dismissMessage())
     }
 
-    @Test fun `a Success step pushes the produced object and records usage`() = runTest(dispatcher) {
+    /**
+     * Результат виден там, где человек его ждёт (P4): новый объект встаёт у исходника, как
+     * найденное, а человек остаётся там, где нажал. Слова говорят, что и где готово (P7).
+     */
+    @Test fun `a Success step keeps the produced object beside its source and records usage`() = runTest(dispatcher) {
         resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
         vm.onBubble(bubble()); advanceUntilIdle()
 
-        assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
+        val frame = vm.ui.value.frame!!
+        assertEquals("человек остался у исходника", ObjectKind.IMAGE, frame.obj.state.kind)
+        val made = vm.lastMade()
+        assertEquals(ObjectKind.TEXT, made.state.kind)
+        assertTrue(
+            "исходник знает, что из него сделано",
+            frame.relations.contains(
+                com.point.core.model.Relation(made.id, com.point.core.model.RelationType.DERIVED_FROM, frame.obj.id),
+            ),
+        )
+        assertEquals(com.point.core.flow.madeMessage(made), vm.ui.value.message)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
         assertTrue(usage.recorded.contains(CapabilityId("a")))
+
+        vm.enterMade(); advanceUntilIdle()
+        assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
+        assertEquals(
+            "у результата — дорога назад к исходнику",
+            "in",
+            com.point.core.flow.madeFromOf(made.id, vm.ui.value.frame!!.found, vm.ui.value.frame!!.relations)?.id,
+        )
+    }
+
+    /** Распаковать, разложить на страницы — действие открывает то, что лежало внутри. */
+    @Test fun `a step that reveals the inside still opens it`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.COLLECTION, "inode/directory", ScratchRef("/in")))
+        val vm = vm(own = listOf(com.point.core.flow.capabilities.ArchiveCapability()))
+        vm.onShared("uri", "application/zip"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = com.point.core.flow.capabilities.ArchiveCapability.ID.value, title = "Распаковать"))
+        advanceUntilIdle()
+
+        assertEquals(ObjectKind.COLLECTION, vm.ui.value.frame?.obj?.state?.kind)
     }
 
     @Test fun `a Done step shows its message and keeps the frame`() = runTest(dispatcher) {
@@ -2598,6 +2643,9 @@ class FlowViewModelTest {
         assertEquals(listOf(ObjectKind.IMAGE), vm.ui.value.path.map { it.kind })
 
         vm.onBubble(bubble(title = "Распознать текст")); advanceUntilIdle()
+        assertEquals("результат встал рядом — путь тот же", listOf(ObjectKind.IMAGE), vm.ui.value.path.map { it.kind })
+
+        vm.enterMade(); advanceUntilIdle()
         assertEquals(listOf(ObjectKind.IMAGE, ObjectKind.TEXT), vm.ui.value.path.map { it.kind })
         assertEquals("Распознать текст", vm.ui.value.path.last().via)
 
@@ -2610,11 +2658,13 @@ class FlowViewModelTest {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
 
         // Второй шаг делает ДРУГУЮ вещь: шаг, вернувший ту же самую копию, объект не меняет
         // и узла пути не добавляет (#1042).
         resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o2")))
         vm.onBubble(bubble()); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
         assertEquals(3, vm.ui.value.path.size)
 
         vm.jumpTo(0)
@@ -2638,6 +2688,7 @@ class FlowViewModelTest {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
         assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
 
         val handled = vm.onBack()
@@ -2803,6 +2854,7 @@ class FlowViewModelTest {
         // Человек берёт из страницы кусок текста: самостоятельный объект, порождённый снимком.
         resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(piece)))
         vm.onBubble(bubble()); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
         assertEquals("вырезка помнит, из чего сделана", listOf("in"), vm.ui.value.frame!!.obj.sourceObjects)
 
         // На вырезке — «Исправить ошибки»: исправленный текст ложится прочтением объекта.
@@ -2838,6 +2890,7 @@ class FlowViewModelTest {
             ResultObject(ObjectKind.IMAGE, "image/jpeg", ScratchRef(tempFile("скан"))),
         )
         vm.onBubble(bubble()); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
         assertEquals("скан помнит, из чего сделан", listOf("in"), vm.ui.value.frame!!.obj.sourceObjects)
 
         // На скане — «Прочитать сильнее»: текст и сила прочтения ложатся знанием скана.
@@ -3666,6 +3719,8 @@ class FlowViewModelTest {
         dispatcher.scheduler.advanceTimeBy(50)
         vm.onBubble(bubble())
         dispatcher.scheduler.advanceTimeBy(100)
+        vm.enterMade()
+        dispatcher.scheduler.advanceTimeBy(10)
         assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
 
         advanceUntilIdle()
@@ -4749,6 +4804,7 @@ class FlowViewModelTest {
         vm.onShared("/card.jpg", "image/jpeg"); advanceUntilIdle()
 
         vm.onBubble(bubble(title = "Распознать текст")); advanceUntilIdle()
+        vm.enterMade(); advanceUntilIdle()
 
         assertFalse(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_QR) == true)
         assertNull(vm.ui.value.frame?.obj?.metadata?.get("entity.qr"))
@@ -5681,7 +5737,7 @@ class FlowViewModelTest {
         assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
     }
 
-    @Test fun `реализатор назвал сделанное теми же словами — молчим`() = runTest(dispatcher) {
+    @Test fun `реализатор назвал сделанное теми же словами — без оговорки`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         resolver.result = ActionResult.Success(
@@ -5698,7 +5754,9 @@ class FlowViewModelTest {
         )
         advanceUntilIdle()
 
-        assertNull(vm.ui.value.message)
+        // Оговорки нет — только что и где готово (P4, P7).
+        assertEquals(com.point.core.flow.madeMessage(vm.lastMade()), vm.ui.value.message)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
     }
 
     @Test fun `вышло обещанное — лишних слов нет`() = runTest(dispatcher) {
@@ -5711,7 +5769,9 @@ class FlowViewModelTest {
         )
         advanceUntilIdle()
 
-        assertNull(vm.ui.value.message)
+        // Сказано только, что и где готово (P4, P7), — без оговорки про обещание.
+        assertEquals(com.point.core.flow.madeMessage(vm.lastMade()), vm.ui.value.message)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
     }
 
     private fun linkVm() = vm(
@@ -5964,7 +6024,9 @@ private class FakeStore : ObjectStore {
             by: com.point.core.model.CapabilityId?,
         ): PointObject =
         PointObject(
-            "out", result.mime, result.uri, ObjectState(result.type), result.metadata,
+            // Своё имя у каждой сделанной вещи, как у настоящего хранилища: два разных
+            // результата подряд — два объекта, а не один под общим именем.
+            "out:" + result.uri.value, result.mime, result.uri, ObjectState(result.type), result.metadata,
             sourceObjects = listOfNotNull(from?.id),
             creatorAction = by?.value,
         )

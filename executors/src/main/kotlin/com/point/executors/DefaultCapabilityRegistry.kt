@@ -107,6 +107,10 @@ class DefaultCapabilityRegistry @Inject constructor(
 
         yields = c.yields(state),
         unusableReason = unusableReason ?: offlineReason(c),
+
+        // Какое найденное значение действие продолжает — по нему экран кладёт действие к
+        // значению, а не в группу вида функции.
+        because = graph?.let { com.point.core.flow.becauseOf(c, it) },
     )
 
     /** Про сеть спрашиваем один раз на список, а не у каждого действия. */

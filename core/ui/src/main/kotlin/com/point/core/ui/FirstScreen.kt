@@ -46,6 +46,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
@@ -149,6 +150,31 @@ fun FirstScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val facts = understoodFacts(obj)
+        val verdict = objectVerdict(obj)
+
+        // Вещь → её смыслы → естественные шаги. Найденное значение приходит со своими
+        // продолжениями — «Телефон · 067 123 4567»: позвонить, написать, сохранить контакт, —
+        // а действия самой вещи и её понимания стоят ниже, после её содержимого.
+        //
+        // Решение владельца 11.08.2026 убрало наверх не значения, а строку «одно действие на
+        // значение, и не то, которое мне надо». Здесь у значения все его продолжения, и
+        // сгруппированы они по значению — ровно то «правильно сгруппированными», о котором
+        // он просил.
+        val sections = if (inputPrompt == null) {
+            actionSections(bubbles, obj.state, thingTitle(obj), thingIsValue(obj), makeTitle(obj))
+        } else {
+            emptyList()
+        }
+        val valueSections = sections.filter { it.topic == SectionTopic.VALUE }
+        val ownSections = sections.filter { it.topic != SectionTopic.VALUE }
+        val sharedReason = com.point.core.flow.sharedUnusableReason(bubbles.map { it.unusableReason })
+
+        // Одно значение — одно место (#696, #747): значение, у которого есть продолжения,
+        // стоит заголовком своего раздела и не повторяется ни строкой знания, ни чипом.
+        val continued = valueSections.mapTo(mutableSetOf()) { understoodKeyOf(it.key) }
+        val continuedValues = valueSections
+            .flatMap { listOfNotNull(rawValueOf(obj, it.key), it.value) }
+            .map(String::trim)
 
         // Найденное живёт внизу, а не строкой действия наверху (решение владельца 11.08.2026:
         // «сущности вверху имеют одно действие и не то, которое мне надо; хочу видеть их внизу
@@ -160,18 +186,40 @@ fun FirstScreen(
 
         // Объект, который сам и есть значение, не рассказывает о себе второй раз: внутри
         // телефона «067 636 05 60» строка «Нашёл телефон 067 636 05 60» повторяла заголовок.
-        val own = objectVerdict(obj).headline.trim()
+        val own = verdict.headline.trim()
         val plainFacts = facts
-            .filter { it.key !in promoted }
+            .filter { it.key !in promoted && it.key !in continued }
             .filterNot { sameAsOwnValue(it, own) }
         // Найденное не повторяет показанное выше (#696, #747): телефон, уже стоящий в
         // карточке человека, вторым чипом не приходит, и исправленное значение не двоится
         // со своей же строкой. Правило было отключено при перестройке экрана 11.08.2026 —
         // строкой `val visibleFound = found`, — и полтора дня жило только в тестах.
-        val shownValues = remember(plainFacts, own) {
-            plainFacts.mapNotNullTo(mutableSetOf()) { it.value?.trim() } + own
+        val shownValues = remember(plainFacts, own, continuedValues) {
+            plainFacts.mapNotNullTo(mutableSetOf()) { it.value?.trim() } + own + continuedValues
         }
-        val visibleFound = visibleFoundChips(found, shownValues)
+        // Сделанное — не найденное (P4): результат действия стоит у исходника своим блоком
+        // «Получилось», а у результата — «Сделано из» с дорогой назад. В общем списке
+        // «Нашёл» они значились находками, хотя Point их не нашёл, а сделал.
+        val made = com.point.core.flow.madeOf(obj.id, found, relations)
+        val madeFrom = com.point.core.flow.madeFromOf(obj.id, found, relations)
+        val visibleFound = visibleFoundChips(
+            found.filterNot { node -> node in made || node.id == madeFrom?.id },
+            shownValues,
+        )
+
+        // Заголовок раздела значения — само значение, с тем, что про него известно. Смысл,
+        // который уже сказан подписью объекта («Встреча · Созвон с Анной»), не повторяется.
+        fun headOf(section: ActionSection<Bubble>): ValueHead {
+            val value = section.value?.takeUnless { it == verdict.headline || it == verdict.subline }
+            val raw = rawValueOf(obj, section.key)
+            return ValueHead(
+                name = section.title,
+                value = value,
+                copy = value?.let { raw ?: it },
+                known = facts.firstOrNull { it.key == understoodKeyOf(section.key) }?.known ?: true,
+                other = otherReadingOf(obj.metadata, section.key),
+            )
+        }
 
         ObjectHeader(
             obj,
@@ -181,6 +229,11 @@ fun FirstScreen(
             onTap = onHeroTap,
             focusEntry = obj.state.kind == ObjectKind.IMAGE,
         )
+
+        madeFrom?.let { source ->
+            Spacer(Modifier.height(8.dp))
+            MadeFromRow(source = source, onOpen = { onFound(source) })
+        }
 
         if (focused) {
             Spacer(Modifier.height(12.dp))
@@ -200,9 +253,25 @@ fun FirstScreen(
             )
         }
 
+        if (made.isNotEmpty() && inputPrompt == null) {
+            MadeHere(made = made, onOpen = onFound)
+        }
+
         issuedLinkOf(obj.metadata)?.let { link ->
             Spacer(Modifier.height(16.dp))
             LinkCard(url = link, title = "Ссылка на файл", warning = issuedLinkWarning(obj.metadata))
+        }
+
+        if (valueSections.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            ObjectActions(
+                sections = valueSections,
+                shared = sharedReason,
+                working = working,
+                onBubble = onBubble,
+                appIconFor = appIconFor,
+                head = ::headOf,
+            )
         }
 
         UnderstoodSection(facts = plainFacts, enriching = enriching, failed = failed)
@@ -249,11 +318,8 @@ fun FirstScreen(
         } else {
 
             ObjectActions(
-                sections = actionSections(
-                    bubbles,
-                    obj.state,
-                    useFirst = obj.uri is ValueRef || knowsUsableValue(obj.state),
-                ),
+                sections = ownSections,
+                shared = sharedReason,
                 working = working,
                 onBubble = onBubble,
                 appIconFor = appIconFor,
@@ -299,6 +365,87 @@ private fun LatentHints(latent: List<LatentBubble>) {
         }
     }
 }
+
+/**
+ * «Получилось» — сделанное из этой вещи, у неё же (P4).
+ *
+ * Стоит сразу под словами о результате: человек нажал действие здесь и здесь же видит, что
+ * вышло. Вход в результат — касанием, когда он нужен; исходник при этом не пропадает.
+ */
+@Composable
+private fun MadeHere(made: List<PointObject>, onOpen: (PointObject) -> Unit) {
+    Column(
+        modifier = Modifier
+            .padding(top = 14.dp)
+            .widthIn(max = PortalColumnWidth)
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SectionLabel(MADE_HERE_LABEL)
+        made.asReversed().forEach { result ->
+            key("made:" + result.id) {
+                Surface(
+                    onClick = { onOpen(result) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = kindIcon(result.state.kind),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = foundHeadline(result),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = kindLabel(result.state.kind),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            text = "открыть ›",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** «Сделано из …» — дорога от результата назад к исходнику, прямо под вещью. */
+@Composable
+private fun MadeFromRow(source: PointObject, onOpen: () -> Unit) {
+    Text(
+        text = "$MADE_FROM_LABEL ${foundHeadline(source)} ›",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .widthIn(max = PortalColumnWidth)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+}
+
+const val MADE_HERE_LABEL = "Получилось"
+const val MADE_FROM_LABEL = "Сделано из"
 
 @Composable
 private fun WorkingStage(stage: String?) {
@@ -640,10 +787,36 @@ const val FOCUS_NOTHING_FOUND = "В области ничего не нашло�
 fun otherReading(obj: PointObject): String? {
     val altKey = obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) } ?: return null
     val key = altKey.removeSuffix(META_ALT_SUFFIX)
-    val shown = (obj.metadata[key] ?: foundHeadline(obj)).trim()
-    return alternativesOf(obj.metadata, key)
+    return otherReadingOf(obj.metadata, key, shown = obj.metadata[key] ?: foundHeadline(obj))
+}
+
+/** Другое прочтение значения [key] — то, что человеку нужно видеть рядом с ним (P8). */
+internal fun otherReadingOf(
+    metadata: Map<String, String>,
+    key: String,
+    shown: String? = metadata[key],
+): String? {
+    val current = shown?.trim() ?: return null
+    return alternativesOf(metadata, key)
         .map(String::trim)
-        .firstOrNull { it.isNotBlank() && !com.point.core.flow.sameFact(key, it, shown) }
+        .firstOrNull { it.isNotBlank() && !com.point.core.flow.sameFact(key, it, current) }
+}
+
+/**
+ * Само значение факта — то, что человек вставит, скопировав его: номер без подписи вида,
+ * ссылка со схемой. Только у значений: у смысла вещи («встреча») значения нет, есть суть.
+ */
+internal fun rawValueOf(obj: PointObject, factKey: String): String? =
+    obj.metadata[factKey]?.takeIf { factKey.startsWith(META_ENTITY_PREFIX) && it.isNotBlank() }
+
+/**
+ * Ключ строки знания (`understoodFacts`) для ключа факта: «entity.phone» — «phone».
+ * Раздел значения и строка знания об одном значении узнают друг друга по нему.
+ */
+internal fun understoodKeyOf(factKey: String): String = when (factKey) {
+    com.point.core.flow.META_SHOT_AT -> "shot-at"
+    com.point.core.flow.META_SEMANTIC_TYPE -> "semantic"
+    else -> factKey.removePrefix(META_ENTITY_PREFIX)
 }
 
 private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
@@ -926,11 +1099,12 @@ private fun ObjectHeader(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-        // Портал один на любой объект: круг одного размера. Прежде круглым он был только
-        // у снимка, а всё остальное садилось скруглённым квадратом и меньшего размера —
-        // вместе с ним прыгало и кольцо портала. Форма объекта не меняет форму двери.
-        val headerSize = PortalPreviewSize
-        val headerShape = CircleShape
+        // Героем экрана стоит сама вещь, а не дверь в неё. Снимок и страница показываются
+        // целиком и в своих пропорциях: прежде их вырезали кругом внутри светящегося кольца
+        // портала, и человек видел не свою фотографию, а её середину в чужой рамке. Портал —
+        // знак границы, через которую вещь пришла и уйдёт, а не рама для неё.
+        val frame = heroFrameFor(preview)
+        val shape = RoundedCornerShape(HERO_CORNER)
 
         Box(
             contentAlignment = Alignment.Center,
@@ -941,23 +1115,28 @@ private fun ObjectHeader(
                 enabled = onTap != null,
             ) { onTap?.invoke() },
         ) {
-
-            val glow = ((if (thinking) 0.9f else 0.62f) + 0.09f * factCount.coerceAtMost(4)).coerceAtMost(1f)
-            Portal(size = headerSize + 68.dp, intensity = glow)
-
             AliveSurface(
                 kind = obj.state.kind,
                 thinking = thinking,
                 understanding = auraLevel(factCount),
-                shape = headerShape,
-                size = headerSize,
+                shape = shape,
+                size = frame.width,
+                height = frame.height,
             ) {
                 if (preview != null) {
-                    RoundPreview(
-                        image = preview,
-                        size = headerSize,
-                        contentDescription = obj.metadata["name"] ?: obj.state.kind.name,
-                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(frame.width, frame.height)
+                            .background(MaterialTheme.colorScheme.surface),
+                    ) {
+                        Image(
+                            bitmap = preview,
+                            contentDescription = obj.metadata["name"] ?: obj.state.kind.name,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(frame.width, frame.height),
+                        )
+                    }
                 } else if (kindMarkOf(obj) != KindMark.UNKNOWN) {
 
                     // Марка на каждый вид (#825): экран объекта одинаково живой, чем бы объект
@@ -966,40 +1145,38 @@ private fun ObjectHeader(
                     // приложений.
                     KindMarkIcon(
                         mark = kindMarkOf(obj),
-                        size = headerSize * MARK_IN_CIRCLE,
+                        size = frame.width * MARK_IN_FRAME,
                         motion = rememberMotionEnabled(),
                         contentDescription = obj.metadata["name"] ?: kindMarkLabel(kindMarkOf(obj)),
                     )
                 } else {
                     Surface(
-                        shape = CircleShape,
+                        shape = shape,
 
-                        // Та же пара, что у аватара «Недавнего»: тёмная подложка и светлый
-                        // знак. Прежний `secondary` — светло-серый, и на диаметре портала
-                        // он превращался в яркое пятно, чужое тёмному кольцу.
+                        // Та же пара, что у аватара «Недавнего»: тёмная подложка и светлый знак.
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         shadowElevation = 0.dp,
-                        modifier = Modifier.size(headerSize),
+                        modifier = Modifier.size(frame.width, frame.height),
                     ) {
                         Icon(
                             imageVector = kindIcon(obj.state.kind),
                             contentDescription = obj.state.kind.name,
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier
-                                .padding(headerSize * ICON_INSET)
+                                .padding(frame.width * ICON_INSET)
                                 .fillMaxSize(),
                         )
                     }
                 }
             }
 
-            // Вход в обводку рисуется ПОВЕРХ превью и в цвете портала (#798, решение
+            // Вход в обводку рисуется ПОВЕРХ превью и в цвете акцента (#798, решение
             // владельца 11.08.2026: «вынести вперёд и подсветить»). Прежде он лежал под
             // кругом почти прозрачным пятном и на тёмном снимке терялся: за ним прячутся
             // три способности — «Понять область», «Взять фрагмент» и «Замазать».
             if (focusEntry && onTap != null) {
                 Box(
-                    modifier = Modifier.size(headerSize),
+                    modifier = Modifier.size(frame.width + 12.dp, frame.height + 12.dp),
                     contentAlignment = Alignment.BottomEnd,
                 ) {
                     FocusEntryMark(onClick = onTap)
@@ -1101,11 +1278,40 @@ private fun AmendmentInput(
     }
 }
 
-/**
- * Квадрат, вписанный в круг, — сторона не больше диаметра/√2. Рисованный знак садится
- * с запасом, чтобы круг его не срезал (#650-соседнее: единый портал у всех объектов).
- */
-private const val MARK_IN_CIRCLE = 0.62f
+/** Рисованный знак вида и есть лицо вещи без снимка: рамку он занимает почти целиком. */
+private const val MARK_IN_FRAME = 0.84f
 
-/** Отступ значка внутри круга: та же зрительная величина, что была у квадрата 96 dp. */
+/** Отступ значка внутри рамки: та же зрительная величина, что была у квадрата 96 dp. */
 private const val ICON_INSET = 0.27f
+
+private val HERO_CORNER = 18.dp
+
+/** Самое большее, что вещь занимает на первом экране: первое действие не уезжает за край (#879). */
+private val HERO_MAX_WIDTH = 280.dp
+private val HERO_MAX_HEIGHT = 200.dp
+
+/** Узкий кадр (чек, длинный скриншот) не превращается в щель: рамка не уже этого. */
+private val HERO_MIN_SIDE = 96.dp
+
+internal data class HeroFrame(val width: androidx.compose.ui.unit.Dp, val height: androidx.compose.ui.unit.Dp)
+
+/**
+ * Рамка вещи на первом экране — в пропорциях самой вещи.
+ *
+ * Снимок вписывается целиком в [HERO_MAX_WIDTH] × [HERO_MAX_HEIGHT] без обрезки. Кадр,
+ * который вышел бы уже [HERO_MIN_SIDE], получает рамку этой ширины, а сам садится в её
+ * середину: вещь видна целиком, а не щелью. Без снимка — квадрат знака вида.
+ */
+internal fun heroFrameFor(preview: ImageBitmap?): HeroFrame {
+    if (preview == null || preview.width <= 0 || preview.height <= 0) {
+        return HeroFrame(PortalPreviewSize, PortalPreviewSize)
+    }
+    val aspect = preview.width.toFloat() / preview.height
+    var width = HERO_MAX_WIDTH
+    var height = width / aspect
+    if (height > HERO_MAX_HEIGHT) {
+        height = HERO_MAX_HEIGHT
+        width = height * aspect
+    }
+    return HeroFrame(maxOf(width, HERO_MIN_SIDE), maxOf(height, HERO_MIN_SIDE))
+}

@@ -60,7 +60,7 @@ class SameActionSameFaceTest {
     fun `компьютер группирует действия общим правилом`() {
         val screen = File("src/main/kotlin/com/point/desktop/ui/ObjectPane.kt").readText()
 
-        assertTrue("группировка своя, а не общая", screen.contains("actionGroupOrder("))
+        assertTrue("группировка своя, а не общая", screen.contains("com.point.core.ui.actionSections("))
         assertTrue("старый общий заголовок вернулся", !screen.contains("ЧТО МОЖНО СДЕЛАТЬ"))
     }
 

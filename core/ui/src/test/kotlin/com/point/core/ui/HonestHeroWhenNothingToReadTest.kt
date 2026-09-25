@@ -13,14 +13,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Герой — честное местное, когда читать нечего (#1101, #994; решение владельца 21.08.2026).
+ * Первым идёт честное местное, когда читать нечего (#1101, #994; решение владельца 21.08.2026).
  *
  * У архива `docs.zip` и у неизвестного `bolshoy55.bin` первым и подсвеченным стояло «AI»:
- * единственное, что попало в группу «Извлечь», — оно берёт любой файл и ничего определённого
- * не обещает. «Открыть», «Сохранить», «Поделиться» — то, что точно сработает, — лежали ниже.
- * Негодный снимок предлагал четыре способа себя прочитать; теперь чтения ему не предлагаются,
- * и вести первым становилось бы «Дать ссылку». Там, где негодность сказана о сорвавшейся
- * попытке, чтения остаются — экран зовёт попробовать ещё раз, — но героем не становятся.
+ * единственное, что попало в чтения, — оно берёт любой файл и ничего определённого не
+ * обещает. «Открыть», «Сохранить», «Поделиться» — то, что точно сработает, — лежали ниже.
+ * Негодный снимок предлагал четыре способа себя прочитать; теперь чтения ему не предлагаются.
+ * Там, где негодность сказана о сорвавшейся попытке, чтения остаются — экран зовёт попробовать
+ * ещё раз, — но первыми не становятся.
  */
 class HonestHeroWhenNothingToReadTest {
 
@@ -39,56 +39,59 @@ class HonestHeroWhenNothingToReadTest {
     private val image = ObjectState(ObjectKind.IMAGE)
     private val unfitImage = ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE))
 
-    @Test fun `у архива единственное чтение — AI, и первым идёт то, что точно сработает`() {
-        val sections = actionSections(listOf(ai, unzip, link, open, save, share), zip)
+    private fun sections(bubbles: List<Bubble>, state: ObjectState) = actionSections(bubbles, state, "С архивом")
 
-        assertEquals(ActionGroup.USE, sections.first().group)
-        assertEquals(open.capabilityId, sections.first().bubbles.first().capabilityId)
+    @Test fun `у архива единственное чтение — AI, и первой идёт сама вещь`() {
+        val sections = sections(listOf(ai, unzip, link, open, save, share), zip)
+
+        assertEquals(SectionTopic.THING, sections.first().topic)
+        assertFalse("AI остался первым", sections.first().items.first() == ai)
     }
 
-    @Test fun `у неизвестного файла AI виден, но не героем`() {
-        val sections = actionSections(listOf(ai, open, save, share), zip)
+    @Test fun `у неизвестного файла AI виден, но не первым и не подсвеченным`() {
+        val sections = sections(listOf(ai, open, save, share), zip)
 
-        assertEquals(ActionGroup.USE, sections.first().group)
-        assertTrue("AI пропал из списка", sections.flatMap { it.bubbles }.contains(ai))
-        assertFalse("AI остался героем", sections.first().bubbles.first() == ai)
+        assertEquals(SectionTopic.THING, sections.first().topic)
+        assertEquals(open, sections.first().items.first())
+        assertTrue("AI пропал из списка", sections.flatMap { it.items }.contains(ai))
+        assertFalse("подсвечено то, для чего нет основания", sections.any { it.leads })
     }
 
-    @Test fun `негодному чтений нет — ведёт Сделать, а не ссылка`() {
-        val sections = actionSections(listOf(link, open, save, share), unfitImage)
+    @Test fun `негодному чтений нет — ведёт сама вещь`() {
+        val sections = sections(listOf(link, open, save, share), unfitImage)
 
-        assertEquals(ActionGroup.USE, sections.first().group)
+        assertEquals(SectionTopic.THING, sections.first().topic)
     }
 
-    @Test fun `снимку, который читается, по-прежнему первым Извлечь`() {
-        val sections = actionSections(listOf(ocr, ai, open, share), image)
+    @Test fun `снимку, который читается, по-прежнему первым Разобраться`() {
+        val sections = sections(listOf(ocr, ai, open, share), image)
 
-        assertEquals(ActionGroup.EXTRACT, sections.first().group)
-        assertEquals(ocr.capabilityId, sections.first().bubbles.first().capabilityId)
+        assertEquals(SectionTopic.UNDERSTAND, sections.first().topic)
+        assertEquals(ocr, sections.first().items.first())
     }
 
     /**
      * Живой объект #994 — битый PDF. Предпросмотр его не открыл и пометил негодным словами
      * про попытку («Прочитать сейчас не вышло»), поэтому двери чтения у него остались:
      * экран зовёт попробовать ещё раз, и пробовать должно быть чем. Вести первым им всё
-     * равно нечего — а вело: «Перевести» берёт PDF безусловно и обещает текст, и группа
-     * «Извлечь» становилась героем у документа без единого прочитанного слова.
+     * равно нечего — а вело: «Перевести» берёт PDF безусловно и обещает текст, и чтения
+     * становились первыми у документа без единого прочитанного слова.
      */
-    @Test fun `документ не открылся — ведёт то, что точно сработает, а не перевод`() {
+    @Test fun `документ не открылся — первым то, что точно сработает, а не перевод`() {
         val unfitPdf = ObjectState(ObjectKind.PDF, setOf(Feature.UNUSABLE))
         val translate = bubble("translate", Intent.UNDERSTAND, ActionYield.New(ObjectKind.TEXT))
 
-        val sections = actionSections(listOf(translate, ai, open, save, share), unfitPdf)
+        val sections = sections(listOf(translate, ai, open, save, share), unfitPdf)
 
-        assertEquals(ActionGroup.USE, sections.first().group)
-        assertEquals(open.capabilityId, sections.first().bubbles.first().capabilityId)
-        assertTrue("чтение пропало из списка", sections.flatMap { it.bubbles }.contains(translate))
+        assertEquals(SectionTopic.THING, sections.first().topic)
+        assertEquals(open, sections.first().items.first())
+        assertTrue("чтение пропало из списка", sections.flatMap { it.items }.contains(translate))
     }
 
-    @Test fun `ничего не спрятано — меняется только порядок групп`() {
+    @Test fun `ничего не спрятано — меняется только порядок разделов`() {
         val offered = listOf(ai, unzip, link, open, save, share)
 
-        val shown = actionSections(offered, zip).flatMap { it.bubbles }.map { it.capabilityId }
+        val shown = sections(offered, zip).flatMap { it.items }.map { it.capabilityId }
 
         assertEquals(offered.map { it.capabilityId }.toSet(), shown.toSet())
     }

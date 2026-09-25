@@ -758,6 +758,7 @@ class FlowViewModel @Inject constructor(
             runCatching { store.clear() }
             cancelEnrichment()
             stack.clear()
+            madeBy.clear()
             pushFrame(obj)
         }
     }
@@ -1332,9 +1333,20 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onFound(found: PointObject) {
-        if (stack.lastOrNull()?.found?.none { it.id == found.id } != false) return
-        pushFrame(found)
+        val top = stack.lastOrNull() ?: return
+        if (top.found.none { it.id == found.id }) return
+
+        // Сделанное рядом (P4) открывается тем же шагом пути, каким было сделано: путь и журнал
+        // помнят действие между исходником и результатом, как помнили, когда результат
+        // открывался сам.
+        val made = madeBy[found.id]?.takeIf {
+            com.point.core.flow.madeOf(top.obj.id, top.found, top.relations).any { it.id == found.id }
+        }
+        if (made != null) pushFrame(found, made.first, made.second) else pushFrame(found)
     }
+
+    /** Каким действием сделан результат, вставший у исходника (P4). */
+    private val madeBy = mutableMapOf<String, Pair<CapabilityId, String>>()
 
     fun submitAmendment(text: String) {
         val bubble = pendingBubble ?: return
@@ -2606,10 +2618,19 @@ class FlowViewModel @Inject constructor(
                 if (source == null || !com.point.core.flow.continuesObject(source, produced)) {
                     runCatching { history.record(produced) }
                 }
-                pushFrame(produced, bubble.capabilityId, bubble.title)
 
-                yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])?.let { note ->
-                    _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
+                // Результат виден там, где человек его ждёт (P4): новый объект встаёт рядом с
+                // исходником, как найденное, а человек остаётся там, где начал. Внутрь ведут
+                // только шаг, продолживший тот же объект, и шаг, открывший то, что лежало
+                // внутри (распаковать, разложить на страницы), — ради этого их и нажимают.
+                val surprise = yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])
+                if (source == null || com.point.core.flow.continuesObject(source, produced) || revealsInside(bubble.capabilityId)) {
+                    pushFrame(produced, bubble.capabilityId, bubble.title)
+                    surprise?.let { note ->
+                        _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
+                    }
+                } else {
+                    keepBeside(produced, bubble, surprise)
                 }
             }
             is ActionResult.Done -> {
@@ -2752,6 +2773,7 @@ class FlowViewModel @Inject constructor(
         // Разговор сворачивает свой держатель — здесь про его внутренности не знают (#833).
         chatFlow.close()
         stack.clear()
+        madeBy.clear()
         pendingBubble = null
         pendingPreviewBubble = null
         _ui.update { FlowUiState() }
@@ -2801,6 +2823,7 @@ class FlowViewModel @Inject constructor(
         busyJob?.cancel()
         cancelEnrichment()
         stack.clear()
+        madeBy.clear()
         _ui.update { it.copy(frame = null, focusPreview = null, path = emptyList()) }
         return interrupted
     }
@@ -2837,14 +2860,21 @@ class FlowViewModel @Inject constructor(
         // не сливаются. Раньше вложенность жила стопкой экранов: пока человек внутри — путь
         // помнит, вышел — забыл; отношения между объектами не создавались вовсе.
         val born = via?.let { bornOf(parent, known, it) }
-        val relations = carriedRelations + listOfNotNull(born)
+        val relations = (carriedRelations + listOfNotNull(born)).distinct()
 
         // Исходник, из которого объект получен, стоит рядом (#925): это и путь к нему, и
         // опора для порядка действий — обратное преобразование того, что Point только что
         // сделал, первым стоять не должно.
+        //
+        // Результат, сделанный рядом с исходником (P4), открывают касанием — тогда связь уже
+        // лежит в графе исходника, и «Сделано из» у результата ведёт назад так же.
+        val derivedHere = born?.type == com.point.core.model.RelationType.DERIVED_FROM ||
+            carriedRelations.any {
+                it.type == com.point.core.model.RelationType.DERIVED_FROM &&
+                    it.fromId == known.id && it.toId == parent?.obj?.id
+            }
         val cameFrom = parent?.obj?.takeIf {
-            born?.type == com.point.core.model.RelationType.DERIVED_FROM &&
-                carriedFound.none { seen -> seen.id == it.id }
+            derivedHere && carriedFound.none { seen -> seen.id == it.id }
         }
         val found = carriedFound + listOfNotNull(cameFrom)
         val graph = com.point.core.flow.GraphState(known, found, relations)
@@ -2946,6 +2976,44 @@ class FlowViewModel @Inject constructor(
         } else {
             com.point.core.model.Relation(born.id, type, source.id)
         }
+    }
+
+    private fun revealsInside(id: CapabilityId): Boolean =
+        runCatching { registry.byId(id).meta.revealsInside }.getOrDefault(false)
+
+    /**
+     * Сделанное встаёт у исходника, как найденное (P4; на компьютере — решение N1-A).
+     *
+     * Тем же путём, каким у исходника встают находки и результат компьютера: связь «получено
+     * из» ложится в граф исходника, а сам результат сразу продолжает цикл понимания — его
+     * знание видно у записи «Получилось» без входа. Человек читает, что готово, там же, где
+     * нажал, и входит в результат, когда он ему нужен.
+     */
+    private fun keepBeside(produced: PointObject, bubble: Bubble, surprise: String?) {
+        val top = stack.lastOrNull() ?: return
+        val born = bornOf(top, produced, bubble.capabilityId)
+        applyEnrichment(
+            top.obj,
+            EnrichmentUpdate(
+                features = emptySet(),
+                metadata = emptyMap(),
+                running = top.enriching,
+                objects = listOf(produced),
+                relations = listOfNotNull(born),
+            ),
+        )
+        enrichFoundInBackground(produced, top.obj.id)
+        madeBy[produced.id] = bubble.capabilityId to bubble.title
+        _ui.update {
+            it.copy(
+                busy = null, busyStage = null,
+                message = surprise ?: com.point.core.flow.madeMessage(produced),
+                messageOutcome = if (surprise != null) Outcome.NONE else Outcome.DONE,
+                inputPrompt = null, inputSuggestions = emptyList(),
+                needsImage = null, needsImageFrom = null,
+            )
+        }
+        persistJourney()
     }
 
     /** Исходник запоминает вышедший из него объект — иначе шаг назад стирает его. */

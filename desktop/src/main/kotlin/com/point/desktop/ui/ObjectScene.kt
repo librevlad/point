@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,8 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
@@ -49,83 +46,27 @@ internal fun PortalPreview(item: InboxItem) {
     if (item.obj.state.kind == ObjectKind.IMAGE) {
         ImagePreview(item)
     } else {
-        // Кольцо было пустым, и объект узнавался только по имени файла в шапке (#879).
-        // Значок вида — тот же, что на телефоне: он лежит в общей таблице с #849.
-        // Портал компактнее телефонного: в окне вертикаль дороже, площадь принадлежит
-        // действиям, а не иллюстрации.
+        // Героем стоит сама вещь, а не дверь в неё — как на телефоне. Прежде знак вида сидел
+        // в двух встречных вращающихся кольцах портала: они двигались всегда, даже когда
+        // Point ничего не делал, и говорили «идёт работа», которой не было. Портал — знак
+        // границы, через которую вещь приходит и уходит, а не рама для неё.
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            PortalHalo(size = 132.dp)
-
-            // Та же марка, что на телефоне (#825): она живёт в общем шве, и компьютер не
-            // рисует свой знак. Плоская иконка делала объект строкой из списка приложений.
-            com.point.core.ui.KindMarkIcon(
-                mark = com.point.core.ui.kindMarkOf(item.obj),
-                size = 74.dp,
-                contentDescription = com.point.core.ui.kindMarkLabel(
-                    com.point.core.ui.kindMarkOf(item.obj),
-                ),
-            )
-        }
-    }
-}
-
-/** Портал телефона, перенесённый на ПК: свечение и два встречных кольца. */
-@Composable
-internal fun PortalHalo(size: androidx.compose.ui.unit.Dp, intensity: Float = 1f) {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "portal")
-    val spin by transition.animateFloat(
-        0f, 360f,
-        androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(9000, easing = androidx.compose.animation.core.LinearEasing),
-        ),
-        label = "spin",
-    )
-    val spinBack by transition.animateFloat(
-        360f, 0f,
-        androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(6500, easing = androidx.compose.animation.core.LinearEasing),
-        ),
-        label = "spinBack",
-    )
-    androidx.compose.foundation.Canvas(Modifier.size(size)) {
-        val c = center
-        val rad = this.size.minDimension / 2f
-        val a = intensity.coerceIn(0f, 1.4f)
-        drawCircle(
-            brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                0f to PointColors.violet.copy(alpha = 0.28f * a),
-                0.55f to PointColors.cyan.copy(alpha = 0.13f * a),
-                1f to Color.Transparent,
-                center = c, radius = rad,
-            ),
-            radius = rad,
-        )
-        val core = Color(0xFFEAF0FF)
-        val glow = Color(0xFFB39DFF)
-        val bloom = listOf(0.14f to 4.0f, 0.9f to 1.0f)
-        rotate(spin, c) {
-            for ((alpha, widthMul) in bloom) {
-                drawCircle(
-                    brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                        listOf(Color.Transparent, PointColors.cyan, glow, core, glow, PointColors.cyan, Color.Transparent),
-                        center = c,
+            Box(
+                modifier = Modifier
+                    .size(104.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(PointColors.surfaceDeep)
+                    .border(1.dp, PointColors.border, RoundedCornerShape(18.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                // Та же марка, что на телефоне (#825): она живёт в общем шве, и компьютер не
+                // рисует свой знак. Плоская иконка делала объект строкой из списка приложений.
+                com.point.core.ui.KindMarkIcon(
+                    mark = com.point.core.ui.kindMarkOf(item.obj),
+                    size = 74.dp,
+                    contentDescription = com.point.core.ui.kindMarkLabel(
+                        com.point.core.ui.kindMarkOf(item.obj),
                     ),
-                    radius = rad * 0.80f,
-                    style = Stroke(width = rad * 0.055f * widthMul),
-                    alpha = (alpha * a).coerceIn(0f, 1f),
-                )
-            }
-        }
-        rotate(spinBack, c) {
-            for ((alpha, widthMul) in bloom) {
-                drawCircle(
-                    brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                        listOf(Color.Transparent, PointColors.violet, core, PointColors.violet, Color.Transparent),
-                        center = c,
-                    ),
-                    radius = rad * 0.54f,
-                    style = Stroke(width = rad * 0.042f * widthMul),
-                    alpha = (alpha * a).coerceIn(0f, 1f),
                 )
             }
         }
@@ -227,8 +168,11 @@ internal fun Knowledge(
     item: InboxItem,
     onCopyFact: (String) -> Unit,
     questionName: (com.point.core.model.CapabilityId) -> String?,
+
+    /** Ключи знания, которые уже стоят заголовками разделов действий, — второй раз не нужны. */
+    shownElsewhere: Set<String> = emptySet(),
 ) {
-    val facts = com.point.core.flow.knowledgeRows(item.obj.metadata)
+    val facts = com.point.core.flow.knowledgeRows(item.obj.metadata).filterNot { it.key in shownElsewhere }
     val questions = com.point.core.flow.openQuestions(item.obj.metadata, questionName)
     if (facts.isEmpty() && questions.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
