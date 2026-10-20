@@ -11,7 +11,7 @@ import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.aiCall
-import com.point.core.flow.aiCheckedLine
+import com.point.core.flow.aiChainLine
 import com.point.core.flow.aiOutcomeOfStatus
 import com.point.core.flow.aiServiceLines
 
@@ -56,10 +56,11 @@ class SettingsFlow(private val parts: SettingsParts) {
         val keys = keys()
         val facts = runCatching { parts.aiFacts.all() }.getOrDefault(emptyMap())
         val ours = runCatching { parts.builtInKeys.have() }.getOrDefault(emptySet())
+        val services = aiServiceLines(keys, ours, facts, now)
         return AiKeysScreen(
             keys = keys,
-            services = aiServiceLines(keys, ours, facts, now),
-            checkedLine = aiCheckedLine(facts, now),
+            services = services,
+            checkedLine = aiChainLine(services, facts, now),
         )
     }
 
@@ -88,7 +89,8 @@ class SettingsFlow(private val parts: SettingsParts) {
             if (key.isBlank()) continue
             val call = mine?.let(::aiCall) ?: UserAiConfig(
                 apiKey = key,
-                baseUrl = provider.baseUrl,
+                baseUrl = runCatching { parts.builtInKeys.baseUrl(provider.id) }.getOrDefault("")
+                    .ifBlank { provider.baseUrl },
                 model = provider.models.substringBefore(','),
             )
             probe(provider.id, call)

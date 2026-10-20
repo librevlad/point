@@ -5004,8 +5004,8 @@ class FlowViewModelTest {
         assertEquals(setOf("openrouter", "groq", "cerebras"), aiFacts.facts.keys)
         assertNull("кнопка осталась бы в «Проверяю…»", vm.ui.value.keyChecking)
         assertTrue(
-            "возраст сведений не обновился",
-            vm.ui.value.keyScreen?.checkedLine?.startsWith("Проверено") == true,
+            "после проверки человек видит итог, а не только её время",
+            vm.ui.value.keyScreen?.checkedLine?.contains("все 3") == true,
         )
     }
 

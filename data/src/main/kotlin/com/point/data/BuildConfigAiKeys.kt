@@ -28,5 +28,21 @@ class BuildConfigAiKeys @Inject constructor() : BuiltInAiKeys {
 
     override fun key(providerId: String): String = ours[providerId].orEmpty().trim()
 
+    // Workers AI без номера аккаунта в цепочку не входит (`DataModule.cloudflareModels`) —
+    // значит, и «работает на ключе Point» про него сказать нельзя.
     override fun have(): Set<String> = ours.filterValues { it.isNotBlank() }.keys
+        .filterNot { it == CLOUDFLARE && BuildConfig.CLOUDFLARE_ACCOUNT_ID.isBlank() }.toSet()
+
+    // «Проверить все» стучался с ключом сборки по адресу без номера аккаунта и записывал
+    // Workers AI в «не отвечал», хотя цепочка ходит к нему по полному адресу.
+    override fun baseUrl(providerId: String): String =
+        if (providerId == CLOUDFLARE && BuildConfig.CLOUDFLARE_ACCOUNT_ID.isNotBlank()) {
+            "${BuildConfig.CLOUDFLARE_BASE_URL}/${BuildConfig.CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+        } else {
+            ""
+        }
+
+    private companion object {
+        const val CLOUDFLARE = "cloudflare"
+    }
 }

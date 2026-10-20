@@ -199,4 +199,51 @@ class AiFactsTest {
         assertEquals("Свои ключи: 1 из $all", one)
         assertEquals("Свои ключи: 2 из $all", two)
     }
+
+    @Test
+    fun `после проверки сводка говорит итог, а не только время`() {
+        val keys = UserAiKeys.NONE.with(UserAiKey("openrouter", "sk-or-v1-мой"))
+        val asked = mapOf(
+            "openrouter" to AiFact(AiOutcome.ANSWERED, night),
+            "groq" to AiFact(AiOutcome.LIMIT, night),
+        )
+        val lines = aiServiceLines(keys, builtIn = setOf("groq"), facts = asked, now = night, zone = zone)
+
+        val mixed = aiChainLine(lines, asked, now = night, zone = zone)
+        assertTrue("итога проверки не видно: $mixed", mixed.contains("1 из 2"))
+
+        val fine = asked + ("groq" to AiFact(AiOutcome.ANSWERED, night))
+        val all = aiChainLine(lines, fine, now = night, zone = zone)
+        assertTrue("благополучие названо не прямо: $all", all.contains("все 2"))
+        assertTrue("возраст сведений пропал: $all", all.contains(whenWord(night, night, zone)))
+    }
+
+    @Test
+    fun `пока о сервисе с ключом сведений нет, счёта нет — есть только возраст`() {
+        val asked = mapOf("groq" to AiFact(AiOutcome.ANSWERED, night))
+        val lines = aiServiceLines(UserAiKeys.NONE, builtIn = setOf("groq", "mistral"), facts = asked, now = night, zone = zone)
+
+        // Счёт по половине сервисов был бы неправдой: остаётся то же, что было до счёта.
+        assertEquals(aiCheckedLine(asked, now = night, zone = zone), aiChainLine(lines, asked, now = night, zone = zone))
+        assertEquals(aiCheckedLine(emptyMap(), now = night, zone = zone), aiChainLine(lines, emptyMap(), now = night, zone = zone))
+    }
+
+    @Test
+    fun `у сервиса без ключа в закрытой строке видна цена`() {
+        val lines = aiServiceLines(UserAiKeys.NONE, builtIn = emptySet(), facts = emptyMap(), now = night, zone = zone)
+        val paid = lines.single { it.providerId == "openai" }
+        val free = lines.single { it.providerId == "groq" }
+
+        assertEquals(AI_PAID_OFFER, aiServiceState(paid, checking = false, open = false))
+        assertEquals(AI_PROVIDERS.single { it.id == "groq" }.freeNote, aiServiceState(free, checking = false, open = false))
+    }
+
+    @Test
+    fun `где ключ есть, цена уже не новость`() {
+        val keys = UserAiKeys.NONE.with(UserAiKey("openai", "sk-proj-мой"))
+        val lines = aiServiceLines(keys, builtIn = setOf("groq"), facts = emptyMap(), now = night, zone = zone)
+
+        assertEquals(null, lines.single { it.providerId == "openai" }.offer)
+        assertEquals(null, lines.single { it.providerId == "groq" }.offer)
+    }
 }

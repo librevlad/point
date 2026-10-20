@@ -98,6 +98,9 @@ data class KeyErrand(
     val action: String,
 
     val objectName: String,
+
+    /** Вид вещи: по нему Point знает, какой сервис ей по силам — запись, снимок, текст. */
+    val kind: com.point.core.model.ObjectKind? = null,
 )
 
 /**

@@ -8,6 +8,10 @@ interface AiKeyCheck {
 data class KeyProbe(
     val status: Int? = null,
 
+    /**
+     * Что ответила модель. `null` — ответа модели в теле нет вовсе; пустая строка — модель
+     * ответила, но слова не успела: думающие модели тратят короткий запас пробы на раздумье.
+     */
     val reply: String? = null,
 
     val error: String? = null,
@@ -15,9 +19,19 @@ data class KeyProbe(
 
 sealed interface KeyVerdict {
 
+    /** [reply] пуст, когда модель ответила, но слов прислать не успела. */
     data class Works(val reply: String) : KeyVerdict
 
     data class Refused(val what: String, val fix: String) : KeyVerdict
+}
+
+/**
+ * «Работает» словами сервиса — одна строка на телефон и компьютер. Ключ, которому сервис
+ * ответил, сохраняется на обоих устройствах сразу, поэтому строка говорит и это.
+ */
+fun keyWorksLine(verdict: KeyVerdict.Works): String {
+    val said = if (verdict.reply.isBlank()) "Работает — сервис ответил." else "Работает — сервис ответил: «${verdict.reply}»."
+    return "$said Ключ сохранён."
 }
 
 const val KEY_PROBE_PROMPT: String = "Ответь одним словом: готово"
@@ -30,17 +44,15 @@ fun keyVerdict(probe: KeyProbe): KeyVerdict {
                 "Проверьте интернет и нажмите «Проверить и включить» ещё раз.",
         )
     return when {
-        status in 200..299 -> {
-            val reply = probe.reply?.trim().orEmpty()
-            if (reply.isEmpty()) {
-                KeyVerdict.Refused(
-                    what = "Ключ приняли, но ответа не прислали",
-                    fix = "Обычно дело в имени модели. Выберите сервис в списке выше — имя подставится само.",
-                )
-            } else {
-                KeyVerdict.Works(reply.take(PROOF_CHARS))
-            }
-        }
+        // Ответ модели без единого слова — тоже ответ: ключ принят, модель работала. Думающие
+        // модели (gpt-oss у Groq и Cerebras, Gemini) тратят короткий запас пробы на раздумье,
+        // и рабочий ключ объявлялся негодным — человек выбрасывал верный ключ.
+        status in 200..299 -> probe.reply?.let { KeyVerdict.Works(it.trim().take(PROOF_CHARS)) }
+            ?: KeyVerdict.Refused(
+                what = "Ключ приняли, но ответа не прислали",
+                fix = probe.error?.takeIf { it.isNotBlank() }?.let(::detailOrHint)
+                    ?: "Обычно дело в имени модели. Откройте «Модель и адрес» и оставьте поля пустыми — имя подставится само.",
+            )
         status == 401 || status == 403 -> KeyVerdict.Refused(
             what = "Ключ не подошёл",
             fix = "Скопируйте ключ целиком, без пробелов по краям, и проверьте, что он от того сервиса, " +

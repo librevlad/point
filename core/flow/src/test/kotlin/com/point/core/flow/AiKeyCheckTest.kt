@@ -77,10 +77,30 @@ class AiKeyCheckTest {
     }
 
     @Test
-    fun `принятый ключ без ответа не выдаётся за работающий`() {
+    fun `тело без ответа модели не выдаётся за работающий ключ`() {
 
-        val verdict = refusal(KeyProbe(status = 200, reply = "   "))
+        val verdict = refusal(KeyProbe(status = 200, reply = null))
         assertTrue(verdict.what.contains("ответа не прислали"))
+    }
+
+    @Test
+    fun `думающая модель без единого слова — ключ всё равно работает`() {
+        // gpt-oss у Groq и Cerebras тратит короткий запас пробы на раздумье: слов нет, а ключ
+        // принят и модель работала. Прежде верный ключ объявлялся негодным и не сохранялся.
+        assertEquals(KeyVerdict.Works(""), keyVerdict(KeyProbe(status = 200, reply = "   ")))
+    }
+
+    @Test
+    fun `«работает» без слов не ставит пустых кавычек`() {
+        val silent = keyWorksLine(KeyVerdict.Works(""))
+        assertFalse("пустые кавычки читаются как поломка: $silent", silent.contains("«»"))
+        assertTrue("слово сервиса — доказательство, что ключ живой", keyWorksLine(KeyVerdict.Works("Готово")).contains("«Готово»"))
+    }
+
+    @Test
+    fun `ошибка под кодом 200 пересказывается словами сервиса`() {
+        val verdict = refusal(KeyProbe(status = 200, reply = null, error = "No endpoints found for model"))
+        assertTrue(verdict.fix.contains("No endpoints found"))
     }
 
     @Test
