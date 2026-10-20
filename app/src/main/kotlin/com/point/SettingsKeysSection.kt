@@ -36,7 +36,6 @@ import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.OutcomeCard
 import com.point.core.ui.PortalRow
-import com.point.core.ui.ScreenHeader
 import com.point.core.ui.SectionLabel
 import com.point.core.ui.bubbleColor
 import com.point.core.ui.bubbleIcon
@@ -69,8 +68,7 @@ internal fun KeySection(
     onBack: () -> Unit,
     onLeave: () -> Unit,
 ) {
-    BackToList(onBack)
-    ScreenHeader(title = KEY_SECTION_TITLE, modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp))
+    SectionTopBar(title = KEY_SECTION_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp))
 
     if (note != null) OutcomeBanner(message = note, outcome = Outcome.FAILED)
 

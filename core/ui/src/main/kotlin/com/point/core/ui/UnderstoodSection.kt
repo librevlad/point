@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,18 +41,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SEMANTIC_SUMMARY
-import com.point.core.flow.META_SEMANTIC_TYPE
-import com.point.core.flow.META_SIZE
-import com.point.core.flow.META_WHOLE_FRAME
-import com.point.core.flow.unusableReasonOf
-import com.point.core.flow.documentLabel
-import com.point.core.flow.humanWeight
 import com.point.core.flow.maskedForScreen
 import com.point.core.flow.provenanceLabel
 import com.point.core.flow.provenanceOf
-import com.point.core.flow.recordingLength
 import com.point.core.model.Feature
-import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 
 data class UnderstoodFact(
@@ -165,69 +156,6 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
     }
 }
 
-data class ObjectVerdict(val headline: String, val subline: String?, val measure: String? = null)
-
-fun objectMeasure(obj: PointObject): String? {
-    if (obj.state.kind != ObjectKind.AUDIO) return null
-
-    // Сначала точное знание из самой записи (#1123): прикидка по размеру врала в полтора
-    // раза, «примерно» рядом с такой ошибкой — не честность, а маскировка.
-    obj.metadata[com.point.core.flow.META_DURATION_SECONDS]?.toLongOrNull()
-        ?.let { com.point.core.flow.exactRecordingLength(it) }
-        ?.let { return it }
-    val size = obj.metadata[META_SIZE]?.toLongOrNull() ?: return null
-    return recordingLength(obj.mime, size, obj.metadata["name"]) ?: humanWeight(size)
-}
-
-fun objectVerdict(obj: PointObject): ObjectVerdict {
-    val state = obj.state
-    val headline = when {
-        state.has(Feature.IS_PURCHASE) -> "Покупка"
-        state.has(Feature.IS_MEETING) -> "Встреча"
-        state.has(Feature.IS_RECIPE) -> "Рецепт"
-        state.has(Feature.IS_JOB) -> "Вакансия"
-        state.has(Feature.HAS_VCARD) -> "Визитка"
-
-        else -> documentLabel(obj.metadata[META_SEMANTIC_TYPE]) ?: heroKindLabel(obj)
-    }
-
-    // Годность — часть состояния объекта (#684/#685): человек читает её здесь же, до
-    // первого тапа, — она важнее названия файла или того, что успела сказать модель.
-    val unusable = unusableReasonOf(obj.metadata).takeIf { state.has(Feature.UNUSABLE) }
-
-    // Страницу на снимке не нашли, и человеку отдан весь кадр (#1333). Это он читает здесь
-    // же: выбеленный кадр целиком выглядит как выбеленная страница, и без этой строки скан
-    // «не нашлось» был бы неотличим от удавшегося — а переснять стоит именно такой.
-    val wholeFrame = obj.metadata[META_WHOLE_FRAME]?.takeIf { it.isNotBlank() }
-    val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
-    val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
-
-    // Найденное зовут его собственным значением (#769). В списке карточка человека
-    // подписана именем, а внутри объект назывался «Человек» — вход терял имя, хотя это
-    // главное, что о человеке известно. Вид при этом не пропадает: он уходит подписью.
-    val own = valueHeadline(obj)
-    if (own != null) return ObjectVerdict(own, unusable ?: headline, objectMeasure(obj))
-    return ObjectVerdict(headline, unusable ?: wholeFrame ?: summary ?: name, objectMeasure(obj))
-}
-
-/**
- * Значение, которым объект зовётся сам: имя человека, номер, дата.
- *
- * Такие узлы рождает понимание, и живут они значением, а не файлом, — поэтому и признак
- * тот же: содержимое лежит прямо в ссылке. У файла имя берётся иначе, его это не трогает.
- */
-private fun valueHeadline(obj: PointObject): String? =
-    if (obj.uri is com.point.core.model.ValueRef) foundHeadline(obj).takeIf { it.isNotBlank() } else null
-
-/**
- * Подпись героя берётся у того же детектора, что рисует знак (#1233).
- *
- * До этого таблицу узнавали два разных списка форматов, и один экран мог одновременно
- * показать знак «Таблица» и заголовок «Документ».
- */
-private fun heroKindLabel(obj: PointObject): String =
-    if (kindMarkOf(obj) == KindMark.SPREADSHEET) kindMarkLabel(KindMark.SPREADSHEET) else kindLabel(obj.state.kind)
-
 private fun String.readableUrl() =
     removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')
 
@@ -255,15 +183,14 @@ internal fun UnderstoodSection(
     val detail = facts.filter { it.key != "semantic" }
     val trouble = failedNote(failed)
     if (detail.isEmpty() && enriching.isEmpty() && trouble == null) return
-    Surface(
-        shape = PortalCardShape,
-        color = MaterialTheme.colorScheme.surface,
+    Box(
         modifier = Modifier
             .padding(top = 16.dp)
             .widthIn(max = PortalColumnWidth)
-            .animateContentSize(tween(220)),
+            .animateContentSize(tween(220))
+            .portalCard(),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             detail.forEach { fact -> key(fact.key) { FactRow(fact) } }
             trouble?.let { note ->
                 Text(
@@ -411,4 +338,4 @@ private fun FactRow(fact: UnderstoodFact) {
     }
 }
 
-private const val FACT_COPIED_SHOWN_MS = 1_600L
+internal const val FACT_COPIED_SHOWN_MS = 1_600L

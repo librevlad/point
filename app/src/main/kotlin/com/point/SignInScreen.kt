@@ -143,14 +143,14 @@ private fun PrimaryAction(title: String, onClick: () -> Unit) {
 
 internal const val ACCOUNT_ICON = "account"
 
-@Preview(name = "Вход · не вошёл (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Вход · не вошёл (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewSignedOut() = PointTheme(darkTheme = true) {
 
     SignInScreen(state = SignIn.SignedOut, onSignIn = {}, onCancel = {})
 }
 
-@Preview(name = "Вход · ждём браузер (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Вход · ждём браузер (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewWaiting() = PointTheme(darkTheme = true) {
 
@@ -161,7 +161,7 @@ private fun PreviewWaiting() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Вход · вошёл (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Вход · вошёл (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewSignedIn() = PointTheme(darkTheme = true) {
 
@@ -174,7 +174,7 @@ private fun PreviewSignedIn() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Вход · отказ (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Вход · отказ (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewRefused() = PointTheme(darkTheme = true) {
 

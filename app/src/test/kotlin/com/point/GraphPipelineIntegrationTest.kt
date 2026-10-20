@@ -475,6 +475,12 @@ class GraphPipelineIntegrationTest {
         val readQr = enriched.bubbles.first { it.capabilityId == ReadQrCapability.ID }
 
         vm.onBubble(readQr)
+
+        // Результат встаёт у исходника (P4): человек остаётся на снимке и входит в сделанное
+        // касанием по «Получилось».
+        settle { frame(vm).let { com.point.core.flow.madeOf(it.obj.id, it.found, it.relations).isNotEmpty() } }
+        assertEquals("человек остался у исходника", ObjectKind.IMAGE, frame(vm).obj.state.kind)
+        vm.onFound(frame(vm).let { com.point.core.flow.madeOf(it.obj.id, it.found, it.relations).single() })
         settle { vm.ui.value.frame?.obj?.state?.kind == ObjectKind.TEXT }
 
         val produced = frame(vm)

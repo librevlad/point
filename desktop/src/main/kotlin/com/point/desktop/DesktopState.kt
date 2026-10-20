@@ -118,6 +118,13 @@ class DesktopState(
      * событие, которого дожидаются, а не срок, который истёк.
      */
     private val io: CoroutineDispatcher = Dispatchers.IO,
+
+    /**
+     * Связаны ли устройства: вошёл ли человек в аккаунт (решение владельца 20.10.2026).
+     * Без входа работать можно, но телефона, на котором что-то исполнить, у компьютера нет —
+     * и его действия, оставшиеся с прошлого входа, не предлагаются.
+     */
+    private val linked: () -> Boolean = { true },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + background)
 
@@ -316,6 +323,19 @@ class DesktopState(
     fun copyFact(value: String) {
         runCatching { clipboard.copy(value) }
         _message.value = "В буфере: $value"
+    }
+
+    /**
+     * Прочитанный текст объекта — в буфер целиком (макет 19.10.2026), а не голова, показанная
+     * на экране: копия, оборванная на пределе показа, обрывалась бы молча.
+     */
+    fun copyText(ref: String) {
+        val text = runCatching { java.io.File(ref).readText() }.getOrNull()?.takeIf { it.isNotBlank() }
+        _message.value = when {
+            text == null -> "Текст не прочитался — скопировать нечего"
+            runCatching { clipboard.copy(text) }.isFailure -> "Скопировать не вышло"
+            else -> "Текст в буфере"
+        }
     }
 
     /** Человеческое имя вопроса знания; вопросы без имени на экран не выходят (P2). */
@@ -780,6 +800,7 @@ class DesktopState(
         // объекту сам» (#1369): «В Excel» здесь читает одиночную страницу, но не набор —
         // и телефонная дверь для набора обязана остаться, иначе частичное умение
         // компьютера молча съедает целое умение соседа.
+        if (!linked()) return emptyList()
         val mine = registry.bubblesFor(item.obj.state).map { it.capabilityId.value }.toSet()
         return _phoneCaps.value.filter { action ->
 

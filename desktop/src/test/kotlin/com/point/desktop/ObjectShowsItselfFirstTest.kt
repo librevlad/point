@@ -12,7 +12,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import com.point.core.ui.kindMarkLabel
 import com.point.core.ui.kindMarkOf
-import com.point.desktop.ui.CompactObject
+import com.point.desktop.ui.ObjectPane
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -63,6 +63,10 @@ class ObjectShowsItselfFirstTest {
      * Снимок слов не несёт и подписи у него нет, поэтому он ищется на самом кадре: фикстура
      * заливается цветом, которого в палитре Point нет, и на кадре его видно ровно там, где
      * человек видит снимок.
+     *
+     * С макета 19.10.2026 снимок стоит в кольце шапки, рядом со словами о нём, а крупно — в
+     * содержимом ниже. Беда #898 — слова наверху, а снимок где-то под ними, — поэтому меряется
+     * начало снимка: оно выше слов, а не под ними.
      */
     @Test
     fun `у снимка наверху он сам, а не знак вида`() = runDesktopComposeUiTest(COMPACT_WIDTH, COMPACT_HEIGHT) {
@@ -78,7 +82,7 @@ class ObjectShowsItselfFirstTest {
         val shown = captureToImage().toAwtImage().rowsOf(PAINT)
 
         assertTrue("снимка на экране нет вовсе — залито строк ${shown.size}", shown.size > PAINT_ROWS)
-        assertTrue("снимок стоит ниже слов об объекте, а не наверху", shown.last() < name)
+        assertTrue("снимок стоит ниже слов об объекте, а не наверху", shown.first() < name)
     }
 
     @Test
@@ -121,7 +125,7 @@ class ObjectShowsItselfFirstTest {
             .apply { setPhoneCaps(listOf(PcRemoteAction("call", ACTION, kinds = setOf("TEXT"), priority = 10))) }
         st.onReceived(item)
 
-        showCompact { CompactObject(state = st, item = item, onBack = {}) }
+        showCompact { ObjectPane(state = st, item = item) }
         return sceneNodes()
     }
 

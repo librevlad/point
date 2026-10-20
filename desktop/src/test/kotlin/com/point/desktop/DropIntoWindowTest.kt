@@ -185,7 +185,8 @@ class DropIntoWindowTest {
     @Test
     fun `правила исчезновения по уходу человека в коде больше нет`() {
         val placement = java.io.File("src/main/kotlin/com/point/desktop/CompactPlacement.kt").readText()
-        val window = java.io.File("src/main/kotlin/com/point/desktop/ui/CompactApp.kt").readText()
+        val window = listOf("PointWindow.kt", "PopoverPane.kt")
+            .joinToString("\n") { java.io.File("src/main/kotlin/com/point/desktop/ui/$it").readText() }
 
         assertFalse("окно снова прячется само", placement.contains("fun flyoutHides"))
 

@@ -47,10 +47,7 @@ class SandboxActivity : ComponentActivity() {
 
         setContent {
             PointTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
+                com.point.core.ui.PointScreen {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
                     if (state.frame == null && state.busy == null && state.message == null) {
                         SandboxMenu(onPick = ::start)

@@ -67,14 +67,14 @@ class ExitRowTest {
     @Test fun `дверь «Поделиться» не обещает «Недавнее»`() {
         objectScreen(leaveLabel = LEAVE_BACK)
 
-        compose.onNodeWithText("← Назад").assertExists()
-        compose.onNodeWithText("← Недавнее").assertDoesNotExist()
+        compose.onNodeWithText(LEAVE_BACK).assertExists()
+        compose.onNodeWithText(LEAVE_TO_HOME).assertDoesNotExist()
     }
 
     @Test fun `без имени двери выход ведёт домой и так и назван`() {
         objectScreen()
 
-        compose.onNodeWithText("← Недавнее").assertExists()
+        compose.onNodeWithText(LEAVE_TO_HOME).assertExists()
     }
 }
 
@@ -91,8 +91,8 @@ class ShareDoorExitTest {
             .putExtra(Intent.EXTRA_TEXT, "Пришлите договор до пятницы")
 
         ActivityScenario.launch<ShareActivity>(intent).use {
-            compose.waitUntilAtLeastOneExists(hasText("← Назад"), TIMEOUT_MS)
-            compose.onNodeWithText("← Недавнее").assertDoesNotExist()
+            compose.waitUntilAtLeastOneExists(hasText(LEAVE_BACK), TIMEOUT_MS)
+            compose.onNodeWithText(LEAVE_TO_HOME).assertDoesNotExist()
         }
     }
 

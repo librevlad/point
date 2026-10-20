@@ -1,22 +1,14 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,19 +16,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.AI_PROVIDERS
-import com.point.core.flow.AiProvider
 import com.point.core.flow.KeyVerdict
-import com.point.core.flow.UserAiConfig
 import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
 import com.point.desktop.PcConfig
@@ -108,7 +92,7 @@ fun SettingsKeys(
         var howOpen by remember { mutableStateOf(false) }
         Text(
             if (howOpen) "Свернуть" else "Как это работает",
-            style = PointType.small.copy(color = PointColors.cyan),
+            style = PointType.small.copy(color = PointColors.link),
             modifier = Modifier.clip(RoundedCornerShape(8.dp))
                 .clickable { howOpen = !howOpen }
                 .padding(vertical = 3.dp),
@@ -125,8 +109,7 @@ fun SettingsKeys(
         // умолчанием (#911).
         Column(
             modifier = Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(PointColors.surface)
+                .glassPanel(RoundedCornerShape(14.dp))
                 .padding(horizontal = 14.dp, vertical = 11.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -145,7 +128,7 @@ fun SettingsKeys(
                     style = PointType.small.copy(color = PointColors.muted),
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.fillMaxWidth().glassPanel().padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 rows.forEach { line ->
                     PortalRow(
                         // Номер — место в очереди обращения, то же, что на телефоне (#902).
@@ -227,8 +210,7 @@ private fun ServiceKey(
 
     Column(
         modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(PointColors.surfaceDeep)
+            .glassPanel(RoundedCornerShape(12.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {

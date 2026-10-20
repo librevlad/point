@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -75,6 +74,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 internal const val WHAT_POINT_IS: String =
     "Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
@@ -105,10 +110,6 @@ internal const val CANCEL: String = "Отмена"
 /** Дверь входа спрашивает человека, а не перечисляет наши источники (макет владельца 10.08.2026). */
 internal const val WHAT_YOU_HAVE: String = "Что у вас есть?"
 
-internal const val RECENT_TITLE: String = "Недавнее"
-
-internal const val RECENT_WHAT: String = "Последние объекты"
-
 @Composable
 fun HomeScreen(
     recent: List<HistoryEntry>,
@@ -132,11 +133,16 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().systemBarsPadding()) {
+        // Шапка макета: наш знак, имя и дверь в настройки. Знак — портал Point, тот же, что у
+        // иконки и окна компьютера (решение владельца 20.10.2026: «логотип только наш»).
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-
+            com.point.core.ui.PointGlyph(size = 30.dp)
+            Text("Point", style = com.point.core.ui.theme.PointText.brand)
+            Spacer(Modifier.weight(1f))
             PortalDoor(
                 label = SETTINGS_TITLE,
                 onClick = onSettings,
@@ -172,16 +178,18 @@ fun HomeScreen(
                     Text(
 
                         WHAT_POINT_IS,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = com.point.core.ui.theme.PointText.subline,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.widthIn(max = PortalColumnWidth),
                     )
                     Spacer(Modifier.height(22.dp))
                     NewObjectDoor(onClick = onNewObject)
                     Spacer(Modifier.height(9.dp))
                     Text(
                         HOW_TO_SHARE,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = com.point.core.ui.theme.PointText.note,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.widthIn(max = PortalColumnWidth),
                     )
 
                     Spacer(Modifier.height(11.dp))
@@ -195,53 +203,46 @@ fun HomeScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             ) {
                 item {
                     NewObjectDoor(
                         onClick = onNewObject,
 
-                        // Вровень с записями и карточкой компьютера: узкая колонка (340.dp)
-                        // хороша на пустом экране по центру, но в списке дверь входа
-                        // не дотягивала до края и выглядела случайно уже соседей.
+                        // Вровень с записями и карточкой компьютера: узкая колонка хороша на
+                        // пустом экране по центру, но в списке дверь входа не дотягивала до
+                        // края и выглядела случайно уже соседей.
                         wide = true,
-                        modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
                 if (!aiKeySet) {
 
-                    item { ConnectAiRow(onConnect = onSettings, modifier = Modifier.padding(bottom = 8.dp)) }
-                }
-                item {
-                    Column(modifier = Modifier.padding(bottom = 6.dp)) {
-                        Text(RECENT_TITLE, style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            RECENT_WHAT,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    item { ConnectAiRow(onConnect = onSettings, modifier = Modifier.padding(top = 10.dp)) }
                 }
 
                 // Время — структура списка, а не подпись в каждой строке (#880). Правило
-                // общее с компьютером: секции те же, оформление своё.
+                // общее с компьютером: секции те же, оформление своё. Секция — одна панель
+                // стекла с заголовком и линией до края (макет «Недавнее · телефон»).
                 val now = System.currentTimeMillis()
                 com.point.core.flow.byTimeSection(recent, now) { it.epochMillis }
                     .forEach { (section, entries) ->
                         item(key = "section-${section.name}") {
-                            com.point.core.ui.SectionLabel(
-                                section.label,
-                                modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-                            )
-                        }
-                        items(entries, key = { it.id }) { entry ->
-                            RemovableHistoryRow(
-                                entry = entry,
-                                now = now,
-                                onClick = { onOpen(entry) },
-                                onRemove = { onRemove(entry) },
-                            )
+                            Column {
+                                com.point.core.ui.GroupHeader(section.label, line = true)
+                                com.point.core.ui.GlassGroup {
+                                    entries.forEachIndexed { index, entry ->
+                                        androidx.compose.runtime.key(entry.id) {
+                                            if (index > 0) com.point.core.ui.GroupSeam()
+                                            RemovableHistoryRow(
+                                                entry = entry,
+                                                now = now,
+                                                onClick = { onOpen(entry) },
+                                                onRemove = { onRemove(entry) },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 item {
@@ -250,14 +251,14 @@ fun HomeScreen(
                         ClearRecentPanel(
                             onConfirm = { asking = false; onClear() },
                             onCancel = { asking = false },
-                            modifier = Modifier.padding(top = 6.dp),
+                            modifier = Modifier.padding(top = 14.dp),
                         )
                     } else {
                         TextButton(
                             onClick = { asking = true },
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         ) {
-                            Text(CLEAR_RECENT, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(CLEAR_RECENT, style = com.point.core.ui.theme.PointText.note)
                         }
                     }
                 }
@@ -441,7 +442,8 @@ private fun RemovableHistoryRow(entry: HistoryEntry, now: Long, onClick: () -> U
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = ENTRY_MENU,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = com.point.core.ui.PointPalette.text.copy(alpha = 0.4f),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -463,60 +465,73 @@ private fun HistoryRow(
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Surface(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 1.dp,
-        modifier = modifier.fillMaxWidth(),
+    androidx.compose.foundation.layout.Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 60.dp)
+            .clip(com.point.core.ui.PortalCardShape)
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = if (trailing == null) 12.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = if (trailing == null) 14.dp else 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            HistoryAvatar(entry)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = entryTitle(entry),
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                // Время ушло в заголовок секции (#880): строке остаётся то, чего в секции
-                // нет — имя файла и вид объекта.
-                Text(
-                    text = rowSubtitle(
-                        name = entry.name.takeIf { entryTitle(entry) != it },
-                        kind = kindLabel(entry.kind),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                // Знание выглядит знанием, а не ссылкой (#880): раньше номер телефона был
-                // написан цветом действия и читался как «нажми меня».
-                val facts = entryFacts(entry)
-                if (facts.isNotEmpty()) {
-                    Text(
-                        text = facts.take(2).joinToString(" · ") { it.value ?: it.label },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+        HistoryAvatar(entry)
+        Column(Modifier.weight(1f)) {
             Text(
-                text = clockLabel(entry.epochMillis, now),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                text = entryTitle(entry),
+                style = com.point.core.ui.theme.PointText.rowTitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            trailing?.invoke()
+
+            // Время ушло в заголовок секции (#880): строке остаётся то, чего в секции
+            // нет — имя файла и вид объекта.
+            Text(
+                text = rowSubtitle(
+                    name = entry.name.takeIf { entryTitle(entry) != it },
+                    kind = kindLabel(entry.kind),
+                ),
+                style = com.point.core.ui.theme.PointText.note,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+
+            // Знание выглядит знанием, а не ссылкой (#880): раньше номер телефона был
+            // написан цветом действия и читался как «нажми меня». Метка моно-строкой с
+            // точкой цвета найденного — как в макете «Недавнее · телефон».
+            val facts = entryFacts(entry)
+            if (facts.isNotEmpty()) {
+                FactTag(facts.take(2).joinToString(" · ") { it.value ?: it.label })
+            }
         }
+        Text(
+            text = clockLabel(entry.epochMillis, now),
+            style = com.point.core.ui.theme.PointText.clock,
+        )
+        trailing?.invoke()
+    }
+}
+
+/** Найденное в строке «Недавнего»: моно-метка с голубой точкой — знание, а не кнопка. */
+@Composable
+private fun FactTag(text: String) {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f))
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(5.dp).clip(CircleShape).background(com.point.core.ui.PointPalette.cyan))
+        Text(
+            text = text,
+            style = com.point.core.ui.theme.PointText.chip,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -579,21 +594,22 @@ private fun HistoryAvatar(entry: HistoryEntry) {
             }
         }
     }
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(44.dp)) {
-        val bmp = thumb
-        if (bmp != null) {
-            Image(
-                bitmap = bmp,
-                contentDescription = entry.name ?: entry.kind.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Icon(
-                imageVector = kindIcon(entry.kind),
-                contentDescription = entry.kind.name,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(10.dp).fillMaxSize(),
+
+    // Снимок узнаётся по самому снимку — миниатюрой в круге плашки; остальное — знаком вида
+    // на пастели своего вида: запись фиолетовая, ссылка синяя, текст голубой (макет).
+    val bmp = thumb
+    if (bmp != null) {
+        Image(
+            bitmap = bmp,
+            contentDescription = entry.name ?: entry.kind.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(36.dp).clip(CircleShape),
+        )
+    } else {
+        Box(Modifier.semantics { contentDescription = entry.kind.name }) {
+            com.point.core.ui.PortalPlate(
+                accent = com.point.core.ui.kindTint(entry.kind),
+                icon = kindIcon(entry.kind),
             )
         }
     }
@@ -608,13 +624,13 @@ private fun previewEntry(id: String, name: String, kind: ObjectKind, ago: Long) 
     epochMillis = System.currentTimeMillis() - ago,
 )
 
-@Preview(name = "Дом · объекта ещё нет (#456)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Дом · объекта ещё нет (#456)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewHomeEmpty() = PointTheme {
     HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {})
 }
 
-@Preview(name = "Дом · недавнее (#462)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Дом · недавнее (#462)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewHomeRecent() = PointTheme {
     HomeScreen(

@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.MEMORY_TITLE
-import com.point.core.ui.ScreenHeader
 
 /** Раздел «Что Point помнит» на телефоне (#834). */
 /** Сколько объектов Point помнит, сколько это занимает и как забыть (#821). */
@@ -25,8 +24,7 @@ internal fun MemorySection(
     onForgetAll: () -> Unit,
     onBack: () -> Unit,
 ) {
-    BackToList(onBack)
-    ScreenHeader(title = MEMORY_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+    SectionTopBar(title = MEMORY_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
 
     Text(
         memoryLine(memory),

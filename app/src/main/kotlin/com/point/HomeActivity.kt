@@ -5,11 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -62,7 +58,7 @@ class HomeActivity : ComponentActivity() {
 
         setContent {
             PointTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                com.point.core.ui.PointScreen {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
                     if (state.frame == null && state.busy == null && state.message == null &&
                         state.keyScreen == null && state.devicesScreen == null && state.signIn == null

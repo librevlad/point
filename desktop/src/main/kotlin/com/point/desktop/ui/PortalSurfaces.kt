@@ -3,146 +3,54 @@ package com.point.desktop.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
-import com.point.core.ui.PointPalette
-import com.point.core.ui.PortalCardShape
-import com.point.core.ui.PortalPlateShape
-import com.point.core.ui.PortalTones
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.point.core.ui.actionTint
 
 /*
- * Поверхности телефона на ПК (порт `core/ui/PortalSurfaces.kt`).
+ * Строка и плашка, которыми пишут настройки, аккаунт и действия.
  *
- * Одно и то же действие выглядело двумя разными продуктами: на телефоне — карточка со
- * скруглением 18, вертикальным градиентом, светлой кромкой сверху и плашкой-иконкой 46;
- * на ПК — плоская строка со скруглением 14, точкой 8 и стрелкой-текстом. Общего модуля у
- * Android-UI и Compose Desktop нет, поэтому токены переносятся, а не переиспользуются.
- * Источник правды — телефонный файл: расходиться им нельзя.
+ * Прежде это был порт телефонных поверхностей (`core/ui/PortalSurfaces.kt`): карточка со
+ * скруглением 18, вертикальным градиентом и цветной плашкой 40. Макет 19.10.2026 даёт компьютеру
+ * своё стекло, и строка рисуется им (`GlassRow`); имя и параметры остались прежними, чтобы экраны,
+ * которые ими пишут, не переписывались ради формы.
  */
 
-// Тона и скругления — из общей палитры (#851): те же самые, что у телефона.
-private val RowTop = PortalTones.rowTop
-private val RowBottom = PortalTones.rowBottom
-private val PlateBase = PortalTones.plateBase
-private val TopHighlight = PortalTones.topHighlight
-private val PrimaryStart = PointPalette.violet
-private val PrimaryEnd = PointPalette.blue
-
-fun Modifier.portalCard(
-    shape: Shape = PortalCardShape,
-    elevation: Dp = 6.dp,
-    accent: Color? = null,
-): Modifier = this
-    .then(
-        if (elevation > 0.dp) {
-            Modifier.shadow(elevation, shape, ambientColor = Color.Black, spotColor = Color.Black)
-        } else {
-            Modifier
-        },
-    )
-    .clip(shape)
-    .background(Brush.verticalGradient(listOf(RowTop, RowBottom)))
-    .then(
-        if (accent != null) {
-            Modifier.background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent)))
-        } else {
-            Modifier
-        },
-    )
-    .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
-
-fun Modifier.portalPrimary(
-    shape: Shape = PortalCardShape,
-    elevation: Dp = 20.dp,
-): Modifier = this
-    .then(
-        if (elevation > 0.dp) {
-            Modifier.shadow(elevation, shape, ambientColor = PrimaryStart, spotColor = PrimaryStart)
-        } else {
-            Modifier
-        },
-    )
-    .clip(shape)
-    .background(Brush.horizontalGradient(listOf(PrimaryStart, PrimaryEnd)))
-
-/** Плашка действия: цвет действия светится изнутри, а не стоит точкой рядом. */
+/** Плашка со знаком: цвет действия смягчён к пастели, знак — светлой линией. */
 @Composable
 fun PortalPlate(
     accent: Color,
     icon: ImageVector?,
     modifier: Modifier = Modifier,
     onGlass: Boolean = false,
-    size: Dp = 40.dp,
-    shape: Shape = PortalPlateShape,
+    size: Dp = 32.dp,
 ) {
-    val plate = modifier
-        .size(size)
-        .clip(shape)
-        .then(
-            if (onGlass) {
-                Modifier
-                    .background(Color.White.copy(alpha = 0.18f))
-                    .border(1.dp, Color.White.copy(alpha = 0.30f), shape)
-            } else {
-                Modifier
-                    .background(PlateBase)
-                    .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.34f), Color.Transparent)))
-                    .border(1.dp, accent.copy(alpha = 0.30f), shape)
-            },
-        )
-
-    Box(plate, contentAlignment = Alignment.Center) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (onGlass) Color.White else accent,
-                modifier = Modifier.size(size * 0.5f),
-            )
-        }
-    }
+    Plate(
+        icon = icon,
+        modifier = modifier,
+        tint = if (onGlass) null else actionTint(accent),
+        size = size,
+        iconSize = size * 0.48f,
+        onLight = onGlass,
+    )
 }
 
 /**
- * Строка действия — та же, что на телефоне (`core/ui` PortalRow).
+ * Строка действия или раздела — та же модель, что на телефоне (`core/ui` PortalRow): обещание
+ * живёт второй строкой под названием, место исполнения — меткой справа (#1384).
  *
- * Обещание живёт под названием второй строкой, а не хвостом справа: человек читает сверху
- * вниз, и «что будет, если нажать» стоит там же, где он привык его видеть.
+ * Появляется строка мягко, со сдвигом по номеру: список собирается на глазах, а не вспыхивает.
  */
 @Composable
-@OptIn(ExperimentalComposeUiApi::class)
 fun PortalRow(
     title: String,
     onClick: () -> Unit,
@@ -159,107 +67,41 @@ fun PortalRow(
     chevron: Boolean = true,
     subtitleMaxLines: Int = 2,
 
-    /**
-     * Где действие исполнится: состояние строки, а не обещание действия (#1384).
-     *
-     * «на телефоне» стояло второй строкой — там же, где «снимок уйдёт в сервис». Одно из них
-     * говорит про цену и приватность, другое — только про то, чьими руками сделано; читались
-     * они одинаково. Место ушло меткой вправо, вторая строка осталась цене.
-     */
+    /** Где действие исполнится: состояние строки, а не обещание действия (#1384). */
     mark: String? = null,
+    dim: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val presence = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        delay(appearIndex * 40L)
+        delay(appearIndex * 35L)
         presence.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
     }
-
-    val base = modifier
-        .fillMaxWidth()
-        .graphicsLayer {
+    GlassRow(
+        title = title,
+        lead = if (place > 0) "%02d".format(place) else null,
+        onClick = if (enabled) onClick else null,
+        subtitle = subtitle,
+        icon = icon,
+        tint = actionTint(accent),
+        primary = primary,
+        dim = dim,
+        subtitleLines = subtitleMaxLines,
+        modifier = modifier.graphicsLayer {
             alpha = presence.value
-            translationY = (1f - presence.value) * 10.dp.toPx()
-        }
-    val body = if (primary) base.portalPrimary() else base.portalCard()
-
-    val labelColor = if (primary) Color.White else PointColors.text
-    val subColor = if (primary) Color.White.copy(alpha = 0.80f) else PointColors.muted
-
-    // Наведение — то, чего нет и не может быть на телефоне (#879): курсор отвечает «сюда
-    // попаду» до нажатия. Модель строки при этом та же, меняется только подсветка.
-    val hovered = remember { mutableStateOf(false) }
-    val lit = if (hovered.value && !primary) {
-        body.border(1.dp, PointColors.violet.copy(alpha = 0.55f), PortalCardShape)
-    } else {
-        body
-    }
-
-    Box(
-        lit
-            .onPointerEvent(PointerEventType.Enter) { hovered.value = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered.value = false }
-            .clickable(enabled = enabled, onClick = onClick),
+            translationY = (1f - presence.value) * 8.dp.toPx()
+        },
     ) {
-        Row(
-            // Плотнее телефона: мышь точнее пальца, а в окне вертикаль дороже (#879).
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = if (primary) 11.dp else 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
-        ) {
-            // Плашка нужна действию, а не строке настроек: пустой квадрат без значка —
-            // обещание картинки, которой нет. На телефоне строки настроек стоят без неё (#886).
-            if (icon != null) PortalPlate(accent = accent, icon = icon, onGlass = primary)
-            if (place > 0) {
-                Text(
-                    "%02d".format(place),
-                    style = PointType.small.copy(color = PointColors.muted.copy(alpha = 0.7f)),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = PointType.body.copy(color = labelColor),
-                    fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = PointType.small.copy(color = subColor),
-                        maxLines = subtitleMaxLines,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            if (mark != null) {
-                Text(
-                    text = mark,
-                    style = PointType.small.copy(
-                        color = if (primary) Color.White.copy(alpha = 0.78f) else PointColors.muted,
-                    ),
-                    maxLines = 1,
-                    modifier = Modifier
-                        .background(
-                            if (primary) Color.White.copy(alpha = 0.14f) else PointColors.muted.copy(alpha = 0.14f),
-                            RoundedCornerShape(6.dp),
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-            }
-            if (trailing != null) {
-                trailing()
-            } else if (chevron) {
-                // Шеврон говорит, что за строкой продолжение, а не мгновенный результат.
-                // Приглушён: повторённый десять раз в полную силу он становится шумом (#879).
-                Text(
-                    "›",
-                    style = PointType.body.copy(
-                        color = if (primary) Color.White.copy(alpha = 0.7f) else PointColors.muted.copy(alpha = 0.45f),
-                    ),
-                )
-            }
+        if (mark != null) PlaceMark(mark, onLight = primary)
+        when {
+            trailing != null -> trailing()
+            chevron -> Chevron(onLight = primary)
         }
     }
+}
+
+/** Подпись под строкой, когда строки нет — пояснение раздела, тихий текст. */
+@Composable
+fun QuietNote(text: String, modifier: Modifier = Modifier) {
+    Text(text, style = PointType.note, modifier = modifier)
 }

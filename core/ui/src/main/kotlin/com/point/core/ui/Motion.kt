@@ -74,6 +74,9 @@ fun AliveSurface(
     shape: Shape,
     size: Dp,
     modifier: Modifier = Modifier,
+
+    /** Высота рамки; по умолчанию рамка квадратная. Вещь живёт в своих пропорциях. */
+    height: Dp = size,
     content: @Composable () -> Unit,
 ) {
     val motion = rememberMotionEnabled()
@@ -117,7 +120,7 @@ fun AliveSurface(
             // 0.62 диаметра и без этого уезжала в угол портала.
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(size)
+                .size(size, height)
                 .graphicsLayer {
                     scaleX = breath
                     scaleY = breath

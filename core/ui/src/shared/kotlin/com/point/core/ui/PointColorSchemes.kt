@@ -16,6 +16,10 @@ import androidx.compose.ui.graphics.Color
  * Схема — это то, чем красятся стандартные компоненты. Пока их на ПК почти нет,
  * расхождение не видно; появится первая кнопка или переключатель — и он окажется другого
  * цвета, чем такой же на телефоне.
+ *
+ * Роли Material непрозрачны: меню, поле ввода и переключатель рисуют ими заливку, и
+ * полупрозрачное стекло палитры сделало бы меню сквозным. Поэтому поверхности здесь — то же
+ * стекло, сведённое на землю в один цвет.
  */
 
 private val Ink = Color(0xFF0F1626)
@@ -44,24 +48,50 @@ val PointLightColors: ColorScheme = lightColorScheme(
     onErrorContainer = Color(0xFF410002),
 )
 
+/** Подпись на земле, сведённая в один цвет: `muted` палитры поверх `canvas`. */
+private val MutedSolid = Color(0xFF9C959C)
+
+/** Стекло строки и панели, сведённое на землю: от самого тёмного к самому светлому. */
+private val GlassLowest = Color(0xFF241F2A)
+private val GlassLow = Color(0xFF2F2936)
+private val Glass = Color(0xFF342D3B)
+private val GlassHigh = Color(0xFF3A3242)
+private val GlassHighest = Color(0xFF41394A)
+
 /** Тёмная — то, что человек видит и на телефоне, и на ПК. */
 val PointDarkColors: ColorScheme = darkColorScheme(
     primary = PointPalette.violet,
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF211B3E),
-    onPrimaryContainer = Color(0xFFD6CCFF),
-    secondary = PointPalette.muted,
-    onSecondary = Ink,
-    secondaryContainer = PointPalette.surfaceDeep,
-    onSecondaryContainer = Color(0xFFE6E9F0),
+    onPrimary = PointPalette.ink,
+    primaryContainer = Color(0xFF453B58),
+    onPrimaryContainer = Color(0xFFE6DDF7),
+    inversePrimary = Color(0xFF6B5A9C),
+    secondary = MutedSolid,
+    onSecondary = PointPalette.ink,
+    secondaryContainer = GlassHigh,
+    onSecondaryContainer = PointPalette.text,
     tertiary = PointPalette.cyan,
+    onTertiary = PointPalette.ink,
     background = PointPalette.canvas,
     onBackground = PointPalette.text,
-    surface = PointPalette.surface,
+    surface = Glass,
     onSurface = PointPalette.text,
-    surfaceVariant = PointPalette.surfaceDeep,
-    onSurfaceVariant = PointPalette.muted,
-    outline = PointPalette.border,
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
+    surfaceVariant = GlassHigh,
+    onSurfaceVariant = MutedSolid,
+    surfaceTint = PointPalette.violet,
+    inverseSurface = PointPalette.text,
+    inverseOnSurface = PointPalette.ink,
+    error = PointPalette.warm,
+    onError = PointPalette.ink,
+    errorContainer = Color(0xFF5A3428),
+    onErrorContainer = Color(0xFFF6D3C4),
+    outline = Color(0xFF5B5262),
+    outlineVariant = Color(0xFF453D4D),
+    scrim = Color(0xFF000000),
+    surfaceBright = GlassHighest,
+    surfaceDim = GlassLowest,
+    surfaceContainerLowest = GlassLowest,
+    surfaceContainerLow = GlassLow,
+    surfaceContainer = Glass,
+    surfaceContainerHigh = GlassHigh,
+    surfaceContainerHighest = GlassHighest,
 )

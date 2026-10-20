@@ -99,7 +99,7 @@ class SettingsRowKeepsWidthTest {
     private fun SkikoComposeUiTest.openedService(): List<SemanticsNode> {
         val service = AI_PROVIDERS.filter { it.freeNote != null }.maxBy { it.freeNote.orEmpty().length }
         showCompact {
-            CompactSettings(
+            SettingsPane(
                 state = desktopState(),
                 page = SettingsPage.KEYS,
                 onPage = {},

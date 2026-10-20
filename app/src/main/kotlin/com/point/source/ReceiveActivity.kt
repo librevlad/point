@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -76,7 +75,7 @@ class ReceiveActivity : ComponentActivity() {
         link = box?.link
         setContent {
             PointTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                com.point.core.ui.PointScreen {
                     ReceiveScreen(
                         link = link,
                         failure = failure,
@@ -312,7 +311,7 @@ private fun ReceiveScreen(
     }
 }
 
-@Preview(name = "Принять файл · ссылка готова (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Принять файл · ссылка готова (#114)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewReceiveWaiting() = PointTheme(darkTheme = true) {
     ReceiveScreen(
@@ -325,14 +324,14 @@ private fun PreviewReceiveWaiting() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Принять файл · готовим ссылку (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Принять файл · готовим ссылку (#114)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewReceivePreparing() = PointTheme(darkTheme = true) {
 
     ReceiveScreen(link = null, failure = null, status = receiveWaitStatus(0), onCopy = {}, onSend = {}, onCancel = {})
 }
 
-@Preview(name = "Принять файл · не получилось (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Принять файл · не получилось (#114)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewReceiveFailed() = PointTheme(darkTheme = true) {
     ReceiveScreen(

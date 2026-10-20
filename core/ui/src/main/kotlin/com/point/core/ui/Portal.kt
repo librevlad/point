@@ -45,9 +45,8 @@ private val PortalBlue = PointPalette.cyan
 private val PortalGlow = Color(0xFFB39DFF)
 
 internal val PortalCore = Color(0xFFEAF0FF)
-private val PortalBackdrop = Color(0xFF07070C)
-private val PortalText = Color(0xFFEAF0FF)
-private val PortalMuted = Color(0xFF9AA3B2)
+private val PortalText = PointPalette.text
+private val PortalMuted = PointPalette.muted
 
 @Composable
 fun Portal(modifier: Modifier = Modifier, size: Dp = 200.dp, intensity: Float = 1f) {
@@ -136,8 +135,10 @@ fun BusyPortal(
 
     onCancel: (() -> Unit)? = null,
 ) {
+    // Фона своего нет: ожидание стоит на тех же обоях, что и вещь, — экран не проваливается в
+    // чёрное, пока Point работает.
     Box(
-        modifier.fillMaxSize().background(PortalBackdrop),
+        modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -204,7 +205,7 @@ private fun StageMarker() {
     }
 }
 
-@Preview(name = "Портал · распознаём (network)", showBackground = true, backgroundColor = 0xFF07070C)
+@Preview(name = "Портал · распознаём (network)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewBusyPortalNetwork() = PointTheme(darkTheme = true) {
     BusyPortal(
@@ -214,7 +215,7 @@ private fun PreviewBusyPortalNetwork() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Портал · стадии ещё нет", showBackground = true, backgroundColor = 0xFF07070C)
+@Preview(name = "Портал · стадии ещё нет", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewBusyPortalLocal() = PointTheme(darkTheme = true) {
     BusyPortal(title = "Обрабатываю…", subtitle = "Это займёт несколько секунд", stage = null)

@@ -12,7 +12,6 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.AddToHomeScreen
+import androidx.compose.material.icons.automirrored.outlined.AddToHomeScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +45,7 @@ import com.point.core.ui.ScreenHeader
 import com.point.core.ui.bubbleColor
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.theme.PointTheme
+import com.point.core.ui.wallpaper
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -260,8 +260,9 @@ internal fun SourcePickerScreen(
         modifier = modifier
             .fillMaxSize()
             // Непрозрачно: сквозь 0.88 просвечивал домашний экран, и его слова налезали
-            // на строки списка — экран выглядел сломанным, а не «поверх» (#895).
-            .background(MaterialTheme.colorScheme.background)
+            // на строки списка — экран выглядел сломанным, а не «поверх» (#895). Обои
+            // начинаются с ровной земли, так что и они непрозрачны.
+            .wallpaper()
             .systemBarsPadding()
 
             .verticalScroll(rememberScrollState())
@@ -274,25 +275,31 @@ internal fun SourcePickerScreen(
         ) {
             if (blocked == null) {
                 ScreenHeader(title = "Что превратить в объект?", modifier = Modifier.padding(bottom = 9.dp))
-                sources.forEachIndexed { index, source ->
-                    PortalRow(
-                        title = source.label,
 
-                        // Зачем это Point — сказано до системного окна, а не после (#568).
-                        // А если сети нет — об этом сказано до тапа, а не отказом после (#759).
-                        subtitle = sourceNote(source, online, signedIn),
-                        onClick = { onPick(source) },
-                        icon = bubbleIcon(source.icon),
-                        accent = bubbleColor(source.icon),
-                        appearIndex = index,
-                    )
+                // Источники — одной панелью стекла, как действия над вещью (макет 19.10.2026).
+                com.point.core.ui.GlassGroup {
+                    sources.forEachIndexed { index, source ->
+                        if (index > 0) com.point.core.ui.GroupSeam()
+                        PortalRow(
+                            title = source.label,
+
+                            // Зачем это Point — сказано до системного окна, а не после (#568).
+                            // А если сети нет — об этом сказано до тапа, а не отказом после (#759).
+                            subtitle = sourceNote(source, online, signedIn),
+                            onClick = { onPick(source) },
+                            icon = bubbleIcon(source.icon),
+                            accent = bubbleColor(source.icon),
+                            surface = false,
+                            appearIndex = index,
+                        )
+                    }
                 }
                 if (tileOffer) {
                     PortalRow(
                         title = "Поставить плитку в шторку",
                         subtitle = "Тот же выбор, но не открывая Point",
                         onClick = onAddTile,
-                        icon = Icons.AutoMirrored.Filled.AddToHomeScreen,
+                        icon = Icons.AutoMirrored.Outlined.AddToHomeScreen,
                         accent = MaterialTheme.colorScheme.onSurfaceVariant,
                         appearIndex = sources.size,
                     )

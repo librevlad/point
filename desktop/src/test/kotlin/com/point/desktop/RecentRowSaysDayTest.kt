@@ -11,7 +11,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.runComposeUiTest
 import com.point.core.flow.rowTimeLabel
 import com.point.core.model.ObjectKind
-import com.point.desktop.ui.CompactList
+import com.point.desktop.ui.RecentList
 import com.point.desktop.ui.PointColors
 import com.point.desktop.ui.PointDesktopTheme
 import java.time.LocalDate
@@ -74,14 +74,10 @@ class RecentRowSaysDayTest {
             setContent {
                 PointDesktopTheme {
                     Box(Modifier.fillMaxSize().background(PointColors.window)) {
-                        CompactList(
+                        RecentList(
                             state = st,
                             items = emptyList(),
                             onOpen = {},
-                            onTakeClipboard = {},
-                            onGrabScreen = {},
-                            onSettings = {},
-                            onHide = {},
                         )
                     }
                 }

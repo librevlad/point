@@ -29,7 +29,7 @@ private fun previewPage(): ImageBitmap {
     return bitmap
 }
 
-@Preview(name = "Поиск · нашлось (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Поиск · нашлось (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewFindFound() = PointTheme(darkTheme = true) {
 
@@ -42,7 +42,7 @@ private fun PreviewFindFound() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Поиск · ещё не искали (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Поиск · ещё не искали (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewFindUntouched() = PointTheme(darkTheme = true) {
 

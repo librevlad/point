@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,7 +58,7 @@ class RecordAudioActivity : ComponentActivity() {
         target = savedInstanceState?.getString(STATE_PATH)?.let(::File)
         setContent {
             PointTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                com.point.core.ui.PointScreen {
                     RecordTicker(recording) { seconds = it }
                     RecordScreen(
                         recording = recording,
@@ -214,19 +213,19 @@ internal fun RecordTicker(recording: Boolean, onTick: (Int) -> Unit) {
     }
 }
 
-@Preview(name = "Звукозапись · до начала (#246)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Звукозапись · до начала (#246)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewRecordIdle() = PointTheme(darkTheme = true) {
     RecordScreen(recording = false, seconds = 0, failure = null, onToggle = {}, onCancel = {})
 }
 
-@Preview(name = "Звукозапись · идёт (#246)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Звукозапись · идёт (#246)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewRecordRunning() = PointTheme(darkTheme = true) {
     RecordScreen(recording = true, seconds = 42, failure = null, onToggle = {}, onCancel = {})
 }
 
-@Preview(name = "Звукозапись · не вышло (#246)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Звукозапись · не вышло (#246)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewRecordFailed() = PointTheme(darkTheme = true) {
     RecordScreen(

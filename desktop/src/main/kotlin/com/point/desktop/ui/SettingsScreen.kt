@@ -2,19 +2,14 @@ package com.point.desktop.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
@@ -28,23 +23,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.point.core.flow.AI_PROVIDERS
-import com.point.core.flow.AiProvider
 import com.point.core.flow.KEY_SECTION_TITLE
 import com.point.core.flow.KeyVerdict
 import com.point.core.flow.MEMORY_TITLE
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.PRIVACY_SECTION_TITLE
 import com.point.core.flow.SETTINGS_TITLE
-import com.point.core.flow.UserAiConfig
-import com.point.core.flow.keyVerdict
-import com.point.core.flow.looksLikeApiKey
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
 
@@ -85,6 +74,9 @@ fun SettingsRoot(
     /** Стоит ли меню файла Windows в этом положении на деле; `null` — прочитать не удалось (#1082). */
     rightClickHolds: suspend (Boolean) -> Boolean?,
     onOpen: (SettingsPage) -> Unit,
+
+    /** Вошёл ли человек: без входа строка устройств зовёт подключить их, а не считает пустоту. */
+    signedIn: Boolean = email.isNotBlank(),
 ) {
     var rightClick by remember { mutableStateOf(config.rightClick) }
     var sound by remember { mutableStateOf(config.sound) }
@@ -122,7 +114,7 @@ fun SettingsRoot(
         Section("Аккаунт и устройства") {
             PortalRow(
                 title = MY_DEVICES_TITLE,
-                subtitle = devicesLine(email, devices),
+                subtitle = if (signedIn) devicesLine(email, devices) else com.point.desktop.NEEDS_SIGN_IN_FOR_DEVICES,
                 onClick = { onOpen(SettingsPage.DEVICES) },
             )
         }
@@ -205,7 +197,8 @@ fun SettingsRoot(
         // Номер один на оба устройства: телефон говорил 0.3.0, компьютер — 3.0.0 (#886).
         Text(
             "Point ${com.point.desktop.BuildInfo.VERSION} · сборка ${com.point.desktop.BuildInfo.BUILT_ON}",
-            style = PointType.small.copy(color = PointColors.muted),
+            style = PointType.mono,
+            modifier = Modifier.padding(start = 10.dp),
         )
     }
 }
@@ -291,17 +284,19 @@ fun SettingsPrivacy(
         // ничего, и запись всё равно уходила на чужой сервер.
         Text(com.point.core.flow.PRIVACY_SETTING_TITLE.uppercase(), style = PointType.label)
         Text(com.point.core.flow.PRIVACY_SETTING_HINT, style = PointType.small)
-        com.point.core.flow.PrivacyLevel.entries.forEach { it ->
-            PortalRow(
-                title = it.title,
-                subtitle = it.what,
-                onClick = { onPickLevel(it) },
-                primary = it == level,
-                // Выбор, а не переход: шеврон обещал бы следующий экран, которого нет.
-                // Разницу между режимами надо прочитать целиком — она про приватность.
-                chevron = false,
-                subtitleMaxLines = 4,
-            )
+        Column(Modifier.fillMaxWidth().glassPanel().padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            com.point.core.flow.PrivacyLevel.entries.forEach { it ->
+                PortalRow(
+                    title = it.title,
+                    subtitle = it.what,
+                    onClick = { onPickLevel(it) },
+                    primary = it == level,
+                    // Выбор, а не переход: шеврон обещал бы следующий экран, которого нет.
+                    // Разницу между режимами надо прочитать целиком — она про приватность.
+                    chevron = false,
+                    subtitleMaxLines = 4,
+                )
+            }
         }
 
         Text("Показывать объект моделям", style = PointType.body)
@@ -369,8 +364,15 @@ internal fun Verdict(verdict: KeyVerdict) {
 @Composable
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title.uppercase(), style = PointType.label)
-        content()
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(title.uppercase(), style = PointType.label)
+            Box(Modifier.weight(1f).height(1.dp).background(PointColors.hairline))
+        }
+        Column(Modifier.fillMaxWidth().glassPanel().padding(4.dp), content = content)
     }
 }
 
@@ -381,20 +383,7 @@ private fun SwitchRow(title: String, subtitle: String, on: Boolean, onToggle: ()
         title = title,
         subtitle = subtitle,
         onClick = onToggle,
-        trailing = {
-            Box(
-                modifier = Modifier.width(40.dp).height(23.dp)
-                    .clip(CircleShape)
-                    .background(if (on) PointColors.violet else PointColors.surfaceDeep)
-                    .border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape),
-                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-            ) {
-                Box(
-                    Modifier.padding(horizontal = 3.dp).size(17.dp).clip(CircleShape)
-                        .background(if (on) Color.White else PointColors.muted),
-                )
-            }
-        },
+        trailing = { GlassToggle(on) },
     )
 }
 
@@ -416,8 +405,8 @@ internal fun Field(
             visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(PointColors.surfaceDeep)
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 11.dp),
         )
     }
@@ -425,14 +414,5 @@ internal fun Field(
 
 @Composable
 internal fun Action(title: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-    ) {
-        Text(title, style = PointType.body)
-    }
+    PillButton(title, onClick)
 }

@@ -390,7 +390,7 @@ private fun PreviewRoundPreviewInPortal() = PointTheme(darkTheme = true) {
     }
 }
 
-@Preview(name = "Фото · шапка первого экрана (#667)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Фото · шапка первого экрана (#667)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewFirstScreenWithPhoto() = PointTheme(darkTheme = true) {
 
@@ -407,7 +407,7 @@ private fun PreviewFirstScreenWithPhoto() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Фото · вертикальный кадр в шапке (#667)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Фото · вертикальный кадр в шапке (#667)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewFirstScreenWithTallPhoto() = PointTheme(darkTheme = true) {
 
@@ -487,7 +487,7 @@ private fun PreviewHugeCollection() = PointTheme {
     )
 }
 
-@Preview(name = "Исход · отказ (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Исход · отказ (#358)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewOutcomeFailure() = PointTheme(darkTheme = true) {
 
@@ -500,7 +500,7 @@ private fun PreviewOutcomeFailure() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Исход · удача (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Исход · удача (#358)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewOutcomeDone() = PointTheme(darkTheme = true) {
 
@@ -513,7 +513,7 @@ private fun PreviewOutcomeDone() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Исход · человек остановил (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Исход · человек остановил (#358)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewOutcomeStopped() = PointTheme(darkTheme = true) {
 

@@ -1,75 +1,42 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import kotlinx.coroutines.launch
-import com.point.core.flow.yieldLabel
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.point.core.flow.CircleDevice
 import com.point.core.model.ObjectKind
-import com.point.core.ui.bubbleColor
 import com.point.core.ui.kindLabel
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
-import com.point.desktop.PcConfig
-import java.awt.datatransfer.DataFlavor
-import java.io.File
 import java.time.ZoneId
-import kotlinx.coroutines.flow.StateFlow
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.kindIcon
+import com.point.core.ui.kindTint
 
 /**
- * Список «Недавнее» в окне компьютера (#836).
- *
- * Раньше жил внутри `CompactApp.kt` вместе с окном, объектом и настройками — 942 строки в
- * одном файле. Искать причину живой ошибки в них дороже, чем в двухстах.
+ * «Недавнее» и способы взять новый объект — левая панель окна и выпадающая панель у трея (#836,
+ * макет 19.10.2026).
  */
-/** Список: «сейчас» + «было раньше» + двери входа. */
+
 /**
  * Строка списка «Недавнее». Живой объект и запись журнала попадают в один поток и режутся
  * на секции времени вместе — иначе одна и та же «СЕГОДНЯ» встречается в списке дважды (#884).
@@ -121,226 +88,237 @@ internal fun recentNote(kind: ObjectKind, source: com.point.desktop.ObjectSource
     listOfNotNull(kindLabel(kind), source?.let { com.point.desktop.sourceShort(it) })
         .joinToString(" · ")
 
+internal fun RecentLine.name(): String = when (this) {
+    is RecentLine.Live -> item.obj.metadata["name"]?.takeIf { it.isNotBlank() } ?: "Объект"
+    is RecentLine.Kept -> entry.name.ifBlank { "Объект" }
+}
+
+internal fun RecentLine.kind(): ObjectKind = when (this) {
+    is RecentLine.Live -> item.obj.state.kind
+    is RecentLine.Kept -> runCatching { ObjectKind.valueOf(entry.kind) }.getOrDefault(ObjectKind.UNKNOWN)
+}
+
+private fun RecentLine.note(): String = when (this) {
+    is RecentLine.Live -> recentNote(kind(), source)
+    is RecentLine.Kept -> recentNote(kind(), entry.source)
+}
+
+/**
+ * Поиск окна по «Недавнему»: имя и вторая строка, без учёта регистра (макет 19.10.2026 — «Найти
+ * объект или действие»). Пустой запрос показывает всё.
+ */
+internal fun recentMatches(line: RecentLine, query: String): Boolean =
+    matchesQuery(line.name(), query) || matchesQuery(line.note(), query)
+
+/** Совпадение строки с поиском окна: каждое слово запроса встречается в тексте. */
+internal fun matchesQuery(text: String, query: String): Boolean {
+    val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (words.isEmpty()) return true
+    val haystack = text.lowercase()
+    return words.all { it in haystack }
+}
+
+/** Способы взять новый объект: им даёт дорогу раздельная кнопка «Новый объект». */
+class NewObjectWays(
+    val pickFile: () -> Unit,
+    val takeClipboard: () -> Unit,
+    val grabScreen: () -> Unit,
+    val receiveFile: () -> Unit,
+    val copyReceiveLink: (String) -> Unit = {},
+    val cancelReceive: () -> Unit = {},
+
+    /** Что лежит в буфере — словами, пока меню открыто: «текст, 2 строки», «картинка». */
+    val clipboardNote: () -> String? = { null },
+)
+
+/** Раздельная кнопка «Новый объект» с меню остальных способов. */
 @Composable
-internal fun CompactList(
+internal fun NewObjectButton(ways: NewObjectWays, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    val clip = remember(open) { if (open) ways.clipboardNote() else null }
+    SplitButton(
+        title = "Новый объект",
+        note = "выбрать файл · Ctrl+O",
+        onMain = ways.pickFile,
+        menuOpen = open,
+        onMenu = { open = it },
+        items = listOf(
+            MenuItem("Выбрать файл…", GlassIcons.Folder, ways.pickFile, keys = "Ctrl+O"),
+            MenuItem("Из буфера", GlassIcons.Clipboard, ways.takeClipboard, note = clip, keys = "Ctrl+V"),
+            MenuItem("Снимок экрана", GlassIcons.Screen, ways.grabScreen, keys = "Ctrl+Shift+S"),
+            MenuItem("Принять по ссылке", GlassIcons.Link, ways.receiveFile),
+        ),
+        hint = "Файл можно просто бросить в это окно",
+        modifier = modifier,
+    )
+}
+
+/**
+ * Левая панель окна: «Новый объект», идущая работа, ожидание файла по ссылке и «Недавнее».
+ *
+ * [selectedId] — объект, открытый справа: его строка подсвечена, чтобы человек видел, где стоит.
+ */
+@Composable
+internal fun RecentPane(
     state: DesktopState,
     items: List<InboxItem>,
     onOpen: (InboxItem) -> Unit,
-    onTakeClipboard: () -> Unit,
-    onGrabScreen: () -> Unit,
-    onSettings: () -> Unit,
-    onHide: () -> Unit,
+    ways: NewObjectWays,
     modifier: Modifier = Modifier,
-    onReceiveFile: () -> Unit = {},
-    onCopyReceiveLink: (String) -> Unit = {},
-    onCancelReceive: () -> Unit = {},
+    selectedId: String? = null,
+    query: String = "",
+
+    /** Связаны ли устройства: без входа звать «поделиться с телефона» нечестно. */
+    linked: Boolean = true,
 ) = Column(modifier) {
-    val journal by state.journal.collectAsState()
-    val lastContact by state.lastContact.collectAsState()
-    val fresh by state.fresh.collectAsState()
-    val working by state.working.collectAsState()
-    val now = rememberNow()
-    val zone = remember { ZoneId.systemDefault() }
-    CompactHeader(
-        title = "Point",
-        onBack = null,
-        onHide = onHide,
-        trailing = { HeaderButton("⚙", onSettings) },
+    NewObjectButton(ways)
+    Text(
+        "Файл можно бросить в окно, Ctrl+V вставляет из буфера",
+        style = PointType.note,
+        modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp),
     )
 
-    // Работа идёт — видно и из списка, с дорогой обратно к объекту.
-    working?.let { work ->
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .background(PointColors.surfaceDeep)
-                .clickable {
-                    work.objectId?.let { id ->
-                        state.items.value.firstOrNull { it.obj.id == id }?.let(onOpen)
-                    }
-                }
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(6.dp).background(PointColors.cyan, CircleShape))
-            Text(
-                work.title + (work.stage?.let { " · $it" } ?: ""),
-                style = PointType.small,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+    WorkingLine(state, onOpen)
+    ReceiveWaiting(state, ways)
+
+    RecentList(
+        state = state,
+        items = items,
+        onOpen = onOpen,
+        selectedId = selectedId,
+        query = query,
+        linked = linked,
+        modifier = Modifier.weight(1f),
+    )
+}
+
+/** Работа идёт — видно и из списка, с дорогой обратно к объекту. */
+@Composable
+private fun WorkingLine(state: DesktopState, onOpen: (InboxItem) -> Unit) {
+    val working by state.working.collectAsState()
+    val work = working ?: return
+    Row(
+        modifier = Modifier.padding(top = 10.dp).fillMaxWidth()
+            .glassPanel(RoundedCornerShape(12.dp))
+            .handCursor()
+            .clickable {
+                work.objectId?.let { id -> state.items.value.firstOrNull { it.obj.id == id }?.let(onOpen) }
+            }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusDot(PointColors.cyan)
+        Text(
+            work.title + (work.stage?.let { " · $it" } ?: ""),
+            style = PointType.small.copy(color = PointColors.soft),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** Приём файла по ссылке (#727): ссылку видно и её можно отдать, ожидание — отменить. */
+@Composable
+private fun ReceiveWaiting(state: DesktopState, ways: NewObjectWays) {
+    val awaiting by state.receiving.collectAsState()
+    val wait = awaiting ?: return
+    Column(
+        modifier = Modifier.padding(top = 10.dp).fillMaxWidth().glassPanel().padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("Пусть отправят файл сюда", style = PointType.rowTitle)
+        Text(wait.link, style = PointType.mono.copy(color = PointColors.soft), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(wait.failed ?: wait.status, style = PointType.note)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+            PillButton("Скопировать ссылку", { ways.copyReceiveLink(wait.link) }, icon = GlassIcons.Copy, small = true)
+            PillButton("Отменить", ways.cancelReceive, small = true)
         }
     }
-    Column(
-        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp).padding(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        val link = com.point.core.flow.linkStateOf(lastContact, now, knownButUnheard = true)
-        Text(
-            "Телефон · " + com.point.core.flow.linkLabel(link),
-            style = PointType.small,
-        )
+}
 
-        val remembered = remember(journal, items) {
-            com.point.desktop.recentBesides(journal, items.map { it.obj.uri.value }.toSet())
-        }
+/**
+ * «Недавнее» одним списком (#880) с секциями времени (#884): «Сейчас», «Сегодня», «Вчера»,
+ * «Раньше». Время — структура списка, а не подпись в каждой строке: справа остаётся час.
+ */
+@Composable
+internal fun RecentList(
+    state: DesktopState,
+    items: List<InboxItem>,
+    onOpen: (InboxItem) -> Unit,
+    modifier: Modifier = Modifier,
+    selectedId: String? = null,
+    query: String = "",
+    linked: Boolean = true,
+) {
+    val journal by state.journal.collectAsState()
+    val fresh by state.fresh.collectAsState()
+    val now = rememberNow()
+    val zone = remember { ZoneId.systemDefault() }
+    val remembered = remember(journal, items) {
+        com.point.desktop.recentBesides(journal, items.map { it.obj.uri.value }.toSet())
+    }
+    val lines = remember(items, remembered, journal) { recentLines(items, remembered, journal) }
+    val found = remember(lines, query) { lines.filter { recentMatches(it, query) } }
 
-        // Один список с одним именем — «Недавнее» (#880). Раньше здесь были «СЕЙЧАС» и
-        // «ИСТОРИЯ»: телефон показывал свои объекты, компьютер — журнал событий, и это
-        // читалось как два разных продукта.
-        if (items.isNotEmpty() || remembered.isNotEmpty()) {
-            Text("НЕДАВНЕЕ", style = PointType.label, modifier = Modifier.padding(top = 4.dp))
-        }
-
-        // Время — структура списка, а не подпись в каждой строке. Правило общее с телефоном.
-        //
-        // Объекты, открытые прямо сейчас, и записи журнала — два источника одного списка, и
-        // резать на секции их нужно вместе. Пока каждый резался отдельно, «СЕГОДНЯ» стояло
-        // в списке дважды: сначала над живыми объектами, потом над журналом (#884).
-        val lines = remember(items, remembered, journal) { recentLines(items, remembered, journal) }
-
-        // Список листается до конца памяти (#1098): сразу видна страница, дальше — по просьбе.
-        // Прежде окно обрывалось на восьмой записи молча, и остального будто не существовало.
-        var shown by remember(lines.size) { mutableStateOf(RECENT_PAGE) }
-        com.point.core.flow.byTimeSection(lines.take(shown), now, zone) { it.at }
-            .forEach { (section, rows) ->
-                Text(
-                    section.label.uppercase(),
-                    style = PointType.label.copy(color = PointColors.text.copy(alpha = 0.72f)),
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                rows.forEach { line ->
-                    when (line) {
-                        is RecentLine.Live -> ListRow(
-                            name = line.item.obj.metadata["name"] ?: "Объект",
-                            note = recentNote(line.item.obj.state.kind, line.source),
-                            accent = true,
-                            kind = line.item.obj.state.kind,
-                            clock = com.point.core.flow.rowTimeLabel(line.at, now, zone),
-                            fresh = line.item.obj.id in fresh,
-                        ) { onOpen(line.item) }
-
-                        is RecentLine.Kept -> ListRow(
-                            name = line.entry.name.ifBlank { "Объект" },
-                            note = recentNote(
-                                runCatching { ObjectKind.valueOf(line.entry.kind) }
-                                    .getOrDefault(ObjectKind.UNKNOWN),
-                                line.entry.source,
-                            ),
-                            accent = false,
-                            kind = runCatching { ObjectKind.valueOf(line.entry.kind) }
-                                .getOrDefault(ObjectKind.UNKNOWN),
-                            clock = com.point.core.flow.rowTimeLabel(line.at, now, zone),
-                        ) { state.openAgain(line.entry, onOpen) }
-                    }
-                }
-            }
-
-        if (shown < lines.size) {
-            Text(
-                com.point.core.ui.showMoreLabel(lines.size - shown),
-                style = PointType.small.copy(color = PointColors.violet),
-                modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    .clickable { shown += RECENT_PAGE }
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-            )
-        }
-
-        if (items.isEmpty() && remembered.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Point ждёт объект.\nПоделитесь с телефона, бросьте файл сюда или нажмите Ctrl+V.",
-                style = PointType.small,
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // Станции — не история (#880): это способы породить новый объект, а не прошлые
-        // объекты. Раньше они продолжали тот же список и читались как его хвост.
-        Text("СОЗДАТЬ ОБЪЕКТ", style = PointType.label)
-
-        // Приём файла есть и здесь (#727): «и на пк тоже и прием и отправка».
-        val awaiting by state.receiving.collectAsState()
-        if (awaiting == null) {
-            Station(
-                "Принять файл по ссылке",
-                bubbleColor("link"),
-                icon = "link",
-                note = "дайте ссылку тому, кто пришлёт вам файл",
-            ) { onReceiveFile() }
-        } else {
-            awaiting?.let { wait ->
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                        .background(PointColors.surfaceDeep, RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+    // Список листается до конца памяти (#1098): сразу видна страница, дальше — по просьбе.
+    var shown by remember(found.size) { mutableStateOf(RECENT_PAGE) }
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+        com.point.core.flow.byTimeSection(found.take(shown), now, zone) { it.at }.forEach { (section, rows) ->
+            GroupHeader(section.label)
+            rows.forEach { line ->
+                val id = (line as? RecentLine.Live)?.item?.obj?.id
+                GlassRow(
+                    title = line.name(),
+                    subtitle = line.note(),
+                    icon = kindIcon(line.kind()),
+                    tint = kindTint(line.kind()),
+                    iconDescription = kindLabel(line.kind()),
+                    selected = id != null && id == selectedId,
+                    onClick = {
+                        when (line) {
+                            is RecentLine.Live -> onOpen(line.item)
+                            is RecentLine.Kept -> state.openAgain(line.entry, onOpen)
+                        }
+                    },
                 ) {
-                    Text("Пусть отправят файл сюда", style = PointType.body)
-                    Text(wait.link, style = PointType.small, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(wait.failed ?: wait.status, style = PointType.small)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        HeaderButton("⧉") { onCopyReceiveLink(wait.link) }
-                        HeaderButton("×") { onCancelReceive() }
-                    }
+                    if (id != null && id in fresh) Text("новое", style = PointType.note.copy(color = PointColors.cyan))
+                    Text(com.point.core.flow.rowTimeLabel(line.at, now, zone), style = PointType.mono)
                 }
             }
         }
-        // Строй названий и пояснения — те же, что на телефоне (#895).
-        Station(
-            "Взять из буфера",
-            bubbleColor("copy"),
-            icon = "copy",
-            // Область экрана, снятая Win+Shift+S, — тоже буфер (#1370): дверь берёт и её.
-            note = "Ctrl+V · скопированное — и снимок области экрана — станет объектом",
-        ) { onTakeClipboard() }
-        Station(
-            "Снять экран целиком",
-            bubbleColor("camera"),
-            icon = "camera",
-            note = "снимок всего, что сейчас на экране",
-        ) { onGrabScreen() }
+
+        if (shown < found.size) {
+            Text(
+                com.point.core.ui.showMoreLabel(found.size - shown),
+                style = PointType.small.copy(color = PointColors.link),
+                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(8.dp)).handCursor()
+                    .clickable { shown += RECENT_PAGE }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+
+        when {
+            lines.isEmpty() -> EmptyNote("Пока пусто. " + howToBring(linked))
+            found.isEmpty() -> EmptyNote("В «Недавнем» такого нет")
+        }
     }
 }
 
 @Composable
-private fun ListRow(
-    name: String,
-    note: String,
-    accent: Boolean,
-    kind: ObjectKind,
-    clock: String,
-    fresh: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (accent) PointColors.surface else PointColors.surfaceDeep.copy(alpha = 0.6f))
-            .border(1.dp, PointColors.border.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Значок вида вместо безымянной точки (#880): точка занимала место и не говорила
-        // ничего — ни что это за объект, ни на что он похож на экране объекта.
-        androidx.compose.material3.Icon(
-            imageVector = com.point.core.ui.kindIcon(kind),
-            contentDescription = com.point.core.ui.kindLabel(kind),
-            tint = if (accent) PointColors.text else PointColors.muted,
-            modifier = Modifier.size(18.dp),
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(name, style = PointType.body.copy(fontSize = PointType.small.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note, style = PointType.small.copy(color = PointColors.muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (fresh) Text("новое", style = PointType.small.copy(color = PointColors.cyan))
-
-        // Час справа: время сказано заголовком секции, здесь остаётся «когда именно».
-        Text(clock, style = PointType.small.copy(color = PointColors.muted.copy(alpha = 0.8f)))
-    }
+private fun EmptyNote(text: String) {
+    Spacer(Modifier.height(14.dp))
+    Text(text, style = PointType.small, modifier = Modifier.padding(horizontal = 10.dp))
 }
+
+/**
+ * Как принести сюда объект — словами, которые правда сработают: поделиться с телефона можно,
+ * только когда устройства связаны (решение владельца 20.10.2026 — вход для этого и нужен).
+ */
+internal fun howToBring(linked: Boolean): String =
+    if (linked) {
+        "Бросьте файл в окно, нажмите Ctrl+V или поделитесь с телефона."
+    } else {
+        "Бросьте файл в окно или нажмите Ctrl+V."
+    }

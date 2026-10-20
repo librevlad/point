@@ -18,7 +18,11 @@ sourceSets.main {
     // сторож ловил пропавший ключ, но не ловил разъехавшийся цвет.
     kotlin.srcDir(rootProject.file("core/ui/src/shared/kotlin"))
 
+    // Шрифт — Ubuntu из макета 19.10.2026, один файл на два устройства: лежит в шрифтах телефона
+    // (`core/ui/src/main/res/font`), а лицензия к нему — в его `assets/fonts/UFL.txt`. Тем же
+    // швом, что звуки ниже: общий файл, а не копия (#650).
     resources.srcDir(rootProject.file("core/ui/src/main/res/font"))
+    resources.srcDir(rootProject.file("core/ui/src/main/assets"))
 
     // Звуки-порталы лежат там же, откуда их берёт телефон: общий файл — общий тембр (#650).
     resources.srcDir(rootProject.file("data/src/main/res/raw"))

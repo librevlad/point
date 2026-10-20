@@ -1,278 +1,299 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import kotlinx.coroutines.launch
-import com.point.core.flow.yieldLabel
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.point.core.flow.CircleDevice
-import com.point.core.model.ObjectKind
+import com.point.core.flow.yieldLabel
+import com.point.core.ui.SectionTopic
 import com.point.core.ui.bubbleColor
-import com.point.core.ui.kindLabel
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
-import com.point.desktop.PcConfig
-import java.awt.datatransfer.DataFlavor
-import java.io.File
 import java.time.ZoneId
-import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Экран объекта в окне компьютера (#836).
+ * Экран объекта в окне компьютера (#836, макет 19.10.2026).
  *
- * Портал и знание живут в `ObjectScene.kt`; здесь — сам экран: что за чем стоит и
- * какие действия под ним.
+ * Шапка — вещь и её путь. Ниже две колонки: действия по смыслу слева, содержимое справа —
+ * результат стоит рядом с тем, из чего он (P4), а не под стеной строк. В узком окне колонки
+ * встают одна под другую тем же порядком, что на телефоне: значения с их продолжениями, знание
+ * и текст, остальные действия.
  */
-/** Сцена объекта — то же, что показал бы мобильный Point: превью, знание, действия, путь. */
 @Composable
-internal fun CompactObject(
+internal fun ObjectPane(
     state: DesktopState,
     item: InboxItem,
-    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     invited: InboxItem? = null,
     onOpenInvited: (InboxItem) -> Unit = {},
-    modifier: Modifier = Modifier,
-) = Column(modifier) {
+) {
     val journal by state.journal.collectAsState()
     val working by state.working.collectAsState()
     val now = rememberNow()
-    // Шапка — рама окна, а не место объекта (#879): имя файла там отрывало идентичность
-    // объекта от самого объекта. Объект называется у портала, ниже.
-    CompactHeader(
-        title = "Point",
-        onBack = onBack,
-        onHide = null,
+    val zone = remember { ZoneId.systemDefault() }
+    val entry = journal.firstOrNull { it.path == item.obj.uri.value }
+    val verdict = remember(item.obj) { com.point.core.ui.objectVerdict(item.obj) }
+    val picture = rememberPicture(item)
+
+    // Разделы действий — те же, что на телефоне (#879): найденное значение со своими
+    // продолжениями, понимание вещи, новое из неё, сама вещь дальше.
+    val actions = state.actionsFor(item)
+    val sections = com.point.core.ui.actionSections(
+        actions,
+        { it.bubble },
+        item.obj.state,
+        com.point.core.ui.thingTitle(item.obj),
+        com.point.core.ui.thingIsValue(item.obj),
+        com.point.core.ui.makeTitle(item.obj),
     )
+    val values = sections.filter { it.topic == SectionTopic.VALUE }
+    val rest = sections.filter { it.topic != SectionTopic.VALUE }
 
-    // Пришло новое, пока человек здесь работает: не выдёргиваем — приглашаем.
-    invited?.let { fresh ->
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .background(PointColors.surfaceDeep)
-                .clickable { onOpenInvited(fresh) }
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(6.dp).background(PointColors.cyan, CircleShape))
-            Text(
-                "Пришло: " + (fresh.obj.metadata["name"] ?: "объект"),
-                style = PointType.small,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text("открыть →", style = PointType.small.copy(color = PointColors.cyan))
-        }
-    }
-    Column(
-        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        PortalPreview(item)
+    // Причина, общая для всех действий, сказана подписью объекта — у действий остаётся их
+    // обещание (#874).
+    val sharedReason = com.point.core.flow.sharedUnusableReason(actions.map { it.bubble?.unusableReason })
 
-        // Вид крупно, имя тише, мера самым тихим — одна иерархия с телефоном (#879).
-        // Раньше вид стоял подписью над порталом, а имя — в шапке окна, оторванное от
-        // самого объекта.
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            Text(
-                item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
-                    ?: kindLabel(item.obj.state.kind),
-                style = PointType.body,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            item.obj.metadata["name"]?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    it,
-                    style = PointType.small.copy(color = PointColors.muted),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+    // Значение, у которого есть продолжения, стоит заголовком своего раздела и не повторяется
+    // строкой знания: одно значение — одно место.
+    val shownElsewhere = values.mapTo(mutableSetOf()) { it.key }
+    val work = working?.takeIf { it.objectId == null || it.objectId == item.obj.id }
+    val children = remember(item.obj) { com.point.desktop.collectionChildren(item.obj) }
+    val hasContent = work != null || picture != null || children.isNotEmpty() ||
+        com.point.core.flow.shownTextRef(item.obj) != null ||
+        com.point.core.flow.knowledgeRows(item.obj.metadata).any { it.key !in shownElsewhere } ||
+        com.point.core.flow.openQuestions(item.obj.metadata) { id -> state.questionName(id, item.obj.state) }.isNotEmpty()
+
+    val content: @Composable () -> Unit = {
+        work?.let { Working(it) { state.cancelWork() } }
+        picture?.let { PicturePanel(it) }
         Knowledge(
             item,
             onCopyFact = state::copyFact,
             questionName = { id -> state.questionName(id, item.obj.state) },
+            shownElsewhere = shownElsewhere,
         )
+        // Сам текст — после знания о нём, как на телефоне (#898).
+        Preview(item, marks = remember(item.obj.metadata) { textMarks(item.obj.metadata) }, onCopyText = state::copyText)
+        if (children.isNotEmpty()) ChildrenPanel(children, state::openPath)
+    }
 
-        // Дети набора — своим разделом; вход раскрывает ребёнка объектом (#1099).
-        val children = com.point.desktop.collectionChildren(item.obj)
-        if (children.isNotEmpty()) {
-            Text("СОДЕРЖИМОЕ · " + children.size, style = PointType.label)
-            children.forEach { path ->
-                val childName = java.io.File(path).name
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(PointColors.window.copy(alpha = 0.55f))
-                        .clickable { state.openPath(path) }
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        childName,
-                        style = PointType.small,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text("открыть →", style = PointType.small.copy(color = PointColors.cyan))
-                }
-            }
-        }
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        // Пришло новое, пока человек здесь работает: не выдёргиваем — приглашаем.
+        invited?.let { Invite(it, onOpenInvited) }
 
-        // Сам текст — после знания о нём, как на телефоне (#898). Прочитанное видно у любого
-        // объекта, а не только у текстового (#995): «Извлечь текст» кладёт текст знанием на
-        // сам документ, и человеку он нужен на том же экране, где он нажал.
-        if (com.point.core.flow.shownTextRef(item.obj) != null) {
-            Text(kindLabel(ObjectKind.TEXT).uppercase(), style = PointType.label)
-            Preview(item)
-        }
-
-        working?.let { Working(it) { state.cancelWork() } }
-
-        val actions = state.actionsFor(item)
-        if (actions.isNotEmpty()) {
-
-            // Причина, общая для всех действий, сказана подписью объекта — у действий
-            // остаётся их обещание (#874).
-            val sharedReason = com.point.core.flow.sharedUnusableReason(
-                actions.map { it.bubble?.unusableReason },
-            )
-
-            // Группы по смыслу — те же, что на телефоне (#879). Раньше здесь был один
-            // список «Что можно сделать»: порядок совпадал с телефонным, но человеку это
-            // было не видно. Действие без пузыря (просьба к телефону) идёт последней
-            // группой — у него нет своего намерения, кроме «отправить».
-
-            // «Извлечь» ведёт, только когда есть что извлекать (#1101) — правило общее с
-            // телефоном.
-            val useFirst = com.point.core.ui.knowsUsableValue(item.obj.state) ||
-                !com.point.core.ui.promisesExtraction(
-                    actions.mapNotNull { it.bubble },
-                    item.obj.state,
-                )
-            val grouped = com.point.core.ui.actionGroupOrder(useFirst).mapNotNull { group ->
-                actions.filter { choice ->
-                    val intent = choice.bubble?.intent
-                    if (intent == null) group == com.point.core.ui.ActionGroup.SEND
-                    else com.point.core.ui.actionGroupOf(intent) == group
-                }.takeIf { it.isNotEmpty() }?.let { group to it }
-            }
-            grouped.forEachIndexed { groupIndex, (group, rows) ->
-                Text(group.label.uppercase(), style = PointType.label)
-
-                // Группа показывает вероятное, остальное — по просьбе (#879, то же правило
-                // и тот же код, что на телефоне). Компьютер показывал всё подряд: у снимка
-                // выходила стена в два десятка одинаковых строк, и «помочь выбрать»
-                // превращалось в «вывалить всё, что умею» (ревью экранов 02.09.2026).
-                var expanded by androidx.compose.runtime.remember(group, rows.size) {
-                    androidx.compose.runtime.mutableStateOf(false)
-                }
-                val shown = if (expanded) rows else rows.take(com.point.core.ui.likelyCount(rows.size))
-                shown.forEachIndexed { rowIndex, action ->
-                val i = actions.indexOf(action)
-
-                // Подсвечено то, с чего человек начинает читать, — первая строка первой
-                // группы, как на телефоне. Прежде «главное» считалось по плоскому списку ДО
-                // группировки, и после перестановки подсветка садилась на случайную строку
-                // в середине: у снимка ею оказалось «Открыть» тринадцатым по счёту.
-                val primaryHere = groupIndex == 0 && rowIndex == 0
-                when {
-                    action.unavailable != null -> MutedStation(
-                        action.title,
-                        where = if (action.onPhone) "на телефоне" else null,
-                        reason = action.unavailable,
-                        icon = action.icon,
-                        appearIndex = i,
-                    ) { state.say(action.unavailable) }
-
-                    action.bubble != null -> Station(
-                        action.title,
-                        bubbleColor(action.icon),
-                        primary = primaryHere,
-                        icon = action.icon,
-                        note = yieldLabel(
-                            action.bubble.yields,
-                            action.bubble.unusableReason.takeIf { it != sharedReason },
-                        ),
-                        appearIndex = i,
-                    ) { state.onBubble(item, action.bubble) }
-
-                    action.remote != null -> Station(
-                        action.title,
-                        bubbleColor(action.icon),
-                        where = "на телефоне",
-                        primary = primaryHere,
-                        icon = action.icon,
-                        appearIndex = i,
-                    ) { state.sendToPhone(item, action.remote) }
-                }
-                }
-                val hidden = rows.size - shown.size
-                if (hidden > 0 || expanded) {
-                    androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
-                        Text(if (expanded) "Свернуть" else "Показать ещё $hidden", style = PointType.small)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= TWO_COLUMNS) {
+                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    ObjectHead(item, verdict, entry, now, zone, picture)
+                    entry?.let { History(it, verdict.headline, now, zone) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(if (hasContent) Modifier.width(ACTIONS_WIDTH) else Modifier.widthIn(max = 560.dp)) {
+                            ActionSections(state, item, values, actions, sharedReason, atTop = true)
+                            ActionSections(state, item, rest, actions, sharedReason, atTop = values.isEmpty())
+                        }
+                        if (hasContent) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                GroupHeader("Содержимое", top = 0.dp)
+                                content()
+                            }
+                        }
                     }
                 }
+            } else {
+                // Узкое окно — порядок телефона: вещь → значения → знание и текст → действия.
+                // Путь уходит вниз, как прежний «ПУТЬ»: наверху ему место только рядом с колонками.
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ObjectHead(item, verdict, entry, now, zone, picture, ring = 64.dp)
+                    Column {
+                        ActionSections(state, item, values, actions, sharedReason, atTop = true)
+                        if (hasContent) {
+                            Column(
+                                Modifier.padding(top = if (values.isEmpty()) 0.dp else 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) { content() }
+                        }
+                        ActionSections(state, item, rest, actions, sharedReason, atTop = values.isEmpty() && !hasContent)
+                    }
+                    entry?.let { History(it, verdict.headline, now, zone) }
+                }
             }
         }
+    }
+}
 
-        FoldedPath(journal.firstOrNull { it.path == item.obj.uri.value }, now)
+/** С какой ширины действия и содержимое стоят рядом, а не одно под другим. */
+private val TWO_COLUMNS = 620.dp
+
+/** Ширина колонки действий — по макету. */
+private val ACTIONS_WIDTH = 330.dp
+
+/** Значения, которые подсвечиваются в тексте: само знание, его прочтения и «ещё». */
+internal fun textMarks(metadata: Map<String, String>): List<String> =
+    com.point.core.flow.knowledgeRows(metadata).flatMap { row ->
+        listOfNotNull(row.value, metadata[row.key]) + row.disputed + row.more
+    }
+
+/** Приглашение к пришедшему: строка над шапкой, щелчок открывает его. */
+@Composable
+private fun Invite(fresh: InboxItem, onOpen: (InboxItem) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().glassPanel(RoundedCornerShape(12.dp)).handCursor()
+            .clickable { onOpen(fresh) }
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusDot(PointColors.cyan)
+        Text(
+            "Пришло: " + (fresh.obj.metadata["name"] ?: "объект"),
+            style = PointType.small.copy(color = PointColors.text),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text("открыть", style = PointType.small.copy(color = PointColors.link))
+    }
+}
+
+/**
+ * Разделы действий объекта (#879 — то же правило и тот же код, что на телефоне).
+ *
+ * Раздел показывает вероятное, остальное — по просьбе: компьютер показывал всё подряд, и у
+ * снимка выходила стена в два десятка одинаковых строк (ревью экранов 02.09.2026).
+ *
+ * Подсвечено только продолжение найденного — первая строка раздела, который ведёт. Прежде
+ * «главное» считалось по плоскому списку до группировки, и подсветка садилась на случайную
+ * строку в середине: у снимка ею оказалось «Открыть» тринадцатым по счёту.
+ */
+@Composable
+private fun ActionSections(
+    state: DesktopState,
+    item: InboxItem,
+    sections: List<com.point.core.ui.ActionSection<DesktopState.ActionChoice>>,
+    actions: List<DesktopState.ActionChoice>,
+    sharedReason: String?,
+    atTop: Boolean,
+) {
+    sections.forEachIndexed { index, section ->
+        GroupHeader(section.title, top = if (index == 0 && atTop) 0.dp else 14.dp)
+        var expanded by remember(section.key, section.items.size) { mutableStateOf(false) }
+        val rows = section.items
+        val shown = if (expanded) rows else rows.take(com.point.core.ui.shownAtOnce(section))
+        Column(Modifier.fillMaxWidth().glassPanel().padding(4.dp)) {
+            if (section.topic == SectionTopic.VALUE) ValueLine(section, item, onCopy = state::copyFact)
+            shown.forEachIndexed { rowIndex, action ->
+                ActionRow(state, item, action, actions.indexOf(action), section.leads && rowIndex == 0, sharedReason)
+            }
+        }
+        val hidden = rows.size - shown.size
+        if (hidden > 0 || expanded) {
+            Text(
+                if (expanded) "Свернуть" else com.point.core.ui.showMoreLabel(hidden),
+                style = PointType.small.copy(color = PointColors.link),
+                modifier = Modifier.padding(start = 6.dp, top = 6.dp).clip(RoundedCornerShape(8.dp)).handCursor()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionRow(
+    state: DesktopState,
+    item: InboxItem,
+    action: DesktopState.ActionChoice,
+    index: Int,
+    primary: Boolean,
+    sharedReason: String?,
+) {
+    when {
+        action.unavailable != null -> MutedStation(
+            action.title,
+            where = if (action.onPhone) "на телефоне" else null,
+            reason = action.unavailable,
+            icon = action.icon,
+            appearIndex = index,
+        ) { state.say(action.unavailable) }
+
+        action.bubble != null -> Station(
+            action.title,
+            bubbleColor(action.icon),
+            primary = primary,
+            icon = action.icon,
+            note = yieldLabel(action.bubble.yields, action.bubble.unusableReason.takeIf { it != sharedReason }),
+            appearIndex = index,
+        ) { state.onBubble(item, action.bubble) }
+
+        action.remote != null -> Station(
+            action.title,
+            bubbleColor(action.icon),
+            where = "на телефоне",
+            primary = primary,
+            icon = action.icon,
+            appearIndex = index,
+        ) { state.sendToPhone(item, action.remote) }
+    }
+}
+
+/**
+ * Значение раздела — сверху его панели: само значение и спор прочтений там, где человек решает,
+ * что с ним делать (P8). Копируется кнопкой рядом, как строка знания.
+ */
+@Composable
+private fun ValueLine(
+    section: com.point.core.ui.ActionSection<DesktopState.ActionChoice>,
+    item: InboxItem,
+    onCopy: (String) -> Unit,
+) {
+    val row = com.point.core.flow.knowledgeRows(item.obj.metadata).firstOrNull { it.key == section.key }
+
+    // Смысл, уже сказанный подписью объекта («Созвон с Анной»), не повторяется.
+    val value = section.value?.takeUnless { it == item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY] }
+
+    // В буфер — само значение: номер без подписи вида, ссылка со схемой. У смысла вещи
+    // значения нет, есть суть.
+    val raw = item.obj.metadata[section.key]
+        ?.takeIf { section.key.startsWith(com.point.core.flow.META_ENTITY_PREFIX) && it.isNotBlank() }
+    val copy = value?.let { raw ?: it }
+    val disputed = row?.disputed.orEmpty()
+    val more = row?.more.orEmpty()
+    if (value == null && disputed.isEmpty() && more.isEmpty()) return
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            value?.let { Text(it, style = PointType.title.copy(fontSize = PointType.reading.fontSize), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            if (disputed.isNotEmpty()) Text("или: " + disputed.joinToString(", "), style = PointType.note)
+            if (more.isNotEmpty()) Text("ещё: " + more.joinToString(", "), style = PointType.note)
+        }
+        copy?.let { PillButton("Скопировать", { onCopy(it) }, small = true) }
     }
 }

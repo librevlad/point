@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,9 +66,8 @@ fun ConsentScreen(
         PortalPlate(
             accent = MaterialTheme.colorScheme.tertiary,
             icon = bubbleIcon(CLOUD_ICON),
-            ring = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
+            ring = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f),
             size = 76.dp,
-            shape = RoundedCornerShape(24.dp),
         )
         Spacer(Modifier.height(18.dp))
         ScreenHeader(
@@ -99,13 +97,13 @@ fun ConsentScreen(
 
 private const val CLOUD_ICON = "cloud"
 
-@Preview(name = "Облако · согласие моделям (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Облако · согласие моделям (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewConsent() = PointTheme(darkTheme = true) {
     ConsentScreen(onAllow = {}, onDecline = {})
 }
 
-@Preview(name = "Облако · просьба компьютера (#1269)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Облако · просьба компьютера (#1269)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewConsentForPc() = PointTheme(darkTheme = true) {
 
@@ -116,7 +114,7 @@ private fun PreviewConsentForPc() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Облако · выложить по ссылке (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Облако · выложить по ссылке (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewConsentPublish() = PointTheme(darkTheme = true) {
 

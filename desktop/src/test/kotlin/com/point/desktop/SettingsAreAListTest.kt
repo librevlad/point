@@ -61,7 +61,7 @@ class SettingsAreAListTest {
 
     @Test
     fun `слово «Настройки» сказано один раз — шапкой окна`() {
-        val settings = window.substringAfter("internal fun CompactSettings(")
+        val settings = window.substringAfter("internal fun SettingsPane(")
 
         assertTrue("заголовок окна не следует за экраном", settings.contains("title = page.title"))
         assertTrue("«Настройки» написано ещё раз внутри", !settings.contains("\"НАСТРОЙКИ\""))

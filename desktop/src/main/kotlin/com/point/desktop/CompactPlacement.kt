@@ -6,16 +6,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * Геометрия компакт-окна и peek-плашки: правый нижний угол рабочей области
- * (решение владельца 2026-08-09: «компакт-окно из трея в правой части экрана»).
- * Чистые функции — рабочую область (без панели задач) даёт вызывающий.
+ * Геометрия окон Point: панель у трея и плашка прибытия — правый нижний угол рабочей области
+ * (решение владельца 2026-08-09: «компакт-окно из трея в правой части экрана»), окно в две
+ * панели — посередине (макет 19.10.2026). Чистые функции — рабочую область (без панели задач)
+ * даёт вызывающий.
  */
 data class ScreenArea(val x: Int, val y: Int, val width: Int, val height: Int)
 
 data class WindowBounds(val x: Int, val y: Int, val width: Int, val height: Int)
 
-const val COMPACT_WIDTH = 380
-const val COMPACT_HEIGHT = 620
+/** Панель у трея — по макету; столько же у окна, сжатого до одной панели. */
+const val COMPACT_WIDTH = 475
+const val COMPACT_HEIGHT = 630
+
+/** Окно в две панели — по макету. */
+const val WINDOW_WIDTH = 1120
+const val WINDOW_HEIGHT = 790
 const val PEEK_WIDTH = 340
 const val PEEK_HEIGHT = 100
 const val SCREEN_MARGIN = 12
@@ -30,7 +36,22 @@ fun compactBounds(work: ScreenArea): WindowBounds {
     )
 }
 
-/** Плашка встаёт туда же, где появится компакт: клик не прыгает по экрану. */
+/**
+ * Окно в две панели — посередине рабочей области. На маленьком экране оно сжимается до неё,
+ * а не вылезает за край: шапка, за которую окно тянут, обязана быть видна.
+ */
+fun windowBounds(work: ScreenArea): WindowBounds {
+    val width = minOf(WINDOW_WIDTH, work.width - SCREEN_MARGIN * 2)
+    val height = minOf(WINDOW_HEIGHT, work.height - SCREEN_MARGIN * 2)
+    return WindowBounds(
+        x = work.x + (work.width - width) / 2,
+        y = work.y + (work.height - height) / 2,
+        width = width,
+        height = height,
+    )
+}
+
+/** Плашка встаёт туда же, где появится панель у трея: клик не прыгает по экрану. */
 fun peekBounds(work: ScreenArea): WindowBounds = WindowBounds(
     x = work.x + work.width - PEEK_WIDTH - SCREEN_MARGIN,
     y = work.y + work.height - PEEK_HEIGHT - SCREEN_MARGIN,
@@ -80,7 +101,7 @@ class RaiseSignal {
 
 /**
  * Peek — собственная плашка Point, не системное уведомление: прибыло с телефона →
- * высветилась, клик — вылезло окошко на этом объекте, сама гаснет по сроку.
+ * высветилась, клик — вылезло окно на этом объекте, сама гаснет по сроку.
  */
 class PeekState(private val now: () -> Long) {
 
@@ -91,8 +112,9 @@ class PeekState(private val now: () -> Long) {
     /** Тик для UI: смена значения — повод перечитать current(). */
     val pulse: StateFlow<Any?> get() = shown.asStateFlow()
 
-    fun arrived(item: InboxItem, compactVisible: Boolean, source: ObjectSource = ObjectSource.PHONE_RELAY) {
-        if (compactVisible) return
+    /** [windowShown] — на экране уже есть окно Point или панель у трея: пришедшее видно в них. */
+    fun arrived(item: InboxItem, windowShown: Boolean, source: ObjectSource = ObjectSource.PHONE_RELAY) {
+        if (windowShown) return
 
         // Брошенное в окно и взятое из буфера не пикает: человек сам это сделал и видит.
         if (source == ObjectSource.DROPPED || source == ObjectSource.CLIPBOARD) return

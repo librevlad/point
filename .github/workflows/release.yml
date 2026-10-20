@@ -54,6 +54,11 @@ jobs:
 
       - name: Set up Android SDK (accepts licenses, sets ANDROID_HOME)
         uses: android-actions/setup-android@v3
+        # Старый пакет `tools` из SDK убран: раннеры с cmdline-tools 16 его не знают, и шаг по
+        # умолчанию («tools platform-tools») падал раньше сборки. Платформы и build-tools AGP
+        # докачивает сам — лицензии шаг всё так же принимает.
+        with:
+          packages: 'platform-tools'
 
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
@@ -155,6 +160,11 @@ jobs:
       # без Android SDK падает конфигурация всего проекта.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        # Старый пакет `tools` из SDK убран: раннеры с cmdline-tools 16 его не знают, и шаг по
+        # умолчанию («tools platform-tools») падал раньше сборки. Платформы и build-tools AGP
+        # докачивает сам — лицензии шаг всё так же принимает.
+        with:
+          packages: 'platform-tools'
 
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -27,6 +28,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.point.core.flow.SETTINGS_TITLE
 
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w411dp-h891dp")
@@ -226,7 +228,7 @@ class SettingsListTest {
         settings(keys = savedKey)
         compose.onNodeWithText("Ключи AI").performClick()
 
-        compose.onNodeWithText("← Настройки").performScrollTo().performClick()
+        compose.onNodeWithContentDescription(SETTINGS_TITLE).performScrollTo().performClick()
 
         compose.onNodeWithText("Звук действий").assertIsDisplayed()
         compose.onNodeWithText("Проверить все").assertDoesNotExist()
@@ -288,7 +290,7 @@ class SettingsListTest {
         compose.onNodeWithText("Проверить и включить").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Сохранить без проверки").performScrollTo().assertIsDisplayed()
 
-        compose.onNodeWithText("← Настройки").performScrollTo().performClick()
+        compose.onNodeWithContentDescription(SETTINGS_TITLE).performScrollTo().performClick()
         compose.onNodeWithText("Отправка и приватность").performClick()
         compose.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
         assertEquals(true, cloud)
@@ -298,11 +300,11 @@ class SettingsListTest {
         compose.onNodeWithText(PrivacyLevel.NO_TRAINING.title).performScrollTo().performClick()
         assertEquals(PrivacyLevel.NO_TRAINING, picked)
 
-        compose.onNodeWithText("← Настройки").performScrollTo().performClick()
+        compose.onNodeWithContentDescription(SETTINGS_TITLE).performScrollTo().performClick()
         compose.onNodeWithText("Звук действий").performClick()
         compose.onNodeWithText("Вибрация управляется", substring = true).performScrollTo().assertIsDisplayed()
 
-        compose.onNodeWithText("← Настройки").performScrollTo().performClick()
+        compose.onNodeWithContentDescription(SETTINGS_TITLE).performScrollTo().performClick()
         compose.onNodeWithText(MY_DEVICES_TITLE).performClick()
         assertTrue("строка раздела не открыла круг устройств", devices)
 

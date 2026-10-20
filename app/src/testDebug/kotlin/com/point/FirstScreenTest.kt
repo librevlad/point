@@ -79,9 +79,9 @@ class FirstScreenTest {
         screen()
 
         compose.onNodeWithText("Понять").assertIsDisplayed()
-        compose.onNodeWithText("ИЗВЛЕЧЬ").assertExists()
+        compose.onNodeWithText(com.point.core.ui.UNDERSTAND_TITLE.uppercase()).assertExists()
         compose.onNodeWithText("Поделиться").assertExists()
-        compose.onNodeWithText("ОТПРАВИТЬ").assertExists()
+        compose.onNodeWithText(com.point.core.ui.thingTitle(obj).uppercase()).assertExists()
     }
 
     @Test fun `тап по действию зовёт именно его`() {

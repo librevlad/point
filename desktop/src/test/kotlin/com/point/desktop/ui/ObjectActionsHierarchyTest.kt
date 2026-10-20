@@ -53,7 +53,7 @@ class ObjectActionsHierarchyTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             PointDesktopTheme {
-                CompactObject(state = state, item = item, onBack = { })
+                ObjectPane(state = state, item = item)
             }
         }
         compose.mainClock.advanceTimeByFrame()

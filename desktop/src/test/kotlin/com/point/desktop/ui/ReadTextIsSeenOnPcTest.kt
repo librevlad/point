@@ -70,7 +70,7 @@ class ReadTextIsSeenOnPcTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             PointDesktopTheme {
-                CompactObject(state = state, item = item, onBack = { })
+                ObjectPane(state = state, item = item)
             }
         }
         compose.mainClock.advanceTimeByFrame()
@@ -89,7 +89,7 @@ class ReadTextIsSeenOnPcTest {
     fun `текст документа подписан текстом, а не «PDF» и не «Документ»`() {
         show(extractText())
 
-        compose.onNodeWithText("ТЕКСТ").assertExists()
+        compose.onNodeWithText(com.point.core.ui.kindLabel(com.point.core.model.ObjectKind.TEXT)).assertExists()
     }
 
     private companion object {
