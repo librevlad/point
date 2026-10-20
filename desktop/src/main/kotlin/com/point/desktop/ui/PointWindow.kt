@@ -394,7 +394,7 @@ private fun NothingOpen(empty: Boolean) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PointGlyph(size = 44.dp)
+        PointGlyph(size = 52.dp)
         Text(
             if (empty) "Здесь откроется объект" else "Выберите объект слева",
             style = PointType.title,

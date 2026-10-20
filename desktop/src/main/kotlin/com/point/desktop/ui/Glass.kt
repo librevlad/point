@@ -373,7 +373,13 @@ fun LightButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     }
 }
 
-/** Круглая кнопка шапки окна: настройки, свернуть, развернуть, закрыть. */
+/**
+ * Круглая кнопка шапки окна: настройки, свернуть, развернуть, закрыть.
+ *
+ * Знак без слова, поэтому слово приходит при наведении: значок, который человек принял за
+ * лампочку, назывался «Настройки» только для экранного диктора (#462 — безымянных значков нет).
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun RoundButton(
     icon: ImageVector,
@@ -385,31 +391,44 @@ fun RoundButton(
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val base = if (warm) PointColors.close.copy(alpha = if (hovered) 0.55f else 0.32f) else Color.White.copy(alpha = if (hovered) 0.16f else 0.09f)
-    Box(
-        modifier
-            .size(26.dp)
-            .clip(CircleShape)
-            .background(base)
-            .hoverable(interaction)
-            .handCursor()
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    androidx.compose.foundation.TooltipArea(
+        tooltip = {
+            Text(
+                contentDescription,
+                style = PointType.note.copy(color = PointColors.text),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xF0302936))
+                    .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        },
+        delayMillis = 400,
+        modifier = modifier,
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = PointColors.text, modifier = Modifier.size(13.dp))
+        Box(
+            Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(base)
+                .hoverable(interaction)
+                .handCursor()
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = contentDescription, tint = PointColors.text, modifier = Modifier.size(13.dp))
+        }
     }
 }
 
-/** Знак Point: кольцо от фиолетового к голубому и точка в середине. */
+/**
+ * Знак Point внутри окна — наш портал, тот же, что у иконки и у телефона (`PointMark`).
+ *
+ * Макет 19.10.2026 рисовал на его месте свой знак — тонкое кольцо с точкой. Знак у Point один:
+ * окно берёт из макета стекло, а не другой логотип. Поле под кольцом здесь не нужно — фон
+ * у окна уже свой; [field] включает его там, где знак стоит сам по себе, как иконка.
+ */
 @Composable
-fun PointGlyph(modifier: Modifier = Modifier, size: Dp = 16.dp) {
-    androidx.compose.foundation.Canvas(modifier.size(size)) {
-        val stroke = this.size.minDimension * 0.092f
-        val radius = this.size.minDimension * 0.354f
-        drawCircle(
-            brush = Brush.linearGradient(listOf(PointColors.violet, PointColors.cyan), Offset.Zero, Offset(this.size.width, this.size.height)),
-            radius = radius,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
-        )
-        drawCircle(PointColors.text, radius = this.size.minDimension * 0.117f)
-    }
+fun PointGlyph(modifier: Modifier = Modifier, size: Dp = 16.dp, field: Boolean = false) {
+    androidx.compose.foundation.Canvas(modifier.size(size)) { drawPointMark(field = field) }
 }

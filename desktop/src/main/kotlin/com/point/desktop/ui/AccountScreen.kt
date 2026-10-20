@@ -1,23 +1,17 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.CircleDevice
@@ -133,31 +127,11 @@ fun MyDevicesPane(
     }
 }
 
-/** Кольцо Point над входом: тусклое, пока вход не случился, яркое — когда компьютер в круге. */
+/**
+ * Знак Point над входом — наш портал, как на иконке приложения: тусклый, пока вход не случился,
+ * яркий — когда компьютер уже в круге.
+ */
 @Composable
 private fun PortalRing(bright: Boolean) {
-    val alpha = if (bright) 1f else 0.6f
-    Box(Modifier.size(132.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            val w = size.minDimension
-            val middle = Offset(w / 2, w / 2)
-            drawCircle(
-                Brush.radialGradient(listOf(PointColors.violet.copy(alpha = 0.26f * alpha), Color.Transparent), middle, w * 0.6f),
-                radius = w * 0.6f,
-            )
-            drawCircle(
-                Brush.linearGradient(
-                    0f to PointColors.violet.copy(alpha = alpha),
-                    0.55f to PointColors.blue.copy(alpha = alpha),
-                    1f to PointColors.cyan.copy(alpha = alpha),
-                    start = Offset.Zero,
-                    end = Offset(w, w),
-                ),
-                radius = w * 0.44f,
-                style = Stroke(width = 2.5.dp.toPx()),
-            )
-            drawCircle(Color.White.copy(alpha = 0.12f), radius = w * 0.36f, style = Stroke(width = 1.dp.toPx()))
-        }
-        PointGlyph(size = 40.dp)
-    }
+    PointGlyph(Modifier.alpha(if (bright) 1f else 0.6f), size = 120.dp, field = true)
 }

@@ -132,11 +132,11 @@ object GlassIcons {
     val Sparkle = line("sparkle", "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z")
     val Check = line("check", "M5 12l4 4 10-10")
     val Phone = line("phone", "M9.5 2.5h5a2.5 2.5 0 0 1 2.5 2.5v14a2.5 2.5 0 0 1-2.5 2.5h-5A2.5 2.5 0 0 1 7 19V5a2.5 2.5 0 0 1 2.5-2.5z", "M11 18.5h2")
-    val Gear = line(
-        "gear",
-        "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z",
-        "M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1",
-    )
+    /**
+     * Настройки — шестерёнкой, тем же знаком, что у телефона. Макет рисовал здесь кружок с
+     * лучами, и в шапке окна его принимали за лампочку.
+     */
+    val Gear: ImageVector = Icons.Outlined.Settings
     val Minimize = line("minimize", "M6 12h12")
     val Maximize = line("maximize", "M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z")
     val Restore = line("restore", "M8 8h9a2 2 0 0 1 2 2v9H8z", "M5 16V5h11")
