@@ -619,11 +619,6 @@ private fun FoundObjects(
 }
 
 /**
- * Заголовок найденного объекта — текущее значение его факта, а не `uri`:
- * после правки человеком uri продолжает хранить прежнее значение (ADR-0001 §4 —
- * одно значение в двух ролях; носитель истины — факт).
- */
-/**
  * Строка знания повторяет само значение объекта (#932).
  *
  * Внутри телефона «067 636 0560» строка «Нашёл телефон 067 636 0560» говорила бы то же
@@ -635,37 +630,6 @@ private fun sameAsOwnValue(fact: com.point.core.ui.UnderstoodFact, own: String):
     if (value == own) return true
     return fact.key == "phone" && com.point.core.flow.PhoneNumbers.same(value, own)
 }
-
-fun foundHeadline(obj: PointObject): String =
-    // Объект-файл в списке найденного — исходник, из которого сделан результат (#925), или
-    // страница набора — зовётся своим именем, а не первым найденным в нём фактом (#1421):
-    // исходный текст с контактами стоял у результата под именем своей ссылки, как второй
-    // узел той же ссылки. Первый факт — лицо узла-значения, не файла.
-    obj.metadata["name"]?.takeIf { it.isNotBlank() && !isValueNode(obj) }
-
-        ?: obj.metadata.entries.firstOrNull { (key, _) ->
-        (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX)) &&
-            !com.point.core.flow.isAnnotationKey(key) && !com.point.core.flow.isStateKey(key)
-    }?.takeIf { it.value.isNotBlank() }
-
-        // Номер и здесь показывается по-человечески (#932): чип, заголовок объекта и строка
-        // знания говорят об одном номере одним видом — иначе одно и то же значение выглядит
-        // на экране двумя разными.
-        ?.let { (key, value) -> com.point.core.flow.shownKnowledge(key, value) }
-
-        // Результат чужого исполнителя (ПК) не несёт entity/role-фактов — только имя:
-        // без этого запасного шага чип показывал путь до scratch-файла (#681).
-        ?: obj.metadata["name"]?.takeIf { it.isNotBlank() }
-
-        // Узел-значение хранит своё значение прямо в ссылке — оно и есть его лицо.
-        ?: obj.uri.value.takeIf { obj.uri is com.point.core.model.ValueRef }
-
-        // Совсем без имени — вид объекта: путь на диске к человеку не выходит (#1038, #1100).
-        ?: kindMarkLabel(kindMarkOf(obj))
-
-/** Узел-значение: телефон, дата, ссылка — то, что найдено в объекте, а не сам объект-файл. */
-private fun isValueNode(obj: PointObject): Boolean =
-    obj.state.kind in com.point.core.flow.EXTRACTED_KINDS || obj.uri is com.point.core.model.ValueRef
 
 /**
  * Откуда взялось найденное — подпись только у узла-значения (#1421).

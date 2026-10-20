@@ -18,7 +18,8 @@ sourceSets.main {
     // сторож ловил пропавший ключ, но не ловил разъехавшийся цвет.
     kotlin.srcDir(rootProject.file("core/ui/src/shared/kotlin"))
 
-    resources.srcDir(rootProject.file("core/ui/src/main/res/font"))
+    // Шрифт окна свой — Ubuntu из макета 19.10.2026, он лежит в ресурсах ПК вместе с лицензией.
+    // Телефонные Manrope и Unbounded компьютеру больше не нужны и в сборку не едут.
 
     // Звуки-порталы лежат там же, откуда их берёт телефон: общий файл — общий тембр (#650).
     resources.srcDir(rootProject.file("data/src/main/res/raw"))

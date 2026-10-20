@@ -11,9 +11,13 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
-import com.point.desktop.ui.CompactList
-import com.point.desktop.ui.CompactObject
+import com.point.desktop.ui.NewObjectWays
+import com.point.desktop.ui.ObjectPane
 import com.point.desktop.ui.PeekCard
+import com.point.desktop.ui.PointWindow
+import com.point.desktop.ui.PopoverPane
+import com.point.desktop.ui.RecentPane
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import javax.imageio.ImageIO
 import org.junit.Assert.assertTrue
@@ -89,7 +93,7 @@ class CompactRenderTest {
             )
             st.onReceived(item)
 
-            val frame = shot("compact-object") { CompactObject(state = st, item = item, onBack = {}) }
+            val frame = shot("compact-object") { ObjectPane(state = st, item = item) }
             val seen = frame.visibleText()
 
             assertTrue("вид объекта не виден без прокрутки: $seen", frame.shows(SUMMARY))
@@ -127,14 +131,11 @@ class CompactRenderTest {
             st.onReceived(rich())
 
             val frame = shot("compact-list") {
-                CompactList(
+                RecentPane(
                     state = st,
                     items = st.items.value,
                     onOpen = {},
-                    onTakeClipboard = {},
-                    onGrabScreen = {},
-                    onSettings = {},
-                    onHide = {},
+                    ways = NewObjectWays(pickFile = {}, takeClipboard = {}, grabScreen = {}, receiveFile = {}),
                 )
             }
 
@@ -150,6 +151,62 @@ class CompactRenderTest {
 
             assertTrue("плашка не назвала объект: ${frame.visibleText()}", frame.shows(NAME))
             assertTrue("шире плашки: ${frame.tooWide(PEEK_WIDTH)}", frame.tooWide(PEEK_WIDTH).isEmpty())
+        }
+
+    /**
+     * Панель у трея (макет 19.10.2026): «Новый объект», пришедшее и прошлое — в первом кадре,
+     * дорога в окно — тоже, и ничего не шире панели.
+     */
+    @Test
+    fun `панель у трея — новый объект, пришедшее и дорога в окно видны сразу`() =
+        runDesktopComposeUiTest(COMPACT_WIDTH, COMPACT_HEIGHT) {
+            val st = state(
+                listOf(
+                    JournalEntry(
+                        path = "/tmp/старое.pdf",
+                        name = EARLIER,
+                        kind = ObjectKind.PDF.name,
+                        mime = "application/pdf",
+                        source = ObjectSource.PHONE_RELAY,
+                        at = 1L,
+                    ),
+                ),
+            )
+            st.onReceived(rich())
+
+            val frame = shot("popover") { PopoverPane(state = st, onOpen = {}, onOpenWindow = {}, onHide = {}) }
+
+            listOf("Новый объект", NAME, EARLIER, "Открыть окно").forEach { what ->
+                assertTrue("в панели не видно «$what»: ${frame.visibleText()}", frame.shows(what))
+            }
+            assertTrue("шире панели: ${frame.tooWide(COMPACT_WIDTH)}", frame.tooWide(COMPACT_WIDTH).isEmpty())
+        }
+
+    /** Окно по макету: список и раскрытый объект рядом, знание и первое действие — без прокрутки. */
+    @Test
+    fun `окно в две панели — список и объект рядом`() =
+        runDesktopComposeUiTest(WINDOW_WIDTH, WINDOW_HEIGHT) {
+            val item = rich()
+            val st = state()
+
+            // Принятое до первого кадра — такое же прибытие (#1019): окно раскрывает его само.
+            st.onReceived(item)
+            val frame = shot("window") {
+                PointWindow(
+                    state = st,
+                    config = PcConfig(name = "Компьютер"),
+                    account = signedInAccount(),
+                    openObject = MutableStateFlow(null),
+                    onObjectOpened = {},
+                )
+            }
+
+            assertTrue("объекта нет в списке: ${frame.visibleText()}", frame.shows(NAME))
+            knowledgeRows(item.obj.metadata).forEach { row ->
+                assertTrue("знание «${row.name}» не видно рядом с действиями: ${frame.visibleText()}", frame.shows(row.value))
+            }
+            assertTrue("первое действие не видно: ${frame.visibleText()}", frame.shows(phoneActions.first().label))
+            assertTrue("шире окна: ${frame.tooWide(WINDOW_WIDTH)}", frame.tooWide(WINDOW_WIDTH).isEmpty())
         }
 
     /** Первый кадр окна: снимок ложится в `build/render` для глаз, узлы — для проверок. */

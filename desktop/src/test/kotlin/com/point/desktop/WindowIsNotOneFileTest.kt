@@ -19,7 +19,7 @@ class WindowIsNotOneFileTest {
 
     @Test
     fun `у каждой части окна свой файл`() {
-        listOf("CompactApp.kt", "RecentPane.kt", "ObjectPane.kt", "SettingsPane.kt").forEach {
+        listOf("PointWindow.kt", "RecentPane.kt", "ObjectPane.kt", "SettingsPane.kt", "PopoverPane.kt").forEach {
             assertTrue("части окна нет: $it", File(ui, it).isFile)
         }
     }
@@ -36,11 +36,11 @@ class WindowIsNotOneFileTest {
 
     @Test
     fun `окно осталось окном, а не переехало целиком в другой файл`() {
-        val root = File(ui, "CompactApp.kt").readText()
+        val root = File(ui, "PointWindow.kt").readText()
 
-        assertTrue("корень окна пропал", root.contains("fun CompactApp("))
-        assertTrue("список вернулся в корень", !root.contains("internal fun CompactList("))
-        assertTrue("экран объекта вернулся в корень", !root.contains("internal fun CompactObject("))
-        assertTrue("настройки вернулись в корень", !root.contains("fun CompactSettings("))
+        assertTrue("корень окна пропал", root.contains("fun PointWindow("))
+        assertTrue("список вернулся в корень", !root.contains("fun RecentPane("))
+        assertTrue("экран объекта вернулся в корень", !root.contains("fun ObjectPane("))
+        assertTrue("настройки вернулись в корень", !root.contains("fun SettingsPane("))
     }
 }

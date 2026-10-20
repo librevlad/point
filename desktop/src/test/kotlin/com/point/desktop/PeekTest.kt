@@ -24,7 +24,7 @@ class PeekTest {
     fun `прибытие при скрытом компакте показывает плашку`() {
         val peek = PeekState(now = { 100L })
 
-        peek.arrived(item(), compactVisible = false)
+        peek.arrived(item(), windowShown = false)
 
         assertEquals("a", peek.current()?.obj?.id)
     }
@@ -33,7 +33,7 @@ class PeekTest {
     fun `компакт на экране — плашка не выскакивает`() {
         val peek = PeekState(now = { 100L })
 
-        peek.arrived(item(), compactVisible = true)
+        peek.arrived(item(), windowShown = true)
 
         assertNull(peek.current())
     }
@@ -42,7 +42,7 @@ class PeekTest {
     fun `плашка сама гаснет по сроку`() {
         var clock = 0L
         val peek = PeekState(now = { clock })
-        peek.arrived(item(), compactVisible = false)
+        peek.arrived(item(), windowShown = false)
 
         clock = PEEK_LIFETIME_MS - 1
         assertEquals("a", peek.current()?.obj?.id)
@@ -55,10 +55,10 @@ class PeekTest {
     fun `новое прибытие сменяет плашку и продлевает срок`() {
         var clock = 0L
         val peek = PeekState(now = { clock })
-        peek.arrived(item("a"), compactVisible = false)
+        peek.arrived(item("a"), windowShown = false)
 
         clock = PEEK_LIFETIME_MS - 100
-        peek.arrived(item("b"), compactVisible = false)
+        peek.arrived(item("b"), windowShown = false)
         clock += 200
 
         assertEquals("b", peek.current()?.obj?.id)
@@ -67,7 +67,7 @@ class PeekTest {
     @Test
     fun `клик забирает объект и гасит плашку`() {
         val peek = PeekState(now = { 0L })
-        peek.arrived(item(), compactVisible = false)
+        peek.arrived(item(), windowShown = false)
 
         val opened = peek.take()
 
@@ -79,10 +79,10 @@ class PeekTest {
     fun `брошенное руками не пикает — человек сам это сделал и видит`() {
         val peek = PeekState(now = { 0L })
 
-        peek.arrived(item(), compactVisible = false, source = ObjectSource.DROPPED)
+        peek.arrived(item(), windowShown = false, source = ObjectSource.DROPPED)
         assertNull(peek.current())
 
-        peek.arrived(item(), compactVisible = false, source = ObjectSource.CLIPBOARD)
+        peek.arrived(item(), windowShown = false, source = ObjectSource.CLIPBOARD)
         assertNull(peek.current())
     }
 
@@ -90,7 +90,7 @@ class PeekTest {
     fun `готовое на компьютере пикает со своей подписью`() {
         val peek = PeekState(now = { 0L })
 
-        peek.arrived(item(), compactVisible = false, source = ObjectSource.LOCAL)
+        peek.arrived(item(), windowShown = false, source = ObjectSource.LOCAL)
 
         assertEquals("a", peek.current()?.obj?.id)
         assertEquals(ObjectSource.LOCAL, peek.sourceOfCurrent())

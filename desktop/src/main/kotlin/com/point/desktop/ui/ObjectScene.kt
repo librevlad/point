@@ -1,7 +1,6 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,9 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,52 +22,48 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.point.core.model.ObjectKind
-import com.point.core.ui.bubbleIcon
 import com.point.desktop.InboxItem
-import com.point.desktop.JournalEntry
-import com.point.desktop.sourceLabel
-import com.point.desktop.whenLabel
-import java.time.ZoneId
 
-/**
- * Превью объекта. Портал — только за знаком вида, когда содержимого не показать:
- * за текстом и картинкой портала нет (решение владельца 2026-08-09).
+/*
+ * Содержимое объекта — правая колонка его экрана (макет 19.10.2026): снимок, найденное,
+ * прочитанный текст, состав набора, идущая работа. В узком окне та же панель встаёт между
+ * значениями и остальными действиями.
  */
+
+/** Снимок загружается один раз на экран: им пользуются и кольцо шапки, и панель содержимого. */
 @Composable
-internal fun PortalPreview(item: InboxItem) {
-    // Снимок — сам себе опознание, его видно наверху. Текст — нет: четырнадцать строк
-    // сырого текста занимали весь экран, а вид, знание и действия оставались за нижним краем. Текст
-    // теперь стоит там же, где на телефоне, — ниже знания (#898).
-    if (item.obj.state.kind == ObjectKind.IMAGE) {
-        ImagePreview(item)
-    } else {
-        // Героем стоит сама вещь, а не дверь в неё — как на телефоне. Прежде знак вида сидел
-        // в двух встречных вращающихся кольцах портала: они двигались всегда, даже когда
-        // Point ничего не делал, и говорили «идёт работа», которой не было. Портал — знак
-        // границы, через которую вещь приходит и уходит, а не рама для неё.
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(104.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(PointColors.surfaceDeep)
-                    .border(1.dp, PointColors.border, RoundedCornerShape(18.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                // Та же марка, что на телефоне (#825): она живёт в общем шве, и компьютер не
-                // рисует свой знак. Плоская иконка делала объект строкой из списка приложений.
-                com.point.core.ui.KindMarkIcon(
-                    mark = com.point.core.ui.kindMarkOf(item.obj),
-                    size = 74.dp,
-                    contentDescription = com.point.core.ui.kindMarkLabel(
-                        com.point.core.ui.kindMarkOf(item.obj),
-                    ),
-                )
-            }
+internal fun rememberPicture(item: InboxItem): ImageBitmap? =
+    remember(item.obj.uri.value, item.obj.state.kind) {
+        if (item.obj.state.kind != ObjectKind.IMAGE) {
+            null
+        } else {
+            runCatching {
+                java.io.File(item.obj.uri.value).inputStream().use { androidx.compose.ui.res.loadImageBitmap(it) }
+            }.getOrNull()
         }
+    }
+
+/** Снимок крупно, своей панелью. */
+@Composable
+internal fun PicturePanel(picture: ImageBitmap) {
+    Box(Modifier.fillMaxWidth().glassPanel().padding(8.dp), contentAlignment = Alignment.Center) {
+        Image(
+            bitmap = picture,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(12.dp)),
+        )
     }
 }
 
@@ -79,39 +73,41 @@ internal fun PortalPreview(item: InboxItem) {
  * Прочитанное показывается у любого объекта, а не только у текстового: текст документа —
  * знание самого документа, и человек, нажавший «Извлечь текст», обязан увидеть его здесь же.
  * Откуда его брать, решает общее с телефоном правило `shownTextRef`.
+ *
+ * [marks] — найденные значения: в тексте они подсвечены там, где сказаны (макет 19.10.2026), —
+ * видно, откуда взялось знание.
  */
 @Composable
-internal fun Preview(item: InboxItem) {
+internal fun Preview(item: InboxItem, marks: List<String> = emptyList(), onCopyText: ((String) -> Unit)? = null) {
     val ref = com.point.core.flow.shownTextRef(item.obj) ?: return
     val read = remember(ref) {
         runCatching {
             com.point.desktop.readTextHead(java.io.File(ref), com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT)
         }.getOrNull()
     }
-    if (read != null && read.text.isNotBlank()) TextBody(read)
+    if (read == null || read.text.isBlank()) return
+    Column(
+        Modifier.fillMaxWidth().glassPanel().padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusDot(PointColors.cyan)
+            Text(
+                textTitle(item.obj.state.kind),
+                style = PointType.small.copy(color = PointColors.text, fontWeight = FontWeight.Medium),
+                modifier = Modifier.weight(1f),
+            )
+
+            // В буфер уходит весь прочитанный текст, а не показанная голова: копия не обрывается молча.
+            onCopyText?.let { copy -> PillButton("Скопировать", { copy(ref) }, icon = GlassIcons.Copy, small = true) }
+        }
+        TextBody(read, marks)
+    }
 }
 
-/** Снимок сам себе опознание — его видно наверху, вместо портала. */
-@Composable
-internal fun ImagePreview(item: InboxItem) {
-    val bitmap = remember(item.obj.uri.value) {
-        runCatching {
-            java.io.File(item.obj.uri.value).inputStream().use {
-                androidx.compose.ui.res.loadImageBitmap(it)
-            }
-        }.getOrNull()
-    }
-    if (bitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = bitmap,
-            contentDescription = null,
-            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth()
-                .heightIn(max = 300.dp)
-                .clip(RoundedCornerShape(12.dp)),
-        )
-    }
-}
+/** Подпись над текстом называет то, что под ним: у записи это расшифровка, у остального — текст. */
+internal fun textTitle(kind: ObjectKind): String =
+    if (kind == ObjectKind.AUDIO) "Расшифровка" else com.point.core.ui.kindLabel(ObjectKind.TEXT)
 
 /**
  * Текст объекта на компьютере: свёрнут до нескольких строк и раскрывается по просьбе (#1086).
@@ -121,7 +117,7 @@ internal fun ImagePreview(item: InboxItem) {
  * тоже, они лежат в общем каталоге, а не переписаны сюда.
  */
 @Composable
-private fun TextBody(read: com.point.desktop.TextHead) {
+private fun TextBody(read: com.point.desktop.TextHead, marks: List<String>) {
     var expanded by remember(read.text) { mutableStateOf(false) }
 
     // Текст обрезается дважды: по символам (голова) и по строкам на экране. Кнопка обязана
@@ -129,19 +125,19 @@ private fun TextBody(read: com.point.desktop.TextHead) {
     var clipped by remember(read.text) { mutableStateOf(false) }
     val head = remember(read.text) { com.point.core.ui.textPreviewHead(read.text) }
     val shown = if (expanded) read.text else head
+    val marked = remember(shown, marks) { marked(shown, marks) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            shown,
-            style = PointType.body.copy(fontSize = PointType.small.fontSize),
-            // В окне 475 px четырнадцать строк — это весь экран (#898).
-            maxLines = if (expanded) Int.MAX_VALUE else PREVIEW_LINES,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { if (it.hasVisualOverflow) clipped = true },
-            modifier = Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(PointColors.window.copy(alpha = 0.55f))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        )
+        SelectionContainer {
+            Text(
+                marked,
+                style = PointType.reading,
+                // В узком окне четырнадцать строк — это весь экран (#898).
+                maxLines = if (expanded) Int.MAX_VALUE else PREVIEW_LINES,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (it.hasVisualOverflow) clipped = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         if (clipped || head.length < read.text.length) {
             Text(
                 if (expanded) {
@@ -149,20 +145,56 @@ private fun TextBody(read: com.point.desktop.TextHead) {
                 } else {
                     com.point.core.ui.expandTextLabel(read.text.length - head.length, read.atLimit)
                 },
-                style = PointType.small.copy(color = PointColors.violet),
-                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                style = PointType.small.copy(color = PointColors.link),
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).handCursor()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                    .padding(vertical = 4.dp),
             )
         }
 
         // Раскрыли — и оно упёрлось в предел чтения: сколько показано, сказано числом.
         if (expanded && read.atLimit) {
-            Text(com.point.core.ui.truncatedPreviewNotice(read.text.length), style = PointType.small)
+            Text(com.point.core.ui.truncatedPreviewNotice(read.text.length), style = PointType.note)
         }
     }
 }
 
+/** Текст с подсвеченными найденными значениями. */
+private fun marked(text: String, marks: List<String>): AnnotatedString = buildAnnotatedString {
+    var at = 0
+    highlightRanges(text, marks).forEach { range ->
+        append(text, at, range.first)
+        withStyle(SpanStyle(background = PointColors.cyan.copy(alpha = 0.16f), color = PointColors.text)) {
+            append(text, range.first, range.last + 1)
+        }
+        at = range.last + 1
+    }
+    append(text, at, text.length)
+}
+
+/**
+ * Где в тексте стоят найденные значения: без учёта регистра, без наложений, по порядку.
+ *
+ * Значение короче двух знаков не ищется — «5» подсветило бы каждую пятёрку текста, а не ту,
+ * что найдена.
+ */
+internal fun highlightRanges(text: String, values: Collection<String>): List<IntRange> {
+    val found = values.map { it.trim() }.filter { it.length >= 2 }.distinct()
+        .flatMap { value ->
+            generateSequence(text.indexOf(value, ignoreCase = true).takeIf { it >= 0 }) { from ->
+                text.indexOf(value, from + value.length, ignoreCase = true).takeIf { it >= 0 }
+            }.map { it until it + value.length }.toList()
+        }
+        .sortedWith(compareBy<IntRange> { it.first }.thenByDescending { it.last })
+    val kept = mutableListOf<IntRange>()
+    found.forEach { range -> if (kept.none { range.first <= it.last }) kept += range }
+    return kept
+}
+
+/**
+ * Найденное у объекта (P2/P3): значение, спор прочтений и «ещё» — видны (P8), всё копируется
+ * одной кнопкой рядом. Открытые вопросы — тише, ниже.
+ */
 @Composable
 internal fun Knowledge(
     item: InboxItem,
@@ -175,114 +207,78 @@ internal fun Knowledge(
     val facts = com.point.core.flow.knowledgeRows(item.obj.metadata).filterNot { it.key in shownElsewhere }
     val questions = com.point.core.flow.openQuestions(item.obj.metadata, questionName)
     if (facts.isEmpty() && questions.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (facts.isNotEmpty()) Text("ПОНЯЛ", style = PointType.label.copy(color = PointColors.cyan))
-        facts.forEach { fact ->
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onCopyFact(fact.value) }
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(5.dp).background(PointColors.cyan, CircleShape))
-                    Text(
-                        "${fact.name} · ${fact.value}" +
-                            if (fact.confirmed) " · подтверждено вами" else "",
-                        style = PointType.body.copy(fontSize = PointType.small.fontSize),
-                    )
-                }
-
-                // Строка документа при значении — подпись, а не второе значение (#782).
-                fact.said?.let { said ->
-                    Text(said, style = PointType.small, modifier = Modifier.padding(start = 14.dp))
-                }
-
-                // Спор виден (P8); «ещё» — другие значения того же вида, не спор.
-                if (fact.disputed.isNotEmpty()) {
-                    Text(
-                        "или: " + fact.disputed.joinToString(", "),
-                        style = PointType.small,
-                        modifier = Modifier.padding(start = 14.dp),
-                    )
-                }
-                if (fact.more.isNotEmpty()) {
-                    Text(
-                        "ещё: " + fact.more.joinToString(", "),
-                        style = PointType.small,
-                        modifier = Modifier.padding(start = 14.dp),
-                    )
-                }
-            }
-        }
-        questions.forEach { q ->
-            Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(5.dp).background(PointColors.muted, CircleShape))
-                Text(
-                    "${q.name} · " + com.point.core.flow.openQuestionLabel(q.state),
-                    style = PointType.small,
-                )
-            }
-        }
-    }
-}
-
-/** Путь-хроника: складная строка — разворачивается по клику. */
-@Composable
-internal fun FoldedPath(entry: JournalEntry?, now: Long) {
-    if (entry == null) return
-    val zone = remember { ZoneId.systemDefault() }
-    var open by remember(entry.path) { mutableStateOf(false) }
     Column(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, PointColors.border, RoundedCornerShape(12.dp))
-            .clickable { open = !open }
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().glassPanel().padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("ПУТЬ", style = PointType.label)
-            Text(
-                if (open) "▾" else "▸ ${entry.steps.size + 1}",
-                style = PointType.small,
-            )
+        if (facts.isNotEmpty()) {
+            Text("НАЙДЕНО · ${facts.size}", style = PointType.label.copy(color = PointColors.muted), modifier = Modifier.padding(bottom = 6.dp))
         }
-        if (open) {
-            PathStop(
-                dot = PointColors.violet,
-                title = "Приехал · ${sourceLabel(entry.source)}",
-                note = null,
-                time = whenLabel(entry.at, now, zone),
-            )
-            entry.steps.forEach { step ->
-                PathStop(
-                    dot = if (step.ok) PointColors.cyan else PointColors.muted,
-                    title = step.title,
-                    note = step.note.takeIf { it.isNotBlank() },
-                    time = whenLabel(step.at, now, zone),
-                )
-            }
-            if (entry.steps.isEmpty()) {
-                Text("Пока ничего не делали — действия ниже", style = PointType.small)
+        facts.forEach { fact -> FactRow(fact, onCopyFact) }
+        questions.forEach { q ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 30.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                StatusDot(PointColors.faint)
+                Text("${q.name} · " + com.point.core.flow.openQuestionLabel(q.state), style = PointType.small)
             }
         }
     }
 }
 
 @Composable
-internal fun PathStop(dot: Color, title: String, note: String?, time: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 6.dp).size(7.dp).background(dot, CircleShape))
+private fun FactRow(fact: com.point.core.flow.KnowledgeRow, onCopy: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 34.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        StatusDot(PointColors.cyan)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = PointType.body.copy(fontSize = PointType.small.fontSize))
-            note?.let { Text(it, style = PointType.small, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = PointColors.muted)) { append(fact.name) }
+                    append("  ")
+                    withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(fact.value) }
+                    if (fact.confirmed) withStyle(SpanStyle(color = PointColors.muted)) { append(" · подтверждено вами") }
+                },
+                style = PointType.small.copy(fontSize = 12.5.sp, color = PointColors.text),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            // Строка документа при значении — подпись, а не второе значение (#782).
+            fact.said?.let { Text(it, style = PointType.note, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+
+            // Спор виден (P8); «ещё» — другие значения того же вида, не спор.
+            if (fact.disputed.isNotEmpty()) Text("или: " + fact.disputed.joinToString(", "), style = PointType.note)
+            if (fact.more.isNotEmpty()) Text("ещё: " + fact.more.joinToString(", "), style = PointType.note)
         }
-        Text(time, style = PointType.small)
+        PillButton("Скопировать", { onCopy(fact.value) }, small = true)
     }
 }
 
+/** Состав набора — своей панелью; вход раскрывает ребёнка объектом (#1099). */
+@Composable
+internal fun ChildrenPanel(children: List<String>, onOpen: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().glassPanel().padding(4.dp)) {
+        children.forEach { path ->
+            val file = java.io.File(path)
+            GlassRow(
+                title = file.name,
+                subtitle = null,
+                icon = GlassIcons.Document,
+                onClick = { onOpen(path) },
+                minHeight = 44.dp,
+                trailing = { Chevron() },
+            )
+        }
+    }
+}
+
+/** Идущая работа над объектом: что делается, сколько ждём и честно о долгом ожидании. */
 @Composable
 internal fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
     var now by remember(work.startedAt) { mutableStateOf(System.currentTimeMillis()) }
@@ -292,52 +288,30 @@ internal fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
             now = System.currentTimeMillis()
         }
     }
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(PointColors.surface)
-            .border(1.dp, PointColors.cyan.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 15.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    Row(
+        Modifier.fillMaxWidth().glassPanel().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(work.title, style = PointType.body)
-        // Та же строка, что на телефоне (#901): и время, и честность про затянувшееся
-        // ожидание. Раньше компьютер говорил «12 секунд» и про долгое ожидание молчал.
-        Text(
-            listOfNotNull(
-                work.stage,
-                com.point.core.flow.waitingLine(
-                    elapsed = ((now - work.startedAt) / 1000).toInt().coerceAtLeast(0),
-                    network = work.network,
-                ),
-            ).joinToString(" · "),
-            style = PointType.small,
-        )
-        Text(
-            "Отменить",
-            style = PointType.small.copy(color = PointColors.violet),
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onCancel)
-                .padding(vertical = 4.dp),
-        )
-    }
-}
-
-internal fun secondsWord(millis: Long): String {
-    val s = (millis / 1000).coerceAtLeast(0)
-    if (s >= 60) {
-        val m = s / 60
-        return "$m " + when {
-            m % 100 in 11..14 -> "минут"
-            m % 10 == 1L -> "минуту"
-            m % 10 in 2..4 -> "минуты"
-            else -> "минут"
+        StatusDot(PointColors.cyan, size = 8.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(work.title, style = PointType.rowTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Та же строка, что на телефоне (#901): и время, и честность про затянувшееся
+            // ожидание. Раньше компьютер говорил «12 секунд» и про долгое ожидание молчал.
+            Text(
+                listOfNotNull(
+                    work.stage,
+                    com.point.core.flow.waitingLine(
+                        elapsed = ((now - work.startedAt) / 1000).toInt().coerceAtLeast(0),
+                        network = work.network,
+                    ),
+                ).joinToString(" · "),
+                style = PointType.note,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-    }
-    return "$s " + when {
-        s % 100 in 11..14 -> "секунд"
-        s % 10 == 1L -> "секунда"
-        s % 10 in 2..4 -> "секунды"
-        else -> "секунд"
+        PillButton("Отменить", onCancel, small = true)
     }
 }
 
@@ -356,7 +330,7 @@ internal fun Station(
         title = title,
         subtitle = note,
         mark = where,
-        icon = bubbleIcon(icon),
+        icon = lineIcon(icon),
         accent = accent,
         primary = primary,
         appearIndex = appearIndex,
@@ -374,19 +348,21 @@ internal fun MutedStation(
     appearIndex: Int = 0,
     onClick: () -> Unit,
 ) {
-    // Недоступное действие видно с причиной, а не скрыто (PC5). Оно остаётся такой же
-    // строкой, как остальные: гаснет плашка и название, а не форма.
+    // Недоступное действие остаётся такой же строкой, как остальные: гаснет плашка и
+    // название, а не форма.
     PortalRow(
         title = title,
         subtitle = reason,
         mark = where,
-        icon = bubbleIcon(icon),
+        icon = lineIcon(icon),
         accent = PointColors.muted,
+        dim = true,
         appearIndex = appearIndex,
         onClick = onClick,
     )
 }
 
+/** Знак вида буквами — там, где знаку негде нарисоваться линией. */
 internal fun kindMark(kind: ObjectKind): String = when (kind) {
     ObjectKind.IMAGE -> "IMG"
     ObjectKind.PDF -> "PDF"
@@ -395,7 +371,7 @@ internal fun kindMark(kind: ObjectKind): String = when (kind) {
     ObjectKind.ZIP -> "ZIP"
     ObjectKind.OFFICE -> "DOC"
     ObjectKind.COLLECTION -> "SET"
-    else -> "\u2022"
+    else -> "•"
 }
 
 /**

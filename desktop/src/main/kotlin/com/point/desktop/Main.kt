@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.painterResource
 import com.point.desktop.ui.drawPointMark
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -77,14 +78,17 @@ fun main(args: Array<String>) {
 
     lateinit var state: DesktopState
 
-    val compactVisible = kotlinx.coroutines.flow.MutableStateFlow(true)
+    // Окно в две панели и панель у значка трея (макет 19.10.2026). Окно видно с запуска;
+    // панель — по щелчку значка.
+    val windowVisible = kotlinx.coroutines.flow.MutableStateFlow(true)
+    val popoverVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     // Явный зов из проводника: окно видимо и один раз выходит вперёд (#1019, вариант B).
-    // Прежде зов делал ровно compactVisible = true — скрытое показывалось, но не
-    // поднималось, а видимое под чужими окнами не менялось вообще.
+    // Прежде зов делал ровно «видимо» — скрытое показывалось, но не поднималось, а видимое
+    // под чужими окнами не менялось вообще.
     val raise = RaiseSignal()
     fun summon() {
-        compactVisible.value = true
+        windowVisible.value = true
         raise.call()
     }
 
@@ -307,7 +311,7 @@ fun main(args: Array<String>) {
         // «Скинули с телефона — высветилась часть окна»: своя плашка, не системное
         // уведомление. Готовое здесь (PDF, скачанное) объявляется тем же путём.
         announce = { item, source ->
-            peek.arrived(item, compactVisible.value, source)
+            peek.arrived(item, windowVisible.value || popoverVisible.value, source)
 
             // Звучит только прилёт с телефона (#650): пара к свипу ухода на той стороне.
             // Своё, здешнее и принесённое мышью, звука не просит — оно и так на глазах.
@@ -477,10 +481,10 @@ fun main(args: Array<String>) {
     }.getOrDefault(ScreenArea(0, 0, 1280, 720))
 
     application {
-        val visible by compactVisible.collectAsState()
-        val compact = compactBounds(workArea)
+        val visible by windowVisible.collectAsState()
+        val popover by popoverVisible.collectAsState()
 
-        // Компакт живёт у трея: закрыть = спрятаться, выход — из меню трея.
+        // Point живёт у трея: закрыть окно = спрятать его, выход — из меню трея.
         // Непросмотренное прибытие оставляет след на иконке (PC3): peek легко пропустить.
         val freshIds by state.fresh.collectAsState()
         val icon = androidx.compose.runtime.remember(freshIds.isNotEmpty()) {
@@ -489,9 +493,10 @@ fun main(args: Array<String>) {
         Tray(
             icon = icon,
             tooltip = if (freshIds.isEmpty()) "Point" else "Point — есть новое",
-            onAction = { compactVisible.value = true },
+            onAction = { popoverVisible.value = !popoverVisible.value },
             menu = {
-                Item("Открыть Point") { compactVisible.value = true }
+                Item("Открыть Point") { summon() }
+                Item("Панель Point") { popoverVisible.value = true }
 
                 Item("Выход") {
                     relayPoller.stop()
@@ -502,21 +507,76 @@ fun main(args: Array<String>) {
             },
         )
 
-        val compactState = androidx.compose.ui.window.rememberWindowState(
-            position = androidx.compose.ui.window.WindowPosition(compact.x.dp, compact.y.dp),
-            size = androidx.compose.ui.unit.DpSize(compact.width.dp, compact.height.dp),
+        // Одни на оба окна: файл с диска, брошенное, буфер, снимок, приём по ссылке.
+        val pickFile: () -> Unit = {
+            val dialog = FileDialog(null as java.awt.Frame?, "Выбрать файл", FileDialog.LOAD)
+            dialog.isMultipleMode = true
+            dialog.isVisible = true
+            val files = dialog.files.orEmpty().map { it.absolutePath }
+            if (files.isNotEmpty()) state.receiveFiles(inbox, files, ObjectSource.LOCAL)
+        }
+        val filesDropped: (List<File>) -> Unit = { files ->
+            state.receiveFiles(inbox, files.map { it.absolutePath }, ObjectSource.DROPPED)
+        }
+        val textDropped: (String) -> Unit = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) }
+
+        // Картинка со страницы приходит пикселями, а не файлом: чтобы стать объектом, ей
+        // нужен свой файл — снимок ложится в ту же папку (#546).
+        val imageDropped: (java.awt.image.BufferedImage) -> Unit = { picture ->
+            val png = java.io.ByteArrayOutputStream()
+            val written = runCatching { javax.imageio.ImageIO.write(picture, "png", png) }.getOrDefault(false)
+            if (!written) {
+                state.say("Картинку не удалось сохранить — сохраните её на диск и бросьте файлом")
+            } else {
+                state.onReceived(
+                    inbox.receive("Картинка.png", "image/png", emptyMap(), png.toByteArray().inputStream()),
+                    ObjectSource.DROPPED,
+                )
+            }
+        }
+        val clipboardTaken: (com.point.core.flow.ClipboardPayload) -> Unit = { brought ->
+            val item = if (brought.isText) {
+                inbox.addText(brought.text())
+            } else {
+                inbox.receive(brought.name, brought.mime, emptyMap(), brought.bytes.inputStream())
+            }
+            state.onReceived(item, ObjectSource.CLIPBOARD)
+        }
+
+        // Снимок ждёт, пока окна Point уйдут с экрана: прежде окно пряталось и показывалось
+        // в одном такте интерфейса, и на снимок попадал сам Point.
+        val grabScreen: suspend () -> File? = {
+            val wasWindow = windowVisible.value
+            val wasPopover = popoverVisible.value
+            windowVisible.value = false
+            popoverVisible.value = false
+            kotlinx.coroutines.delay(SCREEN_GRAB_DELAY_MS)
+            val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { screenGrab.take() }
+            windowVisible.value = wasWindow
+            popoverVisible.value = wasPopover
+
+            // Снимок сделан здесь, а не брошен в окно: прежде он приходил дорогой брошенных
+            // файлов, и в «Недавнем» снимок экрана был подписан «перетащен».
+            file?.also { state.receiveFiles(inbox, listOf(it.absolutePath), ObjectSource.LOCAL) }
+        }
+        val receiveFile: () -> Unit = { receiver.start { why -> state.say(why) } }
+        val cancelReceive: () -> Unit = { receiver.cancel() }
+
+        val place = windowBounds(workArea)
+        val windowState = androidx.compose.ui.window.rememberWindowState(
+            position = androidx.compose.ui.window.WindowPosition(place.x.dp, place.y.dp),
+            size = androidx.compose.ui.unit.DpSize(place.width.dp, place.height.dp),
         )
         Window(
             visible = visible,
-            state = compactState,
-            onCloseRequest = { compactVisible.value = false },
+            state = windowState,
+            onCloseRequest = { windowVisible.value = false },
             undecorated = true,
             transparent = true,
-            resizable = false,
+            resizable = true,
 
             // Обычное окно не висит поверх чужой работы (владелец 12.08.2026: «сделай
-            // десктопное окно нормальным»). Поверх всех оно было честно ровно до тех пор,
-            // пока само исчезало по уходу человека.
+            // десктопное окно нормальным»).
             alwaysOnTop = false,
             title = "Point",
             icon = androidx.compose.runtime.remember { pointGlyph() },
@@ -527,44 +587,49 @@ fun main(args: Array<String>) {
                 window.toFront()
                 window.requestFocus()
             }
+            LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(COMPACT_WIDTH, WINDOW_MIN_HEIGHT) }
+            val maximized = windowState.placement == androidx.compose.ui.window.WindowPlacement.Maximized
+            val chrome = com.point.desktop.ui.WindowChrome(
+                dragArea = { modifier, content ->
+                    WindowDraggableArea(modifier) { content() }
+                },
+                onMinimize = { windowState.isMinimized = true },
+                onToggleMaximize = {
+                    windowState.placement = if (maximized) {
+                        androidx.compose.ui.window.WindowPlacement.Floating
+                    } else {
+                        androidx.compose.ui.window.WindowPlacement.Maximized
+                    }
+                },
+                maximized = maximized,
+                resizeGrip = { modifier ->
+                    com.point.desktop.ui.ResizeGrip(
+                        size = { windowState.size },
+                        onSize = { wanted ->
+                            windowState.size = androidx.compose.ui.unit.DpSize(
+                                wanted.width.coerceAtLeast(COMPACT_WIDTH.dp),
+                                wanted.height.coerceAtLeast(WINDOW_MIN_HEIGHT.dp),
+                            )
+                        },
+                        modifier = modifier,
+                    )
+                },
+            )
             com.point.desktop.ui.PointDesktopTheme {
-                com.point.desktop.ui.CompactApp(
+                com.point.desktop.ui.PointWindow(
                     state = state,
                     config = config,
                     account = account,
                     openObject = openRequest,
                     onObjectOpened = { openRequest.value = null },
-                    onFilesDropped = { files ->
-                        state.receiveFiles(inbox, files.map { it.absolutePath }, ObjectSource.DROPPED)
-                    },
-                    onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
-
-                    // Картинка со страницы приходит пикселями, а не файлом: чтобы стать
-                    // объектом, ей нужен свой файл — снимок ложится в ту же папку (#546).
-                    onImageDropped = { picture ->
-                        val png = java.io.ByteArrayOutputStream()
-                        val written = runCatching {
-                            javax.imageio.ImageIO.write(picture, "png", png)
-                        }.getOrDefault(false)
-                        if (!written) {
-                            state.say("Картинку не удалось сохранить — сохраните её на диск и бросьте файлом")
-                        } else {
-                            state.onReceived(
-                                inbox.receive("Картинка.png", "image/png", emptyMap(), png.toByteArray().inputStream()),
-                                ObjectSource.DROPPED,
-                            )
-                        }
-                    },
-                    onClipboardTaken = { brought ->
-                        val item = if (brought.isText) {
-                            inbox.addText(brought.text())
-                        } else {
-                            inbox.receive(brought.name, brought.mime, emptyMap(), brought.bytes.inputStream())
-                        }
-                        state.onReceived(item, ObjectSource.CLIPBOARD)
-                    },
-                    onReceiveFile = { receiver.start { why -> state.say(why) } },
-                    onCancelReceive = { receiver.cancel() },
+                    chrome = chrome,
+                    onFilesDropped = filesDropped,
+                    onTextDropped = textDropped,
+                    onImageDropped = imageDropped,
+                    onClipboardTaken = clipboardTaken,
+                    onPickFile = pickFile,
+                    onReceiveFile = receiveFile,
+                    onCancelReceive = cancelReceive,
                     onWipe = { inbox.wipe() },
                     onSaveSettings = { changed ->
                         runCatching { FilePcConfig(pointDir).save(changed) }
@@ -586,22 +651,65 @@ fun main(args: Array<String>) {
                     // файлы старше суток (#1081): само по себе старое по-прежнему уходит при
                     // запуске, а кнопка делает то, что на ней написано.
                     onSweepNow = { state.forgetEverything { inbox.wipe() } },
-                    onGrabScreen = {
-                        compactVisible.value = false
-                        Thread.sleep(SCREEN_GRAB_DELAY_MS)
-                        val file = screenGrab.take()
-                        compactVisible.value = true
-                        file
-                    },
-                    onHide = { compactVisible.value = false },
+                    onGrabScreen = grabScreen,
+                    onHide = { windowVisible.value = false },
                 )
             }
         }
 
-        // «Высветилась часть окна»: плашка на месте будущего компакта, сама гаснет по сроку.
+        // Панель у трея: «Новый объект» и «Недавнее»; выбранное открывается в окне.
+        val gate by account.signIn.collectAsState()
+        val corner = compactBounds(workArea)
+        Window(
+            visible = popover,
+            state = androidx.compose.ui.window.rememberWindowState(
+                position = androidx.compose.ui.window.WindowPosition(corner.x.dp, corner.y.dp),
+                size = androidx.compose.ui.unit.DpSize(corner.width.dp, corner.height.dp),
+            ),
+            onCloseRequest = { popoverVisible.value = false },
+            undecorated = true,
+            transparent = true,
+            resizable = false,
+            alwaysOnTop = false,
+            title = "Point — панель",
+            icon = androidx.compose.runtime.remember { pointGlyph() },
+        ) {
+            LaunchedEffect(popover) {
+                if (popover) {
+                    window.toFront()
+                    window.requestFocus()
+                }
+            }
+            com.point.desktop.ui.PointDesktopTheme {
+                com.point.desktop.ui.PopoverPane(
+                    state = state,
+                    onOpen = { item ->
+                        openRequest.value = item.obj.id
+                        popoverVisible.value = false
+                        summon()
+                    },
+                    onOpenWindow = {
+                        popoverVisible.value = false
+                        summon()
+                    },
+                    onHide = { popoverVisible.value = false },
+                    onPickFile = pickFile,
+                    onFilesDropped = filesDropped,
+                    onTextDropped = textDropped,
+                    onImageDropped = imageDropped,
+                    onClipboardTaken = clipboardTaken,
+                    onGrabScreen = grabScreen,
+                    onReceiveFile = receiveFile,
+                    onCancelReceive = cancelReceive,
+                    signedOut = gate != null,
+                )
+            }
+        }
+
+        // «Высветилась часть окна»: плашка на месте панели у трея, сама гаснет по сроку.
         val peekTick by peek.pulse.collectAsState()
         val shown = peekTick?.let { peek.current() }
-        if (shown != null && !visible) {
+        if (shown != null && !visible && !popover) {
             LaunchedEffect(peekTick) {
                 kotlinx.coroutines.delay(PEEK_LIFETIME_MS + 100)
                 peek.current()
@@ -628,7 +736,7 @@ fun main(args: Array<String>) {
                         onOpen = {
                             peek.take()?.let { arrived ->
                                 openRequest.value = arrived.obj.id
-                                compactVisible.value = true
+                                summon()
                             }
                         },
                         onDismiss = { peek.dismiss() },
@@ -638,6 +746,9 @@ fun main(args: Array<String>) {
         }
     }
 }
+
+/** Ниже окно не сжимается: шапка, кнопка «Новый объект» и пара строк списка обязаны уместиться. */
+private const val WINDOW_MIN_HEIGHT = 520
 
 /**
  * Знак Point на ПК — тот же, что лончер-иконка телефона (решение владельца:

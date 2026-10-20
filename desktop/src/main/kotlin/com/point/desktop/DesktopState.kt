@@ -318,6 +318,19 @@ class DesktopState(
         _message.value = "В буфере: $value"
     }
 
+    /**
+     * Прочитанный текст объекта — в буфер целиком (макет 19.10.2026), а не голова, показанная
+     * на экране: копия, оборванная на пределе показа, обрывалась бы молча.
+     */
+    fun copyText(ref: String) {
+        val text = runCatching { java.io.File(ref).readText() }.getOrNull()?.takeIf { it.isNotBlank() }
+        _message.value = when {
+            text == null -> "Текст не прочитался — скопировать нечего"
+            runCatching { clipboard.copy(text) }.isFailure -> "Скопировать не вышло"
+            else -> "Текст в буфере"
+        }
+    }
+
     /** Человеческое имя вопроса знания; вопросы без имени на экран не выходят (P2). */
     fun questionName(id: com.point.core.model.CapabilityId, state: com.point.core.model.ObjectState): String? =
         runCatching { registry.byId(id).label(state) }.getOrNull() ?: PHONE_QUESTIONS[id.value]

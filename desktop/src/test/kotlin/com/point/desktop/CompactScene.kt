@@ -43,7 +43,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
-import com.point.desktop.ui.CompactApp
+import com.point.desktop.ui.PointWindow
 import com.point.desktop.ui.PointColors
 import com.point.desktop.ui.PointDesktopTheme
 import java.io.File
@@ -52,18 +52,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Окно компакта целиком, как его собирает `Main`: список ⇄ объект, Esc — шаг назад. */
+/**
+ * Окно Point целиком, как его собирает `Main`. В размере компакта оно держит одну панель —
+ * список ⇄ объект, Esc — шаг назад; в размере окна по макету — обе панели рядом.
+ */
 fun compactScene(
     state: DesktopState,
     onHide: () -> Unit,
     account: DesktopAccount = signedInAccount(),
+    width: Int = COMPACT_WIDTH,
+    height: Int = COMPACT_HEIGHT,
 ): ImageComposeScene = ImageComposeScene(
-    width = COMPACT_WIDTH,
-    height = COMPACT_HEIGHT,
+    width = width,
+    height = height,
     density = Density(1f),
 ) {
     PointDesktopTheme {
-        CompactApp(
+        PointWindow(
             state = state,
             config = PcConfig(name = "Компьютер"),
             account = account,
@@ -180,6 +185,11 @@ internal fun SkikoComposeUiTest.showCompact(content: @Composable () -> Unit) {
             Box(Modifier.fillMaxSize().background(PointColors.window)) { content() }
         }
     }
+
+    // Первый кадр собирает и вложенные раскладки (`BoxWithConstraints` экрана объекта): их
+    // плашки начинают появляться только с него. Без этого кадра сдвиг на появление проходил
+    // одним прыжком раньше, чем плашки начинали проявляться, и на снимке они были прозрачны.
+    mainClock.advanceTimeByFrame()
     settle()
 }
 
@@ -190,7 +200,9 @@ internal fun SkikoComposeUiTest.showCompact(content: @Composable () -> Unit) {
  * после него сцену сдвигают на то же появление, что и при первом показе.
  */
 internal fun SkikoComposeUiTest.settle() {
-    mainClock.advanceTimeBy(APPEAR_MS)
+    // Покадрово, а не одним прыжком: плашка, начавшая появляться посреди прыжка, иначе так и
+    // осталась бы прозрачной на снимке — у каждой своя задержка по номеру.
+    repeat((APPEAR_MS / FRAME_MS).toInt()) { mainClock.advanceTimeByFrame() }
 }
 
 /** Все узлы сцены — от корня вглубь. */
@@ -242,3 +254,6 @@ internal fun List<SemanticsNode>.tooWide(limit: Int): List<String> =
 
 /** Столько длится появление плашек действий; дальше сцена стоит. */
 private const val APPEAR_MS = 1_000L
+
+/** Длина кадра тестовых часов Compose. */
+private const val FRAME_MS = 16L
