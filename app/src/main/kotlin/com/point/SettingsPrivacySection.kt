@@ -15,7 +15,6 @@ import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.YOLO_TITLE
 import com.point.core.flow.YOLO_WHAT
 import com.point.core.ui.PortalRow
-import com.point.core.ui.ScreenHeader
 import com.point.core.ui.SectionLabel
 
 /** Раздел «Отправка и приватность» на телефоне (#834). */

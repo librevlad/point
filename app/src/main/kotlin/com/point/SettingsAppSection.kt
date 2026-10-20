@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.point.core.ui.ScreenHeader
 
 /** Раздел «Поведение Point» на телефоне (#834). */
 @Composable

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -110,10 +109,6 @@ internal const val CANCEL: String = "Отмена"
 
 /** Дверь входа спрашивает человека, а не перечисляет наши источники (макет владельца 10.08.2026). */
 internal const val WHAT_YOU_HAVE: String = "Что у вас есть?"
-
-internal const val RECENT_TITLE: String = "Недавнее"
-
-internal const val RECENT_WHAT: String = "Последние объекты"
 
 @Composable
 fun HomeScreen(
@@ -629,13 +624,13 @@ private fun previewEntry(id: String, name: String, kind: ObjectKind, ago: Long) 
     epochMillis = System.currentTimeMillis() - ago,
 )
 
-@Preview(name = "Дом · объекта ещё нет (#456)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Дом · объекта ещё нет (#456)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewHomeEmpty() = PointTheme {
     HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {})
 }
 
-@Preview(name = "Дом · недавнее (#462)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Дом · недавнее (#462)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewHomeRecent() = PointTheme {
     HomeScreen(

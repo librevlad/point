@@ -46,7 +46,7 @@ fun FindScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .portalCard(shape = PanelShape, elevation = 16.dp)
+                .portalCard(shape = PanelShape)
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

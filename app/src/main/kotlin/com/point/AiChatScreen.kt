@@ -17,12 +17,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,7 +48,6 @@ import com.point.core.model.ScratchRef
 import com.point.core.ui.Portal
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalPlate
-import com.point.core.ui.PortalPlateShape
 import com.point.core.ui.PortalRow
 import com.point.core.ui.SectionLabel
 import com.point.core.ui.ThinkingDot
@@ -240,7 +234,7 @@ private fun ChatBubble(message: ChatMessage) {
             modifier = Modifier
                 .widthIn(max = BubbleMaxWidth)
 
-                .then(if (user) Modifier.portalPrimary(shape, elevation = 12.dp) else Modifier.portalCard(shape))
+                .then(if (user) Modifier.portalPrimary(shape) else Modifier.portalCard(shape))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             SelectionContainer {
@@ -321,7 +315,7 @@ private fun previewObject() = PointObject(
     metadata = mapOf("name" to "договор.pdf"),
 )
 
-@Preview(name = "Чат · о чём спросить (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Чат · о чём спросить (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewChatEmpty() = PointTheme(darkTheme = true) {
 
@@ -339,7 +333,7 @@ private fun PreviewChatEmpty() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Чат · разговор кончается объектом (#491)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Чат · разговор кончается объектом (#491)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewChatTakeAnswer() = PointTheme(darkTheme = true) {
 
@@ -360,7 +354,7 @@ private fun PreviewChatTakeAnswer() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Чат · разговор и ожидание (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Чат · разговор и ожидание (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewChatThread() = PointTheme(darkTheme = true) {
 

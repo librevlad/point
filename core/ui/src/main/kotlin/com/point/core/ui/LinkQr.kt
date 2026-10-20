@@ -83,7 +83,7 @@ fun LinkCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = modifier
             .widthIn(max = PortalColumnWidth)
-            .portalCard(elevation = 0.dp)
+            .portalCard()
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Text(

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -77,9 +76,6 @@ private val PLATE_INSET = 12.dp + 36.dp + 14.dp
 fun Modifier.portalCard(
     shape: Shape = GlassGroupShape,
 
-    /** Оставлен для прежних вызовов: стекло не отбрасывает тени. */
-    @Suppress("UNUSED_PARAMETER") elevation: Dp = 0.dp,
-
     /** Тон вещи на краю панели: исход действия, найденное. */
     accent: Color? = null,
 ): Modifier = this
@@ -95,12 +91,7 @@ fun Modifier.portalCard(
     .border(1.dp, glassEdge(0.24f, 0.13f), shape)
 
 /** Светлая строка главного действия — та же, что у окна компьютера (`lightSurface`). */
-fun Modifier.portalPrimary(
-    shape: Shape = PortalCardShape,
-
-    /** Оставлен для прежних вызовов: тень светлой строки задаёт она сама. */
-    @Suppress("UNUSED_PARAMETER") elevation: Dp = 0.dp,
-): Modifier = lightSurface(shape)
+fun Modifier.portalPrimary(shape: Shape = PortalCardShape): Modifier = lightSurface(shape)
 
 /**
  * Группа строк: панель стекла, строки внутри без своих карточек. Между строками —
@@ -543,18 +534,6 @@ fun ScreenHeader(
                 style = PointText.subline,
                 textAlign = if (center) TextAlign.Center else null,
             )
-        }
-    }
-}
-
-/** Ряд строк в одной группе: между ними — линия. Пустой список группы не рисует. */
-@Composable
-fun <T> GlassRows(items: List<T>, modifier: Modifier = Modifier, row: @Composable RowScope.(T) -> Unit) {
-    if (items.isEmpty()) return
-    GlassGroup(modifier) {
-        items.forEachIndexed { index, item ->
-            if (index > 0) GroupSeam()
-            Row { row(item) }
         }
     }
 }

@@ -20,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -57,8 +56,6 @@ import com.point.core.flow.aiKeysSummary
 import com.point.core.flow.aiServiceLines
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
-import com.point.core.ui.ScreenHeader
-import com.point.core.ui.SectionLabel
 import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
 import com.point.core.ui.ScreenTopBar
@@ -498,7 +495,7 @@ fun aiKeysScreenOf(
 
 private val previewProvider: AiProvider = AI_PROVIDERS.first()
 
-@Preview(name = "Настройки · список разделов (#563)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Настройки · список разделов (#563)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewSettingsList() = PointTheme(darkTheme = true) {
 
@@ -514,7 +511,7 @@ private fun PreviewSettingsList() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Ключи AI · все сервисы списком (#699)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключи AI · все сервисы списком (#699)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewKeysAllServices() = PointTheme(darkTheme = true) {
 
@@ -536,7 +533,7 @@ private fun PreviewKeysAllServices() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Ключи AI · проверка идёт (#699)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключи AI · проверка идёт (#699)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewKeysChecking() = PointTheme(darkTheme = true) {
     KeyScreen(
@@ -547,7 +544,7 @@ private fun PreviewKeysChecking() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Ключи AI · пришли с действия (#699)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключи AI · пришли с действия (#699)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewKeysErrand() = PointTheme(darkTheme = true) {
 

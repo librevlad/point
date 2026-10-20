@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,10 +31,8 @@ import com.point.core.flow.deviceKindLabel
 import com.point.core.flow.lastSeenLabel
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
-import com.point.core.ui.Portal
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
-import com.point.core.ui.ScreenHeader
 import com.point.core.ui.SectionLabel
 import com.point.core.ui.ThinkingDot
 import com.point.core.ui.bubbleColor
@@ -222,7 +219,7 @@ internal const val DELETE_ACCOUNT_CONFIRM = "Удалить навсегда"
 
 private const val NOW = 1_800_000_000_000L
 
-@Preview(name = "Мои устройства · круг из трёх (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Мои устройства · круг из трёх (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewCircle() = PointTheme(darkTheme = true) {
     MyDevicesScreen(
@@ -243,7 +240,7 @@ private fun PreviewCircle() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Мои устройства · пока один (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Мои устройства · пока один (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewAlone() = PointTheme(darkTheme = true) {
 
@@ -260,7 +257,7 @@ private fun PreviewAlone() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Мои устройства · круг едет (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Мои устройства · круг едет (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewLoading() = PointTheme(darkTheme = true) {
     MyDevicesScreen(
@@ -272,7 +269,7 @@ private fun PreviewLoading() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Мои устройства · сервер молчит (#472)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Мои устройства · сервер молчит (#472)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewFailed() = PointTheme(darkTheme = true) {
 
@@ -290,7 +287,7 @@ private fun PreviewFailed() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Мои устройства · сервер молчит, круг по памяти (#1076)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Мои устройства · сервер молчит, круг по памяти (#1076)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewFailedRemembered() = PointTheme(darkTheme = true) {
 

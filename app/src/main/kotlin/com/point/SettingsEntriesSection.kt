@@ -6,7 +6,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.point.core.ui.ScreenHeader
 
 /** Раздел «Точки входа» на телефоне (#834). */
 /** Откуда Point открывается — про плитку человек мог не знать вовсе (#821). */

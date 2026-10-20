@@ -525,7 +525,7 @@ private fun PickingImageScreen(title: String) {
     }
 }
 
-@ComposePreview(name = "Ожидание фото · портал вместо крутилки (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@ComposePreview(name = "Ожидание фото · портал вместо крутилки (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewPickingImage() = PointTheme(darkTheme = true) {
     PickingImageScreen(title = "Выберите фон для замены")
@@ -619,7 +619,7 @@ private fun PreviewScreen(preview: Preview, onConfirm: () -> Unit, onCancel: () 
     }
 }
 
-@ComposePreview(name = "Открыть в · выбор приложения (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@ComposePreview(name = "Открыть в · выбор приложения (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewAppPicker() = PointTheme(darkTheme = true) {
 
@@ -634,7 +634,7 @@ private fun PreviewAppPicker() = PointTheme(darkTheme = true) {
     )
 }
 
-@ComposePreview(name = "Предпросмотр · что сейчас произойдёт (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@ComposePreview(name = "Предпросмотр · что сейчас произойдёт (#461)", showBackground = true, backgroundColor = 0xFF2B2531)
 @Composable
 private fun PreviewActionPreview() = PointTheme(darkTheme = true) {
 
