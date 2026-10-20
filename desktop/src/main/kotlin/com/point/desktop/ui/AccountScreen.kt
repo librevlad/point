@@ -20,7 +20,12 @@ import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
 import com.point.core.flow.signInWaitingLine
 
-/** Вход в аккаунт на компьютере: кольцо Point, слова и одна светлая кнопка шага. */
+/**
+ * Вход в аккаунт на компьютере: знак Point, слова и одна светлая кнопка шага.
+ *
+ * Вход начинает сам человек — чтобы подключить устройства (решение владельца 20.10.2026), — и
+ * из любого его шага есть дорога назад: «Не сейчас» и «Отменить» возвращают в окно.
+ */
 @Composable
 fun SignInPane(
     state: SignIn,
@@ -46,6 +51,7 @@ fun SignInPane(
             SignIn.SignedOut -> {
                 Explain(com.point.core.flow.SIGN_IN_WHY)
                 LightButton(SIGN_IN_ACTION, onSignIn)
+                PillButton("Не сейчас", onCancel)
             }
 
             is SignIn.Waiting -> {
@@ -69,6 +75,7 @@ fun SignInPane(
                 Text(state.what, style = PointType.title, textAlign = TextAlign.Center)
                 Explain(state.fix)
                 LightButton(SIGN_IN_ACTION, onSignIn)
+                PillButton("Не сейчас", onCancel)
             }
         }
     }
@@ -77,6 +84,31 @@ fun SignInPane(
 @Composable
 private fun Explain(text: String) {
     Text(text, style = PointType.small, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 420.dp))
+}
+
+/**
+ * «Мои устройства» до входа (решение владельца 20.10.2026): Point работает и так, а вход нужен,
+ * чтобы связать с этим компьютером телефон, планшет или другой компьютер — сколько их ни есть.
+ *
+ * [error] — почему аккаунта больше нет, если человек его не забывал: этот компьютер могли
+ * отключить с другого устройства, и молча оказаться без своих устройств — неправда.
+ */
+@Composable
+fun ConnectDevicesPane(error: String?, onSignIn: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().glassPanel().padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Подключить устройства", style = PointType.title)
+        Text(
+            "Телефон, планшет или другой компьютер найдут этот компьютер, когда вы войдёте в один " +
+                "аккаунт на каждом. Устройств может быть сколько угодно. Работать с Point здесь " +
+                "можно и без входа.",
+            style = PointType.small,
+        )
+        error?.let { Text(it, style = PointType.small.copy(color = PointColors.close)) }
+        LightButton(SIGN_IN_ACTION, onSignIn, Modifier.padding(top = 6.dp))
+    }
 }
 
 @Composable

@@ -128,7 +128,10 @@ fun textArrival(id: String, name: String = "Счёт 4411"): InboxItem {
     )
 }
 
-/** Человек за компьютером уже вошёл — иначе окно показывает вход, а не список. */
+/**
+ * Человек за компьютером уже вошёл: устройства связаны. Без входа окно тоже работает
+ * (решение владельца 20.10.2026), но строка связи и телефонные двери у него другие.
+ */
 fun signedInAccount() = DesktopAccount(
     scope = CoroutineScope(Dispatchers.Unconfined),
     store = object : AccountStore {

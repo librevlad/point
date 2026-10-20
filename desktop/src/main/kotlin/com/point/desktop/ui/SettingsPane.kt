@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
@@ -51,6 +52,7 @@ internal fun SettingsPane(
     // Настройки — список разделов со своими экранами, как на телефоне (#886). Слово
     // «Настройки» при этом сказано один раз: шапкой окна, а не ещё и меткой внутри (#878).
     var swept by remember { mutableStateOf<Int?>(null) }
+    val signedInAs by account.account.collectAsState()
     var cloudAllowed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(page) {
@@ -70,7 +72,8 @@ internal fun SettingsPane(
             SettingsPage.ROOT -> SettingsRoot(
                 config = config,
                 devices = circle.size,
-                email = account.current()?.email.orEmpty(),
+                email = signedInAs?.email.orEmpty(),
+                signedIn = signedInAs != null,
                 onSave = onSave,
                 onRightClick = onRightClick,
                 rightClickHolds = rightClickHolds,
@@ -78,14 +81,19 @@ internal fun SettingsPane(
             )
 
             SettingsPage.DEVICES -> SettingsDevices(config = config, onSave = onSave) {
-                MyDevicesPane(
-                    email = account.current()?.email.orEmpty(),
-                    devices = circle,
-                    busy = busy,
-                    error = error,
-                    onRevoke = account::revoke,
-                    onSignOut = { onWipe(); account.signOut() },
-                )
+                // Без входа здесь — дверь входа: подключать устройства, а не список пустоты.
+                if (signedInAs == null) {
+                    ConnectDevicesPane(error = error, onSignIn = account::signIn)
+                } else {
+                    MyDevicesPane(
+                        email = signedInAs?.email.orEmpty(),
+                        devices = circle,
+                        busy = busy,
+                        error = error,
+                        onRevoke = account::revoke,
+                        onSignOut = { onWipe(); account.signOut() },
+                    )
+                }
             }
 
             SettingsPage.KEYS -> SettingsKeys(config = config, onSave = onSave)

@@ -37,9 +37,21 @@ class DesktopAccount(
 
     private val driver = SignInDriver(client, store, browser)
 
-    private val _signIn = MutableStateFlow<SignIn?>(if (store.current() == null) SignIn.SignedOut else null)
+    /**
+     * Идущий вход — то, что показывает экран входа, — или `null`, когда входа никто не начинал.
+     *
+     * Вход нужен только чтобы связать устройства (решение владельца 20.10.2026): работать на
+     * одном компьютере можно без него. Прежде окно без аккаунта открывалось экраном входа и
+     * дальше не пускало, хотя тот же экран говорил «для работы на одном устройстве вход не
+     * нужен». Теперь вход начинает человек — из «Моих устройств».
+     */
+    private val _signIn = MutableStateFlow<SignIn?>(null)
 
     val signIn: StateFlow<SignIn?> = _signIn
+
+    /** Аккаунт этого компьютера; `null` — человек не входил, устройства не связаны. */
+    private val _account = MutableStateFlow(store.current())
+    val account: StateFlow<PointAccount?> = _account
 
     private val _circle = MutableStateFlow<List<CircleDevice>>(emptyList())
     val circle: StateFlow<List<CircleDevice>> = _circle
@@ -83,7 +95,9 @@ class DesktopAccount(
         job?.cancel()
         job = scope.launch {
             driver.signIn(deviceName, DeviceKind.PC) { state -> _signIn.value = state }
+            _account.value = store.current()
             store.current()?.let { account ->
+                _error.value = null
 
                 runCatching { client.enroll(account, keys.keys().publicKey) }
                 refreshCircle()
@@ -92,10 +106,11 @@ class DesktopAccount(
         }
     }
 
+    /** Человек передумал входить: он возвращается туда, откуда начал, а не на экран входа. */
     fun cancel() {
         job?.cancel()
         job = null
-        _signIn.value = SignIn.SignedOut
+        _signIn.value = null
     }
 
     fun dismissGate() {
@@ -124,7 +139,7 @@ class DesktopAccount(
                 }
                 CircleAnswer.Unreachable -> _error.value = "Не удалось спросить сервер о ваших устройствах"
 
-                CircleAnswer.Revoked -> forget()
+                CircleAnswer.Revoked -> forget(com.point.core.flow.PC_DEVICE_REVOKED)
             }
         }
     }
@@ -165,9 +180,16 @@ class DesktopAccount(
         }
     }
 
-    private suspend fun forget() {
+    /**
+     * Забыть аккаунт: человек вышел или этот компьютер отключили. Point остаётся работать на
+     * этом компьютере — без связанных устройств, а не на экране входа. [why] — почему, если
+     * человек этого не просил: отключение с другого устройства обязано быть сказано.
+     */
+    private suspend fun forget(why: String? = null) {
         runCatching { store.clear() }
         _circle.value = emptyList()
-        _signIn.value = SignIn.SignedOut
+        _account.value = null
+        _signIn.value = null
+        _error.value = why
     }
 }

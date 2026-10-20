@@ -74,6 +74,9 @@ fun SettingsRoot(
     /** Стоит ли меню файла Windows в этом положении на деле; `null` — прочитать не удалось (#1082). */
     rightClickHolds: suspend (Boolean) -> Boolean?,
     onOpen: (SettingsPage) -> Unit,
+
+    /** Вошёл ли человек: без входа строка устройств зовёт подключить их, а не считает пустоту. */
+    signedIn: Boolean = email.isNotBlank(),
 ) {
     var rightClick by remember { mutableStateOf(config.rightClick) }
     var sound by remember { mutableStateOf(config.sound) }
@@ -111,7 +114,7 @@ fun SettingsRoot(
         Section("Аккаунт и устройства") {
             PortalRow(
                 title = MY_DEVICES_TITLE,
-                subtitle = devicesLine(email, devices),
+                subtitle = if (signedIn) devicesLine(email, devices) else com.point.desktop.NEEDS_SIGN_IN_FOR_DEVICES,
                 onClick = { onOpen(SettingsPage.DEVICES) },
             )
         }

@@ -1,5 +1,6 @@
 package com.point.desktop.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -98,6 +101,7 @@ fun PointWindow(
 ) {
     val items by state.items.collectAsState()
     val journal by state.journal.collectAsState()
+    val signedInAs by account.account.collectAsState()
     val signIn by account.signIn.collectAsState()
     val circle by account.circle.collectAsState()
     val accountBusy by account.busy.collectAsState()
@@ -197,8 +201,8 @@ fun PointWindow(
                     chrome = chrome,
                     query = query,
                     onQuery = { query = it },
-                    // Пока человек не вошёл, искать и настраивать нечего: поиск и шестерёнка
-                    // на экране входа были бы кнопками, которые ничего не делают.
+                    // Пока идёт вход, искать и настраивать нечего: поиск и шестерёнка на экране
+                    // входа были бы кнопками, которые ничего не делают.
                     search = wide && searchFits && signIn == null,
                     onBack = if (!wide && opened != null && !showSettings && signIn == null) ({ openedId = null }) else null,
                     settings = if (signIn != null) {
@@ -215,6 +219,15 @@ fun PointWindow(
                         }
                     },
                     onHide = onHide,
+                    account = account,
+                    onDevices = if (signIn != null) {
+                        null
+                    } else {
+                        {
+                            settingsPage = SettingsPage.DEVICES
+                            showSettings = true
+                        }
+                    },
                 )
 
                 val gate = signIn
@@ -267,6 +280,7 @@ fun PointWindow(
                             items = items,
                             onOpen = open,
                             ways = ways,
+                            linked = signedInAs != null,
                             selectedId = openedId.takeUnless { showSettings },
                             query = query,
                             modifier = Modifier.width(LIST_WIDTH).fillMaxHeight()
@@ -279,7 +293,7 @@ fun PointWindow(
                             when {
                                 showSettings -> settingsPane(Modifier.fillMaxSize())
                                 opened != null -> objectPane(opened, Modifier.fillMaxSize())
-                                else -> NothingOpen(empty = items.isEmpty() && journal.isEmpty())
+                                else -> NothingOpen(empty = items.isEmpty() && journal.isEmpty(), linked = signedInAs != null)
                             }
                         }
                     }
@@ -291,6 +305,7 @@ fun PointWindow(
                         items = items,
                         onOpen = open,
                         ways = ways,
+                        linked = signedInAs != null,
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 12.dp),
                     )
                 }
@@ -324,9 +339,13 @@ private fun WindowHeader(
     search: Boolean,
     onBack: (() -> Unit)?,
 
-    /** Дверь в настройки — её кладёт вызывающий; `null` — дверей нет (человек ещё не вошёл). */
+    /** Дверь в настройки — её кладёт вызывающий; `null` — дверей нет, пока идёт вход. */
     settings: (@Composable () -> Unit)?,
     onHide: () -> Unit,
+    account: com.point.desktop.DesktopAccount? = null,
+
+    /** Куда ведёт строка связи — к «Моим устройствам», где их подключают. */
+    onDevices: (() -> Unit)? = null,
 ) {
     chrome.dragArea(Modifier.fillMaxWidth().height(46.dp)) {
         Row(
@@ -341,7 +360,7 @@ private fun WindowHeader(
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (onBack != null) RoundButton(GlassIcons.ChevronLeft, "Назад", onBack) else PointGlyph()
                 Text("Point", style = PointType.header)
-                PhoneLink(state, Modifier.padding(start = 4.dp).weight(1f, fill = false))
+                PhoneLink(state, account, Modifier.padding(start = 4.dp).weight(1f, fill = false), onClick = onDevices)
             }
             if (search) SearchField(query, onQuery, "Найти в недавнем", Modifier.width(320.dp))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
@@ -361,24 +380,46 @@ private fun WindowHeader(
 }
 
 /**
- * Связь с телефоном — в шапке, точкой и словами: «телефон · на связи». Прежде это была первая
- * строка списка, и она уезжала вместе с ним.
+ * Связь с устройствами — в шапке, точкой и словами: «Pixel 8 · на связи». Прежде это была
+ * первая строка списка, и она уезжала вместе с ним.
+ *
+ * Без входа устройства не подключены (решение владельца 20.10.2026), и строка говорит именно
+ * это, а не «телефон · ждёт связи»: ждать телефона, который не может прийти, — неправда.
+ * [onClick] ведёт туда, где их подключают.
  */
 @Composable
-internal fun PhoneLink(state: DesktopState, modifier: Modifier = Modifier) {
+internal fun PhoneLink(
+    state: DesktopState,
+    account: com.point.desktop.DesktopAccount?,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
     val lastContact by state.lastContact.collectAsState()
+
+    // Без аккаунта под рукой (тест, превью) строка не выдумывает «не подключены».
+    val signedInAs = account?.account?.collectAsState()?.value
+    val signedIn = account == null || signedInAs != null
+    val circle = account?.circle?.collectAsState()?.value.orEmpty()
     val now = rememberNow()
     val link = com.point.core.flow.linkStateOf(lastContact, now, knownButUnheard = true)
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .let { if (onClick != null) it.handCursor().clickable(onClick = onClick) else it }
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         StatusDot(
-            when (link) {
-                is com.point.core.flow.LinkState.Live -> PointColors.green
-                com.point.core.flow.LinkState.Checking -> PointColors.cyan
+            when {
+                !signedIn -> PointColors.faint
+                link is com.point.core.flow.LinkState.Live -> PointColors.green
+                link == com.point.core.flow.LinkState.Checking -> PointColors.cyan
                 else -> PointColors.faint
             },
         )
         Text(
-            "телефон · " + com.point.core.flow.linkLabel(link),
+            linkLine(signedIn, circle.filterNot { it.self }, link),
             style = PointType.small,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -386,9 +427,23 @@ internal fun PhoneLink(state: DesktopState, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Строка связи словами. Устройство одно — оно названо своим именем; их несколько или круг ещё не
+ * прочитан — «устройства»: у человека бывают и два телефона, и планшет, и второй компьютер, а
+ * слово «телефон» называло бы одно из них.
+ */
+internal fun linkLine(signedIn: Boolean, others: List<com.point.core.flow.CircleDevice>, link: com.point.core.flow.LinkState): String = when {
+    !signedIn -> DEVICES_NOT_LINKED
+    others.size == 1 -> others.single().name.ifBlank { "устройство" } + " · " + com.point.core.flow.linkLabel(link)
+    else -> "устройства · " + com.point.core.flow.linkLabel(link)
+}
+
+/** Строка связи без входа: подключать устройства — дело входа, а не ожидания. */
+internal const val DEVICES_NOT_LINKED = "устройства не подключены"
+
 /** Справа пусто, пока объект не выбран: что сюда встанет и как его принести. */
 @Composable
-private fun NothingOpen(empty: Boolean) {
+private fun NothingOpen(empty: Boolean, linked: Boolean) {
     Column(
         Modifier.fillMaxSize().padding(40.dp),
         verticalArrangement = Arrangement.Center,
@@ -401,7 +456,7 @@ private fun NothingOpen(empty: Boolean) {
             modifier = Modifier.padding(top = 16.dp),
         )
         Text(
-            "Бросьте файл в окно, нажмите Ctrl+V или поделитесь с телефона",
+            howToBring(linked),
             style = PointType.small,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp).widthIn(max = 360.dp),

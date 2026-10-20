@@ -131,6 +131,10 @@ fun main(args: Array<String>) {
     val serverUrl = com.point.core.flow.PointServer.base(config.server)
     val accountStore = FileAccountStore(pointDir)
 
+    // Связаны ли устройства — знает аккаунт, а он рождается ниже исполнителей: шов подключается,
+    // как только он есть (тот же приём, что у стука, #1079). До того — по тому, что лежит на диске.
+    var linked: () -> Boolean = { accountStore.current() != null }
+
     val deviceKeys = FileDeviceKeys(pointDir)
 
     val entities = com.point.core.flow.RegexEntityExtractor()
@@ -179,7 +183,7 @@ fun main(args: Array<String>) {
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
             PcDownloadRealizer(downloader),
-            PcToPhoneRealizer(outbox, knockPhone = { obj -> knockPhoneLate(obj) }),
+            PcToPhoneRealizer(outbox, knockPhone = { obj -> knockPhoneLate(obj) }, linked = { linked() }),
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf),
             PcPdfTextRealizer(PdfBoxText()),
@@ -287,6 +291,7 @@ fun main(args: Array<String>) {
         mySettings = { FilePcConfig(pointDir).accountSettings() },
         onSettings = { merged -> runCatching { FilePcConfig(pointDir).applyAccountSettings(merged) } },
     )
+    linked = { account.account.value != null }
 
     val phoneCapsFile = File(pointDir, "phone-caps")
 
@@ -301,6 +306,7 @@ fun main(args: Array<String>) {
         },
         journalStore = journalStore,
         knockPhone = account::knockPhones,
+        linked = { linked() },
 
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         consent = FileConsent(File(pointDir, "consent")),
@@ -658,7 +664,6 @@ fun main(args: Array<String>) {
         }
 
         // Панель у трея: «Новый объект» и «Недавнее»; выбранное открывается в окне.
-        val gate by account.signIn.collectAsState()
         val corner = compactBounds(workArea)
         Window(
             visible = popover,
@@ -701,7 +706,7 @@ fun main(args: Array<String>) {
                     onGrabScreen = grabScreen,
                     onReceiveFile = receiveFile,
                     onCancelReceive = cancelReceive,
-                    signedOut = gate != null,
+                    account = account,
                 )
             }
         }

@@ -164,6 +164,9 @@ internal fun RecentPane(
     modifier: Modifier = Modifier,
     selectedId: String? = null,
     query: String = "",
+
+    /** Связаны ли устройства: без входа звать «поделиться с телефона» нечестно. */
+    linked: Boolean = true,
 ) = Column(modifier) {
     NewObjectButton(ways)
     Text(
@@ -181,6 +184,7 @@ internal fun RecentPane(
         onOpen = onOpen,
         selectedId = selectedId,
         query = query,
+        linked = linked,
         modifier = Modifier.weight(1f),
     )
 }
@@ -243,6 +247,7 @@ internal fun RecentList(
     modifier: Modifier = Modifier,
     selectedId: String? = null,
     query: String = "",
+    linked: Boolean = true,
 ) {
     val journal by state.journal.collectAsState()
     val fresh by state.fresh.collectAsState()
@@ -292,7 +297,7 @@ internal fun RecentList(
         }
 
         when {
-            lines.isEmpty() -> EmptyNote("Пока пусто. Поделитесь с телефона, бросьте файл в окно или нажмите Ctrl+V.")
+            lines.isEmpty() -> EmptyNote("Пока пусто. " + howToBring(linked))
             found.isEmpty() -> EmptyNote("В «Недавнем» такого нет")
         }
     }
@@ -303,3 +308,14 @@ private fun EmptyNote(text: String) {
     Spacer(Modifier.height(14.dp))
     Text(text, style = PointType.small, modifier = Modifier.padding(horizontal = 10.dp))
 }
+
+/**
+ * Как принести сюда объект — словами, которые правда сработают: поделиться с телефона можно,
+ * только когда устройства связаны (решение владельца 20.10.2026 — вход для этого и нужен).
+ */
+internal fun howToBring(linked: Boolean): String =
+    if (linked) {
+        "Бросьте файл в окно, нажмите Ctrl+V или поделитесь с телефона."
+    } else {
+        "Бросьте файл в окно или нажмите Ctrl+V."
+    }

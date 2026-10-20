@@ -24,7 +24,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.ClipboardPayload
 import com.point.desktop.DesktopState
@@ -54,8 +53,8 @@ fun PopoverPane(
     onReceiveFile: () -> Unit = {},
     onCancelReceive: () -> Unit = {},
 
-    /** Человек ещё не вошёл: вход живёт в окне, панель зовёт туда, а не открывает Point в обход. */
-    signedOut: Boolean = false,
+    /** Аккаунт — чтобы строка связи говорила правду: без входа устройства не подключены. */
+    account: com.point.desktop.DesktopAccount? = null,
 ) {
     val items by state.items.collectAsState()
     val scope = rememberCoroutineScope()
@@ -83,7 +82,7 @@ fun PopoverPane(
             ) {
                 PointGlyph()
                 Text("Point", style = PointType.header)
-                PhoneLink(state, Modifier.padding(start = 4.dp).weight(1f))
+                PhoneLink(state, account, Modifier.padding(start = 4.dp).weight(1f))
                 Row(
                     Modifier.clip(RoundedCornerShape(8.dp)).handCursor().clickable(onClick = onOpenWindow)
                         .padding(horizontal = 6.dp, vertical = 4.dp),
@@ -95,19 +94,14 @@ fun PopoverPane(
                 }
                 RoundButton(GlassIcons.Close, "Закрыть", onHide)
             }
-            if (signedOut) {
-                Column(
-                    Modifier.weight(1f).fillMaxWidth().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(com.point.core.flow.SIGN_IN_TITLE, style = PointType.title, textAlign = TextAlign.Center)
-                    Text(com.point.core.flow.SIGN_IN_WHY, style = PointType.small, textAlign = TextAlign.Center)
-                    LightButton(com.point.core.flow.SIGN_IN_ACTION, onOpenWindow)
-                }
-            } else {
-                RecentPane(state = state, items = items, onOpen = onOpen, ways = ways, modifier = Modifier.weight(1f))
-            }
+            RecentPane(
+                state = state,
+                items = items,
+                onOpen = onOpen,
+                ways = ways,
+                linked = account?.account?.collectAsState()?.value != null || account == null,
+                modifier = Modifier.weight(1f),
+            )
         }
         WindowMessage(state, Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp))
     }

@@ -262,6 +262,12 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
  */
 const val PC_TO_PHONE = "pc-to-phone"
 
+/**
+ * Зачем на компьютере вход — одной строкой во всех местах, где без него нельзя (решение
+ * владельца 20.10.2026): работать можно и так, вход связывает устройства — сколько их ни есть.
+ */
+const val NEEDS_SIGN_IN_FOR_DEVICES = "Войдите, чтобы подключить телефон, планшет или другой компьютер"
+
 class PcToPhoneCapability : Capability {
     override val id = CapabilityId(PC_TO_PHONE)
 
@@ -286,8 +292,18 @@ class PcToPhoneRealizer(
      * в «ПУТЬ» этого объекта, а не гаснет вместе с плашкой на экране.
      */
     private val knockPhone: suspend (PointObject) -> Unit = {},
+
+    /**
+     * Связаны ли устройства (решение владельца 20.10.2026): без входа телефона у компьютера нет,
+     * и дверь «На телефон» не стоит там, где за ней никто не заберёт объект.
+     */
+    private val linked: () -> Boolean = { true },
 ) : Realizer {
     override val capabilityId = CapabilityId(PC_TO_PHONE)
+
+    override fun isAvailable(): Boolean = linked()
+
+    override fun unavailableReason(): String? = if (linked()) null else NEEDS_SIGN_IN_FOR_DEVICES
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
