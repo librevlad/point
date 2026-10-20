@@ -97,6 +97,12 @@ interface BuiltInAiKeys {
     fun key(providerId: String): String
 
     fun have(): Set<String>
+
+    /**
+     * Адрес, по которому ходит ключ сборки, если он не тот, что в списке: Workers AI живёт
+     * под номером аккаунта сборки. Пусто — адрес как у сервиса в списке.
+     */
+    fun baseUrl(providerId: String): String = ""
 }
 
 fun encodeUserAiKeys(keys: UserAiKeys): String = keys.entries.joinToString("\n") {

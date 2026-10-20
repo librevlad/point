@@ -26,6 +26,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.listSaver
@@ -51,9 +52,11 @@ import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
 import com.point.core.flow.YOLO_TITLE
-import com.point.core.flow.aiCheckedLine
+import com.point.core.flow.accountIn
+import com.point.core.flow.aiChainLine
 import com.point.core.flow.aiKeysSummary
 import com.point.core.flow.aiServiceLines
+import com.point.core.flow.urlWithAccount
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
 import com.point.core.ui.portalCard
@@ -109,15 +112,13 @@ fun KeyScreen(
     modifier: Modifier = Modifier,
 ) {
 
-    var section by rememberSaveable(note, errand, checking, verdict) {
-        mutableStateOf(
-            if (note != null || errand != null || checking != null || verdict != null) {
-                SettingsSection.KEY
-            } else {
-                null
-            },
-        )
-    }
+    val aboutKeys = note != null || errand != null || checking != null || verdict != null
+    var section by rememberSaveable { mutableStateOf(if (aboutKeys) SettingsSection.KEY else null) }
+
+    // Проверка, отказ или поручение ведут в раздел ключей; их конец назад не выкидывает.
+    // Прежде раздел пересоздавался на каждую смену приговора, и «Удалить ключ» после проверки
+    // выбрасывал человека в корень настроек.
+    LaunchedEffect(aboutKeys) { if (aboutKeys) section = SettingsSection.KEY }
 
     Column(
         modifier = modifier
@@ -157,6 +158,7 @@ fun KeyScreen(
                     checking = checking,
                     verdict = verdict,
                     verdictFor = verdictFor,
+                    privacyLevel = privacyLevel,
                     onSave = onSave,
                     onCheck = onCheck,
                     onCheckAll = onCheckAll,
@@ -396,16 +398,40 @@ internal class KeyDraft(saved: UserAiKey) {
     var model by mutableStateOf(saved.model)
     var baseUrl by mutableStateOf(saved.baseUrl)
 
+    /** Номер аккаунта — у сервиса, чей адрес из него собирается; хранится адресом. */
+    var account by mutableStateOf(provider()?.accountIn(saved.baseUrl).orEmpty())
+
     var pasteNote by mutableStateOf("")
 
     var advancedOpen by mutableStateOf(false)
 
-    fun entered() = UserAiKey(providerId, key.trim(), model.trim(), baseUrl.trim())
+    /** Показан ли ключ буквами, а не точками. */
+    var revealed by mutableStateOf(false)
+
+    /** Сервис, чей это ключ по его началу, если не этот. */
+    var elsewhere by mutableStateOf("")
+
+    private fun provider() = AI_PROVIDERS.firstOrNull { it.id == providerId }
+
+    fun entered(): UserAiKey {
+        val withAccount = provider()?.takeIf { it.account != null && account.isNotBlank() }
+        return UserAiKey(
+            providerId,
+            key.trim(),
+            model.trim(),
+            withAccount?.urlWithAccount(account) ?: baseUrl.trim(),
+        )
+    }
 
     companion object {
         val Saver = listSaver<KeyDraft, Any>(
 
-            save = { listOf(it.providerId, it.key, it.baseUrl, it.model, it.pasteNote, it.advancedOpen) },
+            save = {
+                listOf(
+                    it.providerId, it.key, it.baseUrl, it.model, it.pasteNote, it.advancedOpen,
+                    it.account, it.revealed, it.elsewhere,
+                )
+            },
             restore = {
                 KeyDraft(
                     UserAiKey(
@@ -417,6 +443,9 @@ internal class KeyDraft(saved: UserAiKey) {
                 ).apply {
                     pasteNote = it[4] as String
                     advancedOpen = it[5] as Boolean
+                    account = it[6] as String
+                    revealed = it[7] as Boolean
+                    elsewhere = it[8] as String
                 }
             },
         )
@@ -487,11 +516,10 @@ fun aiKeysScreenOf(
     builtIn: Set<String> = emptySet(),
     facts: Map<String, AiFact> = emptyMap(),
     now: Long = System.currentTimeMillis(),
-): AiKeysScreen = AiKeysScreen(
-    keys = keys,
-    services = aiServiceLines(keys, builtIn, facts, now),
-    checkedLine = aiCheckedLine(facts, now),
-)
+): AiKeysScreen {
+    val services = aiServiceLines(keys, builtIn, facts, now)
+    return AiKeysScreen(keys = keys, services = services, checkedLine = aiChainLine(services, facts, now))
+}
 
 private val previewProvider: AiProvider = AI_PROVIDERS.first()
 

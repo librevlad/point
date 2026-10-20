@@ -796,6 +796,7 @@ class FlowViewModel @Inject constructor(
                 KeyErrand(
                     action = com.point.core.flow.labelWithoutKeyNote(bubble.title),
                     objectName = top.metadata["name"] ?: com.point.core.ui.kindLabel(top.state.kind),
+                    kind = top.state.kind,
                 ),
             )
             return

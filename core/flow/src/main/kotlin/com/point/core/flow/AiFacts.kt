@@ -105,6 +105,28 @@ fun aiCheckedLine(facts: Map<String, AiFact>, now: Long, zone: ZoneId = ZoneId.s
     return "Проверено ${whenWord(newest.at, now, zone)}"
 }
 
+/**
+ * Итог проверки одной строкой: сколько сервисов с ключом отвечают и когда это узнали.
+ *
+ * После «Проверить все» человек видел только «Проверено только что» и, чтобы понять, всё ли
+ * в порядке, обходил строки глазами: беда стоит в строке, а благополучие молчит. Итог —
+ * ответ на вопрос, ради которого нажимали. Пока о каком-то сервисе с ключом сведений нет,
+ * счёт был бы неправдой — остаётся возраст сведений.
+ */
+fun aiChainLine(
+    lines: List<AiServiceLine>,
+    facts: Map<String, AiFact>,
+    now: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String {
+    val ready = lines.filter { it.ready }.map { it.providerId }
+    val known = ready.mapNotNull { facts[it] }
+    if (ready.isEmpty() || known.size < ready.size) return aiCheckedLine(facts, now, zone)
+    val answered = known.count { it.outcome == AiOutcome.ANSWERED }
+    val count = if (answered == ready.size) "Отвечают все ${ready.size}" else "Отвечают $answered из ${ready.size}"
+    return "$count · проверено ${whenWord(known.maxOf { it.at }, now, zone)}"
+}
+
 fun whenWord(at: Long, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {
     val ago = now - at
     if (ago in 0 until MINUTE) return "только что"
@@ -137,7 +159,16 @@ data class AiServiceLine(
 
     /** Место в очереди обращения: «03» перед именем объясняет порядок без слов. */
     val place: Int = 0,
+
+    /**
+     * Цена ключа у сервиса, к которому ключа нет ни у кого: «бесплатный уровень», «платно».
+     * Человек выбирает, куда идти за ключом, — и видит главное, не раскрывая строку.
+     */
+    val offer: String? = null,
 )
+
+/** Цена ключа у сервиса без бесплатного уровня. */
+const val AI_PAID_OFFER = "платно"
 
 /**
  * Все известные сервисы списком — в том порядке, в каком Point к ним обращается.
@@ -170,12 +201,14 @@ private fun line(
 ): AiServiceLine {
     val mine = keys.keyFor(id)
     val ours = id in builtIn
+    val provider = AI_PROVIDERS.firstOrNull { it.id == id }
     return AiServiceLine(
         providerId = id,
         name = name,
         what = what,
         trouble = aiTroubleLine(facts[id], now, zone),
         place = aiChainPlace(id),
+        offer = if (mine.isNotEmpty() || ours || provider == null) null else provider.freeNote ?: AI_PAID_OFFER,
         keyLine = when {
             mine.isNotEmpty() -> "ваш ключ ${maskedKey(mine)}"
             ours -> "работает на ключе Point"
@@ -279,8 +312,29 @@ const val AI_CHAIN_MORE =
  */
 const val AI_MINE_KEEP_PLACE = "Ваши ключи сохраняют свои места в общей очереди."
 
-/** Где проверяется цепочка, если здесь этого действия нет. */
-const val AI_CHECK_ELSEWHERE = "Проверка цепочки выполняется на телефоне."
+/**
+ * Вставка ключа, ещё не знающего своего сервиса: он сам встаёт к своему по приметам начала.
+ * Раньше человек искал строку сервиса среди двенадцати, раскрывал её, вставлял и отдельно
+ * нажимал «Проверить».
+ */
+const val PASTE_ANY_KEY = "Вставить ключ из буфера"
+
+const val PASTE_ANY_KEY_WHAT = "Ключ встанет к своему сервису и сразу проверится."
+
+const val NO_KEY_IN_CLIPBOARD = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
+
+/** Ключ без приметы сервиса: Point спрашивает, а не гадает. */
+const val WHOSE_KEY_TITLE = "Чей это ключ?"
+
+const val WHOSE_KEY_WHAT =
+    "По виду ключа сервис не узнать. Нажмите тот, где вы его взяли, — проверять ключ Point будет только там."
+
+const val WHOSE_KEY_DISMISS = "Не вставлять"
+
+/** Ключ другого сервиса узнан по началу — сказать до проверки, а не объявить его негодным. */
+fun keyOfAnotherService(owner: String, here: String): String = "Похоже, это ключ $owner, а не $here."
+
+fun checkAsKeyOf(owner: String): String = "Проверить как ключ $owner"
 
 /** Место сервиса в очереди: «03» перед именем объясняет порядок обращения без слов. */
 fun aiChainPlace(providerId: String): Int =
@@ -294,3 +348,19 @@ fun aiChainPlace(providerId: String): Int =
  */
 fun aiTroubleLine(fact: AiFact?, now: Long, zone: ZoneId = ZoneId.systemDefault()): String? =
     fact?.takeIf { it.outcome != AiOutcome.ANSWERED }?.let { aiFactLine(it, now, zone) }
+
+/**
+ * Что стоит во второй строке сервиса — одно правило на телефон и компьютер. Общее про группу
+ * уже сказано её заголовком, поэтому здесь остаётся личное: свой ключ, последний факт, ход
+ * проверки.
+ */
+fun aiServiceState(line: AiServiceLine, checking: Boolean, open: Boolean): String? = when {
+    checking -> "проверяю…"
+    open && line.mine -> line.what + "\n" + line.keyLine + " · " + line.factLine
+    open -> line.what
+    line.mine -> "${line.keyLine} · ${line.factLine}"
+    // «Ответил» — ожидаемое, о нём строка молчит. Новость — отказ, исчерпанный лимит или
+    // молчание сервиса: их видно, не раскрывая строку (#902). У сервиса без ключа новость —
+    // цена: по ней выбирают, куда идти за ключом.
+    else -> line.trouble ?: line.offer
+}

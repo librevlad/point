@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -114,7 +115,7 @@ class KeyOnboardingTest {
         compose.onNodeWithText("Подключить AI", substring = true).assertDoesNotExist()
     }
 
-    @Test fun `ключ из буфера встаёт в поле одним тапом`() {
+    @Test fun `ключ из буфера встаёт в поле и проверяется одним тапом`() {
         var checked: UserAiKey? = null
         keyScreen(
             onCheck = { checked = it },
@@ -122,10 +123,102 @@ class KeyOnboardingTest {
         )
 
         compose.onNodeWithText("Вставить из буфера").performScrollTo().performClick()
-        compose.onNodeWithText("Проверить и включить").performScrollTo().performClick()
 
+        // Вставить и отдельно нажать «Проверить» — два шага там, где человек хотел один.
         assertEquals("sk-or-v1-0123456789abcdefghij", checked?.apiKey)
         assertEquals("ключ ушёл проверяться не за тот сервис", openRouter.id, checked?.providerId)
+    }
+
+    @Test fun `ключ из буфера сверху сам встаёт к своему сервису`() {
+        var checked: UserAiKey? = null
+        keyScreen(
+            onCheck = { checked = it },
+            onPasteKey = { "gsk_0123456789abcdefghij" },
+            openService = null,
+        )
+
+        compose.onNodeWithText(com.point.core.flow.PASTE_ANY_KEY).performScrollTo().performClick()
+
+        assertEquals("искать строку сервиса пришлось бы человеку", "groq", checked?.providerId)
+        assertEquals("gsk_0123456789abcdefghij", checked?.apiKey)
+        compose.onNodeWithText("Ключ Groq").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `ключ без приметы — Point спрашивает, чей он, и проверяет только там`() {
+        var checked: UserAiKey? = null
+        keyScreen(
+            onCheck = { checked = it },
+            onPasteKey = { "0123456789abcdef0123456789abcdef" },
+            openService = null,
+        )
+
+        compose.onNodeWithText(com.point.core.flow.PASTE_ANY_KEY).performScrollTo().performClick()
+
+        compose.onNodeWithText(com.point.core.flow.WHOSE_KEY_TITLE).performScrollTo().assertIsDisplayed()
+        assertNull("ключ ушёл на пробу наугад — чужому сервису", checked)
+
+        // Первая — кнопка в вопросе «чей?»: строка сервиса стоит ниже, в очереди.
+        compose.onAllNodesWithText("Mistral").onFirst().performScrollTo().performClick()
+
+        assertEquals("mistral", checked?.providerId)
+        compose.onNodeWithText(com.point.core.flow.WHOSE_KEY_TITLE).assertDoesNotExist()
+    }
+
+    @Test fun `в буфере сверху не ключ — Point говорит об этом`() {
+        var checked: UserAiKey? = null
+        keyScreen(onCheck = { checked = it }, onPasteKey = { "просто абзац текста" }, openService = null)
+
+        compose.onNodeWithText(com.point.core.flow.PASTE_ANY_KEY).performScrollTo().performClick()
+
+        compose.onNodeWithText("В буфере нет ключа", substring = true).performScrollTo().assertIsDisplayed()
+        assertNull(checked)
+    }
+
+    @Test fun `ключ чужого сервиса в строке называет своего хозяина, а не «не подошёл»`() {
+        var checked: UserAiKey? = null
+        keyScreen(onCheck = { checked = it }, onPasteKey = { "gsk_0123456789abcdefghij" })
+
+        compose.onNodeWithText("Вставить из буфера").performScrollTo().performClick()
+
+        compose.onNodeWithText("Похоже, это ключ Groq", substring = true).performScrollTo().assertIsDisplayed()
+        assertNull("ключ Groq ушёл бы на пробу к OpenRouter", checked)
+
+        compose.onNodeWithText("Проверить как ключ Groq").performScrollTo().performClick()
+
+        assertEquals("groq", checked?.providerId)
+    }
+
+    @Test fun `вставленный ключ можно увидеть буквами`() {
+        keyScreen(keys = savedKey)
+        fun shown() = compose.onAllNodes(hasSetTextAction())[0].fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text
+
+        assertTrue("ключ виден без просьбы", shown().all { it == '•' })
+        compose.onNodeWithText("Показать").performScrollTo().performClick()
+
+        assertEquals("sk-or-v1-abcdef123456", shown())
+    }
+
+    @Test fun `Workers AI без номера аккаунта проверять не по чему`() {
+        var checked: UserAiKey? = null
+        keyScreen(onCheck = { checked = it }, openService = "Cloudflare")
+
+        compose.onAllNodes(hasSetTextAction())[0].performScrollTo().performTextInput("cf-token-0123456789")
+        compose.onNodeWithText("Проверить и включить").performScrollTo().assertIsNotEnabled()
+
+        compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextInput("0123abcd")
+        compose.onNodeWithText("Проверить и включить").performScrollTo().performClick()
+
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/0123abcd/ai/v1", checked?.baseUrl)
+    }
+
+    @Test fun `в закрытой строке сервиса без ключа видна цена`() {
+        keyScreen(openService = null)
+
+        assertTrue(
+            "куда идти за ключом, не видно, не раскрыв все двенадцать строк",
+            compose.onAllNodes(androidx.compose.ui.test.hasText(com.point.core.flow.AI_PAID_OFFER)).fetchSemanticsNodes().isNotEmpty(),
+        )
     }
 
     @Test fun `в буфере не ключ — Point говорит об этом, а не молчит`() {
@@ -202,7 +295,7 @@ class KeyOnboardingTest {
     @Test fun `совет про исчерпанную квоту не обещает переключения на второй ключ`() {
         keyScreen(keys = savedKey, verdict = keyVerdict(KeyProbe(status = 429)))
 
-        compose.onNodeWithText("квота", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("квота на сейчас", substring = true).performScrollTo().assertIsDisplayed()
 
         compose.onNodeWithText("переключится", substring = true).assertDoesNotExist()
         compose.onNodeWithText("второй ключ", substring = true).assertDoesNotExist()
@@ -276,6 +369,31 @@ class KeyOnboardingTest {
         compose.onNodeWithText("Вернуться к «чек.jpg»").performScrollTo().performClick()
 
         assertTrue("строка есть, а выхода за ней нет", left == 1)
+    }
+
+    @Test fun `пришедшему с действия Point называет, куда идти за ключом`() {
+        keyScreen(errand = errand, openService = null)
+
+        val first = com.point.core.flow.keyErrandService(UserAiKeys.NONE)!!
+        compose.onNodeWithText("Открыть сайт ${first.name}").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `за ключом для записи Point посылает туда, где её расшифруют`() {
+        keyScreen(errand = errand.copy(kind = ObjectKind.AUDIO), openService = null)
+
+        compose.onNodeWithText("Открыть сайт Groq").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `дверь обратно стоит под приговором раскрытого сервиса — одна`() {
+        keyScreen(
+            keys = savedKey,
+            errand = errand,
+            verdict = KeyVerdict.Works("Готово"),
+            openService = openRouter.name,
+        )
+
+        // Одна дверь: найдись их две, onNodeWithText упал бы.
+        compose.onNodeWithText("Вернуться к «чек.jpg»").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `до проверки двери обратно нет`() {

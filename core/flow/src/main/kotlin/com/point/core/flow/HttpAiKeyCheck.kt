@@ -29,19 +29,36 @@ class HttpAiKeyCheck(
         }
         val text = withoutKey(response.body, key)
         return if (response.code in 200..299) {
-            KeyProbe(status = response.code, reply = replyOf(text))
+            val reply = replyOf(text)
+            KeyProbe(status = response.code, reply = reply, error = if (reply == null) errorOf(text) else null)
         } else {
             KeyProbe(status = response.code, error = text)
         }
     }
 
-    private fun replyOf(json: String): String = runCatching {
-        JSONObject(json).getJSONArray("choices").getJSONObject(0)
-            .getJSONObject("message").optString("content").trim()
-    }.getOrDefault("")
+    /**
+     * Слова модели; пустая строка — модель ответила, но слов не прислала; `null` — ответа
+     * модели в теле нет.
+     */
+    private fun replyOf(json: String): String? = runCatching {
+        val message = JSONObject(json).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+        if (message.isNull("content")) "" else message.optString("content").trim()
+    }.getOrNull()
+
+    /** Что сервис сказал вместо ответа: шлюзы присылают ошибку и под кодом 200. */
+    private fun errorOf(json: String): String? = runCatching {
+        val error = JSONObject(json).opt("error")
+        when (error) {
+            is JSONObject -> error.optString("message")
+            is String -> error
+            else -> null
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private companion object {
-        const val PROBE_TOKENS = 16
+
+        // Запас — на одно слово и короткое раздумье: думающие модели начинают с него.
+        const val PROBE_TOKENS = 64
     }
 }
 

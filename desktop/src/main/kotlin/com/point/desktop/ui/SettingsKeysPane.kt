@@ -3,6 +3,8 @@ package com.point.desktop.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +18,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.AI_PROVIDERS
+import com.point.core.flow.AiFact
+import com.point.core.flow.KeyProbe
 import com.point.core.flow.KeyVerdict
+import com.point.core.flow.NO_KEY_IN_CLIPBOARD
+import com.point.core.flow.PASTE_ANY_KEY
+import com.point.core.flow.PASTE_ANY_KEY_WHAT
+import com.point.core.flow.WHOSE_KEY_DISMISS
+import com.point.core.flow.WHOSE_KEY_TITLE
+import com.point.core.flow.WHOSE_KEY_WHAT
+import com.point.core.flow.checkAsKeyOf
+import com.point.core.flow.keyOfAnotherService
+import com.point.core.flow.UserAiKey
+import com.point.core.flow.accountIn
+import com.point.core.flow.aiOutcomeOfStatus
 import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
+import com.point.core.flow.providerOfKey
+import com.point.core.flow.urlWithAccount
+import com.point.core.flow.withoutKey
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
 
@@ -39,6 +58,12 @@ private fun speechSaysWhere(keys: com.point.core.flow.UserAiKeys): String {
     }
 }
 
+/** Текст из буфера обмена — только по нажатию человека, как и на телефоне (#677). */
+internal fun clipboardText(): String? = runCatching {
+    java.awt.Toolkit.getDefaultToolkit().systemClipboard
+        .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+}.getOrNull()
+
 /**
  * Раздел «Ключи AI» в окне компьютера (#834, #911).
  *
@@ -50,6 +75,9 @@ private fun speechSaysWhere(keys: com.point.core.flow.UserAiKeys): String {
  *
  * Раньше здесь выбирался ОДИН сервис и к нему одно поле ключа — модель, которой нет на
  * телефоне. Теперь у каждого сервиса свой ключ, и связка целиком ездит между устройствами.
+ *
+ * Дорога та же, что на телефоне: ключ из буфера встаёт к своему сервису сам и сразу
+ * проверяется, а сохраняется — только когда сервис ответил.
  */
 @Composable
 fun SettingsKeys(
@@ -58,6 +86,7 @@ fun SettingsKeys(
     keyCheck: com.point.core.flow.AiKeyCheck =
         com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
     onOpenUrl: (String) -> Unit = {},
+    readClipboard: () -> String? = ::clipboardText,
 ) {
     var keys by remember { mutableStateOf(config.aiKeys) }
     var speechKey by remember { mutableStateOf(config.speech.key) }
@@ -66,6 +95,15 @@ fun SettingsKeys(
     var verdict by remember { mutableStateOf<KeyVerdict?>(null) }
     var verdictFor by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf<String?>(null) }
+
+    // Исходы проверок — память окна: по ним строка говорит «лимит исчерпан», а сводка —
+    // сколько сервисов отвечают. Своих ключей у Point на компьютере нет, поэтому проверять
+    // здесь есть что только у ключей человека.
+    var facts by remember { mutableStateOf(emptyMap<String, AiFact>()) }
+
+    var unclaimed by remember { mutableStateOf<String?>(null) }
+    var pasted by remember { mutableStateOf<UserAiKey?>(null) }
+    var pasteNote by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     fun store(next: com.point.core.flow.UserAiKeys = keys) {
@@ -79,8 +117,54 @@ fun SettingsKeys(
         )
     }
 
-    // Своих ключей у Point на компьютере нет: здесь работает то, к чему вписан ваш ключ.
-    val lines = com.point.core.flow.aiServiceLines(keys, emptySet(), emptyMap(), 0L)
+    suspend fun probe(key: UserAiKey): KeyVerdict {
+        val call = com.point.core.flow.aiCall(key)
+        val said = runCatching { keyCheck.check(call) }
+            .getOrElse { KeyProbe(error = withoutKey(it.message.orEmpty(), call.apiKey)) }
+        facts = facts + (key.providerId to AiFact(aiOutcomeOfStatus(said.status), System.currentTimeMillis()))
+        return keyVerdict(said)
+    }
+
+    // Проверка — до сохранения, как на телефоне. Прежде ключ сохранялся, а после отказа
+    // стирался (#1080): сорвавшаяся связь или исчерпанный лимит стирали и верный ключ.
+    fun check(key: UserAiKey) {
+        if (checking != null || !looksLikeApiKey(key.apiKey)) return
+        checking = key.providerId
+        verdict = null
+        verdictFor = null
+        scope.launch {
+            val said = probe(key)
+            verdict = said
+            verdictFor = key.providerId
+            checking = null
+            if (said is KeyVerdict.Works) store(keys.with(key))
+        }
+    }
+
+    fun checkAll() {
+        if (checking != null) return
+        checking = CHECK_ALL
+        verdict = null
+        verdictFor = null
+        scope.launch {
+            keys.mine.forEach { probe(it) }
+            checking = null
+        }
+    }
+
+    fun take(key: String, providerId: String) {
+        val provider = AI_PROVIDERS.firstOrNull { it.id == providerId }
+        val entered = (keys.of(providerId) ?: UserAiKey(providerId, "")).copy(apiKey = key.trim())
+        unclaimed = null
+        pasteNote = null
+        pasted = entered
+        open = providerId
+        val waitsForAccount = provider?.account != null && provider.accountIn(entered.baseUrl).isEmpty()
+        if (!waitsForAccount) check(entered)
+    }
+
+    val now = System.currentTimeMillis()
+    val lines = com.point.core.flow.aiServiceLines(keys, emptySet(), facts, now)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -104,20 +188,50 @@ fun SettingsKeys(
                 style = PointType.small.copy(color = PointColors.muted),
             )
         }
-        // Сводка — один и тот же блок, что на телефоне: состояние, время последней проверки
-        // и — там, где оно есть, — действие. Здесь его нет, и об этом сказано прямо, а не
-        // умолчанием (#911).
-        Column(
+
+        // Ключ из буфера — к своему сервису, без поиска строки среди двенадцати.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Action(PASTE_ANY_KEY) {
+                if (checking != null) return@Action
+                val text = readClipboard()?.trim()
+                when {
+                    text == null || !looksLikeApiKey(text) -> {
+                        unclaimed = null
+                        pasteNote = NO_KEY_IN_CLIPBOARD
+                    }
+                    else -> providerOfKey(text)?.let { take(text, it.id) } ?: run {
+                        pasteNote = null
+                        unclaimed = text
+                    }
+                }
+            }
+            Text(PASTE_ANY_KEY_WHAT, style = PointType.small.copy(color = PointColors.muted))
+        }
+        pasteNote?.let { Text(it, style = PointType.small.copy(color = PointColors.muted)) }
+        unclaimed?.let { key -> WhoseKey(onPick = { take(key, it) }, onDismiss = { unclaimed = null }) }
+
+        // Сводка — тот же блок, что на телефоне: счёт своих ключей, итог проверки и сама
+        // проверка. Прежде проверять было нечем: «Проверка цепочки выполняется на телефоне».
+        Row(
             modifier = Modifier.fillMaxWidth()
                 .glassPanel(RoundedCornerShape(14.dp))
                 .padding(horizontal = 14.dp, vertical = 11.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(com.point.core.flow.aiKeysCount(keys), style = PointType.body)
-            Text(
-                com.point.core.flow.AI_CHECK_ELSEWHERE,
-                style = PointType.small.copy(color = PointColors.muted),
-            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(com.point.core.flow.aiKeysCount(keys), style = PointType.body)
+                Text(
+                    if (checking == CHECK_ALL) {
+                        "Point спрашивает каждый сервис одним коротким словом."
+                    } else {
+                        com.point.core.flow.aiChainLine(lines, facts, now)
+                    },
+                    style = PointType.small.copy(color = PointColors.muted),
+                )
+            }
+            if (keys.mine.isNotEmpty()) {
+                Action(if (checking == CHECK_ALL) "Проверяю…" else "Проверить все") { checkAll() }
+            }
         }
 
         com.point.core.flow.aiServiceGroups(lines).forEach { (group, rows) ->
@@ -130,42 +244,27 @@ fun SettingsKeys(
             }
             Column(Modifier.fillMaxWidth().glassPanel().padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 rows.forEach { line ->
+                    val isOpen = open == line.providerId
                     PortalRow(
                         // Номер — место в очереди обращения, то же, что на телефоне (#902).
                         // Он вторичен: главное в строке — имя сервиса (#911).
                         title = line.name,
                         place = line.place,
-                        subtitle = when {
-                            open == line.providerId -> line.what
-                            else -> line.trouble
-                        },
-                        onClick = { open = if (open == line.providerId) null else line.providerId },
+                        subtitle = com.point.core.flow.aiServiceState(line, checking == line.providerId, isOpen),
+                        onClick = { open = if (isOpen) null else line.providerId },
                     )
-                    if (open == line.providerId) {
+                    if (isOpen) {
                         ServiceKey(
                             line = line,
                             saved = keys.of(line.providerId),
+                            pasted = pasted?.takeIf { it.providerId == line.providerId },
                             checking = checking == line.providerId,
                             verdict = verdict.takeIf { verdictFor == line.providerId },
                             onOpenUrl = onOpenUrl,
                             onSave = { key -> verdict = null; store(keys.with(key)) },
                             onForget = { store(keys.without(line.providerId)) },
-                            onCheck = { key ->
-                                if (checking == null && looksLikeApiKey(key.apiKey)) {
-                                    checking = line.providerId
-                                    scope.launch {
-                                        val said = keyVerdict(keyCheck.check(com.point.core.flow.aiCall(key)))
-                                        verdict = said
-                                        verdictFor = line.providerId
-                                        checking = null
-
-                                        // Ключ, не прошедший проверку, своим не остаётся (#1080):
-                                        // прежде он переезжал в «Ваши ключи» и считался
-                                        // рабочим, хотя Point только что сказал обратное.
-                                        if (said is KeyVerdict.Refused) store(keys.without(line.providerId))
-                                    }
-                                }
-                            },
+                            onCheck = ::check,
+                            onElsewhere = ::take,
                         )
                     }
                 }
@@ -189,7 +288,32 @@ fun SettingsKeys(
                 "его дневной предел.",
             style = PointType.small.copy(color = PointColors.muted),
         )
-        Field(ocrKey, { ocrKey = it; store() }, "Ваш ключ OCR.space — необязателен", secret = true)
+        Field(ocrKey, { ocrKey = it; store() }, "Ваш ключ OCR.space — необязателен", secret = true, revealable = true)
+    }
+}
+
+/** «Проверить все» идёт — ни одна строка не проверяется отдельно. */
+private const val CHECK_ALL = "*"
+
+/**
+ * Ключ без приметы сервиса: спросить, а не гадать. Ключ одного сервиса, отправленный на
+ * пробу другому, — это чужой секрет в чужих руках.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WhoseKey(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .glassPanel(RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(WHOSE_KEY_TITLE, style = PointType.body)
+        Text(WHOSE_KEY_WHAT, style = PointType.small.copy(color = PointColors.muted))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AI_PROVIDERS.forEach { provider -> PillButton(provider.name, { onPick(provider.id) }, small = true) }
+        }
+        Action(WHOSE_KEY_DISMISS, onDismiss)
     }
 }
 
@@ -197,16 +321,36 @@ fun SettingsKeys(
 @Composable
 private fun ServiceKey(
     line: com.point.core.flow.AiServiceLine,
-    saved: com.point.core.flow.UserAiKey?,
+    saved: UserAiKey?,
+    pasted: UserAiKey?,
     checking: Boolean,
     verdict: KeyVerdict?,
     onOpenUrl: (String) -> Unit,
-    onSave: (com.point.core.flow.UserAiKey) -> Unit,
+    onSave: (UserAiKey) -> Unit,
     onForget: () -> Unit,
-    onCheck: (com.point.core.flow.UserAiKey) -> Unit,
+    onCheck: (UserAiKey) -> Unit,
+    onElsewhere: (key: String, providerId: String) -> Unit,
 ) {
     val provider = AI_PROVIDERS.firstOrNull { it.id == line.providerId }
-    var draft by remember(line.providerId, saved) { mutableStateOf(saved?.apiKey.orEmpty()) }
+    val start = pasted ?: saved
+    var draft by remember(line.providerId, saved, pasted) { mutableStateOf(start?.apiKey.orEmpty()) }
+    var number by remember(line.providerId, saved, pasted) {
+        mutableStateOf(provider?.accountIn(start?.baseUrl.orEmpty()).orEmpty())
+    }
+    val account = provider?.account
+
+    fun entered() = UserAiKey(
+        providerId = line.providerId,
+        apiKey = draft.trim(),
+        model = saved?.model.orEmpty(),
+        baseUrl = if (account != null && number.isNotBlank()) provider.urlWithAccount(number) else saved?.baseUrl.orEmpty(),
+        savedAt = saved?.savedAt ?: 0L,
+    )
+
+    // Ключ другого сервиса узнаётся по началу — сказать до проверки, а не объявить верный
+    // ключ негодным.
+    val elsewhere = providerOfKey(draft)?.takeIf { it.id != line.providerId }
+    val canCheck = draft.isNotBlank() && !checking && (account == null || number.isNotBlank())
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -217,17 +361,21 @@ private fun ServiceKey(
         provider?.freeNote?.let { Text(it, style = PointType.small.copy(color = PointColors.cyan)) }
         provider?.let { Action("Открыть сайт ${it.name}") { onOpenUrl(it.keyUrl) } }
 
-        Field(draft, { draft = it }, "Ключ ${line.name}", secret = true)
+        Field(draft, { draft = it }, "Ключ ${line.name}", secret = true, revealable = true)
+        if (account != null) {
+            Field(number, { number = it.trim() }, account.label)
+            Text(account.where, style = PointType.small.copy(color = PointColors.muted))
+        }
+
+        if (elsewhere != null) {
+            Text(keyOfAnotherService(elsewhere.name, line.name), style = PointType.small.copy(color = PointColors.muted))
+            Action(checkAsKeyOf(elsewhere.name)) { onElsewhere(draft, elsewhere.id) }
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Action(if (checking) "Проверяю…" else "Сохранить и проверить") {
-                val key = com.point.core.flow.UserAiKey(
-                    providerId = line.providerId,
-                    apiKey = draft.trim(),
-                    savedAt = saved?.savedAt ?: 0L,
-                )
-                onSave(key)
-                onCheck(key)
+            PillButton(if (checking) "Проверяю…" else "Проверить и включить", { onCheck(entered()) }, enabled = canCheck)
+            if (draft.isNotBlank() && verdict !is KeyVerdict.Works && draft.trim() != saved?.apiKey) {
+                Action("Сохранить без проверки") { onSave(entered()) }
             }
             // Дверь «убрать» видна там, где есть что убирать: прежде на её месте была
             // пустота, и вписанный ключ убрать было нечем (#1080).

@@ -2,6 +2,7 @@ package com.point.desktop.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -347,7 +348,7 @@ fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
 @Composable
 internal fun Verdict(verdict: KeyVerdict) {
     when (verdict) {
-        is KeyVerdict.Works -> Text("Ключ работает: " + verdict.reply, style = PointType.small)
+        is KeyVerdict.Works -> Text(com.point.core.flow.keyWorksLine(verdict), style = PointType.small)
         is KeyVerdict.Refused -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(verdict.what, style = PointType.body)
             Text(verdict.fix, style = PointType.small.copy(color = PointColors.muted))
@@ -393,7 +394,11 @@ internal fun Field(
     onChange: (String) -> Unit,
     hint: String,
     secret: Boolean = false,
+
+    /** Секрет можно показать буквами: точки не говорят, тот ли ключ встал и целиком ли. */
+    revealable: Boolean = false,
 ) {
+    var shown by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(hint, style = PointType.small.copy(color = PointColors.muted))
         BasicTextField(
@@ -402,12 +407,25 @@ internal fun Field(
             singleLine = true,
             textStyle = PointType.body,
             cursorBrush = SolidColor(PointColors.violet),
-            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation = if (secret && !shown) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color.White.copy(alpha = 0.06f))
                 .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 11.dp),
+            decorationBox = { inner ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { inner() }
+                    if (secret && revealable && value.isNotBlank()) {
+                        Text(
+                            if (shown) "Скрыть" else "Показать",
+                            style = PointType.small.copy(color = PointColors.link),
+                            modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(6.dp))
+                                .handCursor().clickable { shown = !shown },
+                        )
+                    }
+                }
+            },
         )
     }
 }

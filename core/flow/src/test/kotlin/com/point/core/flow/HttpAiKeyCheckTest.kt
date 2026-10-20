@@ -63,6 +63,34 @@ class HttpAiKeyCheckTest {
     }
 
     @Test
+    fun `думающая модель без слов доезжает как работающий ключ`() = runTest {
+        val body = """{"choices":[{"message":{"role":"assistant","content":null,""" +
+            """"reasoning":"The user asks"},"finish_reason":"length"}]}"""
+        val probe = HttpAiKeyCheck(FakeHttp(body = body)).check(config)
+
+        assertEquals(KeyVerdict.Works(""), keyVerdict(probe))
+    }
+
+    @Test
+    fun `ошибка шлюза под кодом 200 не выдаётся за ответ`() = runTest {
+        val body = """{"error":{"message":"No endpoints found for some-model","code":404}}"""
+        val verdict = keyVerdict(HttpAiKeyCheck(FakeHttp(body = body)).check(config)) as KeyVerdict.Refused
+
+        assertTrue(verdict.what.contains("ответа не прислали"))
+        assertTrue("человек не узнал, что сказал сервис", verdict.fix.contains("No endpoints found"))
+    }
+
+    @Test
+    fun `запаса пробы хватает думающей модели на раздумье и слово`() = runTest {
+        val http = FakeHttp()
+        HttpAiKeyCheck(http).check(config)
+
+        val budget = org.json.JSONObject(http.sent!!).getInt("max_tokens")
+        assertTrue("запас $budget съедает раздумье, и ответ приходит пустым", budget >= 48)
+        assertTrue("проба перестала быть короткой", budget <= 128)
+    }
+
+    @Test
     fun `отказ сервиса приезжает со своим кодом, а не исключением`() = runTest {
         val probe = HttpAiKeyCheck(FakeHttp(code = 429, body = "rate limit")).check(config)
 
