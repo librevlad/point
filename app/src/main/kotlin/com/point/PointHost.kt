@@ -57,7 +57,6 @@ import com.point.core.ui.ScreenHeader
 import com.point.core.ui.FocusScreen
 import com.point.core.ui.ThinkingDot
 import com.point.core.ui.bubbleIcon
-import com.point.core.ui.livingBackground
 import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
 import kotlinx.coroutines.delay
@@ -203,10 +202,10 @@ fun PointHost(
             else -> pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
     }
+    // Обои рисует корень экрана (`PointScreen`): одни на все двери, которыми система зовёт Point.
     Box(
         modifier
             .fillMaxSize()
-            .livingBackground()
             .systemBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
@@ -334,7 +333,6 @@ fun PointHost(
 
                 ExitRow(onLeave = onDismissMessage, label = leaveLabel)
 
-                TimelineStrip(path = state.path, onNode = onJumpTo)
                 AnimatedContent(
                     targetState = frame,
                     contentKey = { it.obj.id },
@@ -396,6 +394,8 @@ fun PointHost(
                     focusPreview = state.focusPreview,
                     focused = current.focus != null,
                     onClearFocus = onClearFocus,
+
+                    history = { TimelineStrip(path = state.path, onNode = onJumpTo) },
 
                     onHeroTap = when (
                         heroTapOf(
@@ -649,19 +649,23 @@ private fun PreviewActionPreview() = PointTheme(darkTheme = true) {
     )
 }
 
-const val LEAVE_TO_HOME = "← Недавнее"
+const val LEAVE_TO_HOME = "Недавнее"
 
-const val LEAVE_BACK = "← Назад"
+const val LEAVE_BACK = "Назад"
 
+/**
+ * Выход с экрана вещи — пилюлей стекла со стрелкой и словом, куда он ведёт (макет 19.10.2026).
+ *
+ * Слово остаётся видимым: из «Поделиться» выход ведёт назад в чужое приложение, а со значка — в
+ * «Недавнее», и круглая кнопка без слова не сказала бы, куда человек попадёт.
+ */
 @Composable
 private fun ExitRow(onLeave: () -> Unit, label: String) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onLeave) {
-            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        com.point.core.ui.GlassPill(label = label, onClick = onLeave, icon = com.point.core.ui.GlassIcons.ChevronLeft)
     }
 }
 

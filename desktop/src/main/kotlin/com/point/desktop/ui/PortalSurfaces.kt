@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.point.core.ui.actionTint
 
 /*
  * Строка и плашка, которыми пишут настройки, аккаунт и действия.

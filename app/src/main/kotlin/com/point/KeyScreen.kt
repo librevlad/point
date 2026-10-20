@@ -61,6 +61,10 @@ import com.point.core.ui.ScreenHeader
 import com.point.core.ui.SectionLabel
 import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
+import com.point.core.ui.ScreenTopBar
+import com.point.core.ui.GroupHeader
+import com.point.core.ui.GlassGroup
+import com.point.core.ui.glassSwitchColors
 
 @Composable
 fun KeyScreen(
@@ -131,7 +135,8 @@ fun KeyScreen(
         ) {
             when (section) {
 
-                null -> BackToRoot(onCancel)
+                // «Назад» у корня настроек ведёт туда, откуда их открыли, — к вещи или в «Недавнее».
+                null -> ScreenTopBar(title = SETTINGS_TITLE, onBack = onCancel, backLabel = LEAVE_BACK)
                 else -> Unit
             }
             when (section) {
@@ -222,9 +227,7 @@ private fun SettingsList(
     memory: com.point.core.flow.HistoryFootprint?,
     version: String,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(GroupGap)) {
-
-        ScreenHeader(title = SETTINGS_TITLE, modifier = Modifier.padding(bottom = 2.dp))
+    Column {
 
         // Порядок разделов один на телефон и компьютер (#881): аккаунт и устройства →
         // AI и приватность → поведение → данные → интеграции. «Мои устройства» стоит первым
@@ -266,7 +269,7 @@ private fun SettingsList(
                 subtitle = "Тихий фирменный отклик на каждое действие.",
                 onClick = { onOpen(SettingsSection.APP) },
                 appearIndex = 3,
-                trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
+                trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound, colors = glassSwitchColors()) },
             )
         }
 
@@ -291,35 +294,32 @@ private fun SettingsList(
         }
 
         if (version.isNotBlank()) {
-            Text(
-                "Point $version",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 14.dp),
-            )
+            Row(
+                modifier = Modifier.padding(start = 16.dp, top = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                com.point.core.ui.PointGlyph(size = 14.dp)
+                Text("Point $version", style = com.point.core.ui.theme.PointText.note)
+            }
         }
     }
 }
 
+/**
+ * Группа настроек — заголовок над панелью и строки в ней (макет «Настройки · телефон»): порядок
+ * разделов читается по заголовкам, строки раздела — одной панелью стекла.
+ */
 @Composable
 private fun SettingsGroup(title: String, rows: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().portalCard()) {
-        SectionLabel(
-            text = title,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 13.dp, bottom = 2.dp),
-        )
-        rows()
-    }
+    GroupHeader(title)
+    GlassGroup(content = rows)
 }
 
+/** Линия между строками настроек: плашек у них нет, и линия идёт от текста. */
 @Composable
 private fun GroupSeam() {
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 14.dp),
-        thickness = 1.dp,
-        color = MaterialTheme.colorScheme.outline,
-    )
+    com.point.core.ui.GroupSeam(start = 14.dp)
 }
 
 @Composable
@@ -342,24 +342,13 @@ private fun SettingsRow(
     )
 }
 
-private val GroupGap = 16.dp
-
+/**
+ * Шапка раздела настроек: круглая кнопка назад к списку и имя раздела рядом (макет «Мои
+ * устройства · телефон»). Куда ведёт кнопка, говорит её имя — «Настройки».
+ */
 @Composable
-private fun BackToRoot(onBack: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onBack) {
-            Text("← Назад", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-internal fun BackToList(onBack: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onBack) {
-            Text("← $SETTINGS_TITLE", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
+internal fun SectionTopBar(title: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    ScreenTopBar(title = title, onBack = onBack, backLabel = SETTINGS_TITLE, modifier = modifier)
 }
 
 private const val AI_GROUP_TITLE = "AI и приватность"
@@ -479,19 +468,19 @@ internal fun SwitchCard(
         modifier = Modifier
             .fillMaxWidth()
             .portalCard()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(title, style = com.point.core.ui.theme.PointText.rowTitle)
             Text(
                 description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = com.point.core.ui.theme.PointText.note,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = glassSwitchColors())
     }
 }
 

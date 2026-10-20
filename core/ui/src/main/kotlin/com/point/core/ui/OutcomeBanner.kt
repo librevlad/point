@@ -17,9 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -66,7 +63,7 @@ fun OutcomeBanner(message: String?, outcome: Outcome) {
     ) {
 
         val accent = when (shownOutcome) {
-            Outcome.DONE -> MaterialTheme.colorScheme.primary
+            Outcome.DONE -> PointPalette.violet
             Outcome.FAILED -> OutcomeWarm
             Outcome.NONE -> null
         }
@@ -103,7 +100,7 @@ fun OutcomeCard(
     detail: String? = null,
 ) {
     val accent = when (outcome) {
-        Outcome.DONE -> MaterialTheme.colorScheme.primary
+        Outcome.DONE -> PointPalette.violet
         Outcome.FAILED -> OutcomeWarm
         Outcome.NONE -> null
     }
@@ -135,7 +132,8 @@ fun OutcomeCard(
     }
 }
 
-private val OutcomeWarm = Color(0xFFF85938)
+/** Не вышло — единственным тёплым тоном палитры, как сорвавшийся шаг у окна компьютера. */
+private val OutcomeWarm = PointPalette.warm
 
 @Composable
 private fun OutcomeMark(accent: Color, failed: Boolean) {
@@ -157,7 +155,7 @@ private fun OutcomeMark(accent: Color, failed: Boolean) {
                 scaleY = s
             }
             .clip(CircleShape)
-            .background(PlateBase)
+            .background(Color.White.copy(alpha = 0.09f))
             .background(
                 Brush.radialGradient(
                     listOf(accent.copy(alpha = (0.34f + 0.34f * ignite).coerceAtMost(1f)), Color.Transparent),
@@ -166,7 +164,7 @@ private fun OutcomeMark(accent: Color, failed: Boolean) {
             .border(1.dp, accent.copy(alpha = 0.45f), CircleShape),
     ) {
         Icon(
-            imageVector = if (failed) Icons.Filled.Close else Icons.Filled.Check,
+            imageVector = if (failed) GlassIcons.Close else GlassIcons.Check,
             contentDescription = if (failed) "Не получилось" else "Готово",
             tint = accent,
             modifier = Modifier.size(18.dp),

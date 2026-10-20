@@ -59,7 +59,7 @@ class RecordAudioActivity : ComponentActivity() {
         target = savedInstanceState?.getString(STATE_PATH)?.let(::File)
         setContent {
             PointTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                com.point.core.ui.PointScreen {
                     RecordTicker(recording) { seconds = it }
                     RecordScreen(
                         recording = recording,

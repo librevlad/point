@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The deep near-black window field (matches Compose DarkColors.background) — kills the white
-         launch flash and keeps the status/nav bars dark for the portal redesign. -->
-    <color name="point_dark_bg">#0A0A12</color>
+    <!-- Земля под стеклом (PointPalette.canvas, макет 19.10.2026) — окно системы того же цвета,
+         что фон Compose: нет белой вспышки при запуске, полосы системы не спорят с обоями. -->
+    <color name="point_dark_bg">#2B2531</color>
 </resources>

@@ -19,6 +19,9 @@ import com.point.core.flow.SIGN_IN_ACTION
 import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
 import com.point.core.flow.signInWaitingLine
+import com.point.core.ui.actionTint
+import com.point.core.ui.bubbleIcon
+import com.point.core.ui.PointGlyph
 
 /**
  * Вход в аккаунт на компьютере: знак Point, слова и одна светлая кнопка шага.
@@ -139,7 +142,7 @@ fun MyDevicesPane(
                     GlassRow(
                         title = device.name,
                         subtitle = com.point.core.flow.deviceLine(device, now),
-                        icon = lineIcon(key),
+                        icon = bubbleIcon(key),
                         tint = actionTint(com.point.core.ui.bubbleColor(key)),
                         onClick = null,
                     ) {

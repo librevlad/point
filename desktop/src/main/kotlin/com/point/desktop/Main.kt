@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.painterResource
-import com.point.desktop.ui.drawPointMark
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.ui.window.Tray
@@ -15,6 +14,7 @@ import java.awt.FileDialog
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.File
+import com.point.core.ui.drawPointMark
 
 private const val SCREEN_GRAB_DELAY_MS = 220L
 

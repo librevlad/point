@@ -41,6 +41,17 @@ import com.point.core.ui.ThinkingDot
 import com.point.core.ui.bubbleColor
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.theme.PointTheme
+import com.point.core.ui.ScreenTopBar
+import com.point.core.ui.GroupHeader
+import com.point.core.ui.GlassGroup
+import com.point.core.ui.GroupSeam
+import com.point.core.ui.GlassButton
+import com.point.core.ui.SmallPill
+import com.point.core.ui.PortalPlate
+import com.point.core.ui.PointPalette
+import com.point.core.ui.theme.PointText
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun MyDevicesScreen(
@@ -69,74 +80,53 @@ fun MyDevicesScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Column(modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
 
-        Portal(size = 148.dp, intensity = if (others.isEmpty()) 0.4f else 1f)
-        Spacer(Modifier.height(16.dp))
-        ScreenHeader(
-            title = MY_DEVICES_TITLE,
-            subtitle = state.email.takeIf { it.isNotBlank() },
-            horizontalAlignment = Alignment.CenterHorizontally,
-        )
+            // Шапка макета «Мои устройства · телефон»: назад и имя экрана в одной строке.
+            ScreenTopBar(title = MY_DEVICES_TITLE, onBack = onClose, backLabel = LEAVE_BACK)
+            state.email.takeIf { it.isNotBlank() }?.let { email ->
+                Text(email, style = PointText.note, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+            }
 
-        OutcomeBanner(state.error, Outcome.FAILED)
-
-        Spacer(Modifier.height(22.dp))
-
-        Column(
-            modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(11.dp),
-        ) {
+            OutcomeBanner(state.error, Outcome.FAILED)
 
             if (state.loading) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 6.dp),
+                    modifier = Modifier.padding(start = 16.dp, top = 18.dp),
                 ) {
                     ThinkingDot()
                     Spacer(Modifier.width(9.dp))
-                    Text(
-                        "Спрашиваю сервер о ваших устройствах…",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text("Спрашиваю сервер о ваших устройствах…", style = PointText.note)
                 }
             }
 
-            state.devices.forEachIndexed { index, device ->
-                val icon = com.point.core.flow.deviceIconKey(device.kind)
-                PortalRow(
-                    title = device.name,
+            if (state.devices.isNotEmpty()) {
+                GroupHeader("Круг · ${state.devices.size}")
+                GlassGroup {
+                    state.devices.forEachIndexed { index, device ->
+                        if (index > 0) GroupSeam(start = 12.dp + 40.dp + 14.dp)
+                        DeviceRow(
+                            device = device,
 
-                    // Правило второй строки общее с компьютером (#891). «На связи» утверждается
-                    // только для списка, который сервер отдал только что; запомненный круг —
-                    // нет (#1076). Свежесть — свойство списка, не отсутствия ошибки: ошибка
-                    // гаснет с началом любой операции, а список при этом тот же.
-                    subtitle = com.point.core.flow.deviceLine(device, now, checkedNow = state.checkedNow),
-
-                    onClick = { },
-                    enabled = false,
-                    icon = bubbleIcon(icon),
-                    accent = bubbleColor(icon),
-                    chevron = false,
-                    appearIndex = index,
-                    trailing = {
-
-                        TextButton(onClick = { onRevoke(device.id) }, enabled = !state.busy) {
-                            Text(
-                                "Отключить",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                        }
-                    },
-                )
+                            // Правило второй строки общее с компьютером (#891). «На связи»
+                            // утверждается только для списка, который сервер отдал только что;
+                            // запомненный круг — нет (#1076). Свежесть — свойство списка, не
+                            // отсутствия ошибки: ошибка гаснет с началом любой операции, а список
+                            // при этом тот же.
+                            line = com.point.core.flow.deviceLine(device, now, checkedNow = state.checkedNow),
+                            busy = state.busy,
+                            onRevoke = { onRevoke(device.id) },
+                        )
+                    }
+                }
             }
 
             if (knockOff && others.any { it.kind == com.point.core.flow.DeviceKind.PC }) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(14.dp))
                 PortalRow(
                     title = KNOCK_TITLE,
                     subtitle = KNOCK_WHAT,
@@ -150,55 +140,75 @@ fun MyDevicesScreen(
             // круг и правда из одного этого устройства: при молчании сервера сюда приходит
             // запомненный круг, и незнание больше не выдаётся за одиночество (#1076).
             if (!state.loading && others.isEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                SectionLabel("Пока вы один")
+                SectionLabel("Пока вы один", modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 6.dp))
                 Text(
                     "Запустите «Point для ПК» и войдите в тот же аккаунт — компьютер появится здесь " +
                         "сам, связывать его ничем не нужно.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = PointText.note,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-        }
 
-        Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(22.dp))
+            GlassButton("Выйти", onClick = onSignOut, enabled = !state.busy)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextButton(onClick = onSignOut, enabled = !state.busy) {
-                Text("Выйти", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = onClose) {
-                Text("Закрыть", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        Spacer(Modifier.height(22.dp))
-        Column(
-            modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (!confirmingDelete) {
-                TextButton(onClick = { confirmingDelete = true }, enabled = !state.busy) {
-                    Text(DELETE_ACCOUNT, color = MaterialTheme.colorScheme.error)
-                }
-            } else {
-                Text(
-                    DELETE_ACCOUNT_WHAT,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TextButton(onClick = { confirmingDelete = false }) {
-                        Text("Не удалять", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(14.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (!confirmingDelete) {
+                    TextButton(onClick = { confirmingDelete = true }, enabled = !state.busy) {
+                        Text(DELETE_ACCOUNT, style = PointText.note.copy(color = PointPalette.warmText))
                     }
-                    TextButton(onClick = onDeleteAccount, enabled = !state.busy) {
-                        Text(DELETE_ACCOUNT_CONFIRM, color = MaterialTheme.colorScheme.error)
+                } else {
+                    Text(
+                        DELETE_ACCOUNT_WHAT,
+                        style = PointText.note,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TextButton(onClick = { confirmingDelete = false }) {
+                            Text("Не удалять", style = PointText.note)
+                        }
+                        TextButton(onClick = onDeleteAccount, enabled = !state.busy) {
+                            Text(DELETE_ACCOUNT_CONFIRM, style = PointText.note.copy(color = PointPalette.warmText))
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Устройство круга: знак вида в кольце его цвета — телефон зелёный, компьютер синий, как точки
+ * связи у окна компьютера, — имя, вторая строка о связи и «Отключить».
+ */
+@Composable
+private fun DeviceRow(device: CircleDevice, line: String, busy: Boolean, onRevoke: () -> Unit) {
+    val key = com.point.core.flow.deviceIconKey(device.kind)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 60.dp)
+            .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        PortalPlate(
+            accent = bubbleColor(key),
+            icon = bubbleIcon(key),
+            size = 40.dp,
+            tint = false,
+            ring = (if (device.kind == com.point.core.flow.DeviceKind.PC) PointPalette.blue else PointPalette.green).copy(alpha = 0.8f),
+        )
+        Column(Modifier.weight(1f)) {
+            Text(device.name, style = PointText.rowTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(line, style = PointText.note, modifier = Modifier.padding(top = 2.dp))
+        }
+        SmallPill("Отключить", onClick = onRevoke, warm = true, enabled = !busy)
     }
 }
 

@@ -61,6 +61,8 @@ fun FindScreen(
                     onValueChange = { query = it; onQuery(it) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    shape = GlassFieldShape,
+                    colors = glassFieldColors(),
                     label = { Text("Что найти") },
                 )
                 TextButton(onClick = onClose) {
@@ -78,7 +80,7 @@ fun FindScreen(
 
         var container by remember { mutableStateOf(IntSize.Zero) }
         val fit = pageFit(container, image.width, image.height)
-        val accent = MaterialTheme.colorScheme.primary
+        val accent = PointPalette.highlight
 
         Box(
             modifier = Modifier

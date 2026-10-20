@@ -41,6 +41,11 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.GlassTone
+import com.point.core.ui.drawWallpaper
+import com.point.core.ui.glassEdge
+import com.point.core.ui.lightSurface
 
 /*
  * Стекло Point на компьютере (макет владельца «Point · концепт в стиле Gestalt», 19.10.2026).
@@ -49,41 +54,10 @@ import androidx.compose.ui.unit.dp
  * действий, блок содержимого — чуть светлее окна) и строка (светлеет под курсором). Главное
  * действие — светлая строка с тёмным текстом: оно стоит первой строкой списка, а не баннером.
  *
- * Размытия за окном Compose Desktop не умеет, поэтому обои рисуются внутри самого окна: земля,
- * три мягких пятна и стекло поверх — так выглядит окно макета на его обоях.
+ * Обои, кромка и светлая строка — общие с телефоном (`core/ui/src/shared`, `GlassSurfaces.kt`):
+ * здесь только то, что есть у окна и нет у телефона, — курсор, подсказка при наведении, шапка окна.
  */
 
-/** Какое стекло лежит на обоях: тёмное окно или светлая выпадающая панель. */
-enum class GlassTone { WINDOW, PANEL }
-
-private val WindowGlass = Color(0xA3241F2A)
-private val Plum = Color(0x99805678)
-private val Clay = Color(0x57D6805C)
-private val Dusk = Color(0x80545E8C)
-
-private fun DrawScope.spot(center: Offset, radius: Float, color: Color) =
-    drawCircle(Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), center, radius), radius, center)
-
-/** Обои окна: земля и три пятна света, как сквозь матовое стекло. */
-fun DrawScope.drawWallpaper(tone: GlassTone) {
-    drawRect(PointColors.canvas)
-    val w = size.width
-    val h = size.height
-    spot(Offset(w * 0.02f, h * 0.12f), maxOf(w, h) * 0.5f, Plum)
-    spot(Offset(w * 0.95f, h * 0.1f), maxOf(w, h) * 0.42f, Clay)
-    spot(Offset(w * 0.5f, h * 1.05f), maxOf(w, h) * 0.52f, Dusk)
-    when (tone) {
-        GlassTone.WINDOW -> drawRect(WindowGlass)
-        GlassTone.PANEL -> drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.05f))))
-    }
-}
-
-/** Кромка стекла: тонкая, у верхнего края светлее — свет падает сверху. */
-private fun glassEdge(top: Float, rest: Float) = Brush.verticalGradient(
-    0f to Color.White.copy(alpha = top),
-    0.05f to Color.White.copy(alpha = rest),
-    1f to Color.White.copy(alpha = rest),
-)
 
 /**
  * Окно целиком: обои, стекло, кромка — и линия цвета компьютера сверху.
@@ -116,13 +90,6 @@ fun Modifier.glassPanel(shape: Shape = RoundedCornerShape(18.dp)): Modifier = th
     .clip(shape)
     .background(PointColors.surface)
     .border(1.dp, glassEdge(0.2f, 0.09f), shape)
-
-/** Светлая строка главного действия и кнопки «Новый объект». */
-fun Modifier.lightSurface(shape: Shape = RoundedCornerShape(14.dp)): Modifier = this
-    .shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f))
-    .clip(shape)
-    .background(Brush.verticalGradient(listOf(PointColors.lightTop, PointColors.lightBottom)))
-    .border(1.dp, Brush.verticalGradient(0f to Color.White.copy(alpha = 0.95f), 0.1f to Color.Transparent), shape)
 
 /** Нажимаемое отвечает курсором-рукой: на компьютере это обещание «сюда можно». */
 fun Modifier.handCursor(): Modifier = pointerHoverIcon(PointerIcon.Hand)
@@ -421,14 +388,3 @@ fun RoundButton(
     }
 }
 
-/**
- * Знак Point внутри окна — наш портал, тот же, что у иконки и у телефона (`PointMark`).
- *
- * Макет 19.10.2026 рисовал на его месте свой знак — тонкое кольцо с точкой. Знак у Point один:
- * окно берёт из макета стекло, а не другой логотип. Поле под кольцом здесь не нужно — фон
- * у окна уже свой; [field] включает его там, где знак стоит сам по себе, как иконка.
- */
-@Composable
-fun PointGlyph(modifier: Modifier = Modifier, size: Dp = 16.dp, field: Boolean = false) {
-    androidx.compose.foundation.Canvas(modifier.size(size)) { drawPointMark(field = field) }
-}

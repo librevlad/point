@@ -13,18 +13,21 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.heroLine
 
 /**
  * Одно действие на двух устройствах узнаётся по одному знаку (макет 19.10.2026).
  *
- * Компьютер рисует знаки действий контуром, телефон — заливкой, и таблица контуров живёт
- * здесь своей копией телефонной. Ключ, заведённый только на телефоне, здесь нарисовался бы
- * запасной молнией — молча, и человек искал бы знакомое действие по чужому знаку.
+ * Компьютер рисовал знаки действий контуром и держал таблицу контуров своей копией телефонной:
+ * ключ, заведённый только на телефоне, здесь рисовался запасной молнией. С 20.10.2026 телефон
+ * тоже рисует контуром, и таблица одна (`bubbleIcon` в общем каталоге). Сторож держит то, что
+ * от копии осталось бедой: ни один ключ таблицы не рисуется запасным знаком.
  */
 class GlassIconsTest {
 
-    /** Ключи знаков телефона — ветви его таблицы: иного перечня у них нет. */
-    private val phoneKeys: List<String> =
+    /** Ключи знаков — ветви общей таблицы: иного перечня у них нет. */
+    private val keys: List<String> =
         File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/BubbleIcons.kt").readText()
             .substringAfter("fun bubbleIcon(")
             .substringBefore("fun bubbleColor(")
@@ -33,27 +36,27 @@ class GlassIconsTest {
             .toList()
 
     @Test
-    fun `у каждого знака телефона есть контур на компьютере`() {
-        assertTrue("ключей телефона не нашлось — сторож смотрит в пустоту: $phoneKeys", phoneKeys.size > 20)
+    fun `ни один знак действия не рисуется запасной молнией`() {
+        assertTrue("ключей не нашлось — сторож смотрит в пустоту: $keys", keys.size > 20)
 
-        val fallback = phoneKeys.filter { lineIcon(it) == Icons.Outlined.Bolt }
-        assertTrue("эти знаки на компьютере рисуются запасной молнией: $fallback", fallback.isEmpty())
+        val fallback = keys.filter { bubbleIcon(it) == Icons.Outlined.Bolt }
+        assertTrue("эти знаки рисуются запасной молнией: $fallback", fallback.isEmpty())
     }
 
-    /** Контур — тот же знак Material, что заливка телефона, а не другой рисунок. */
+    /** Копия таблицы контуров не завелась снова — ни на компьютере, ни рядом с ним. */
     @Test
-    fun `контур — тот же знак, что заливка телефона`() {
-        val drawnHere = GlassIcons.run { setOf(Link) }
-        val other = phoneKeys.filter { key ->
-            val line = lineIcon(key)
-            line !in drawnHere && line.name.substringAfter('.') != bubbleIcon(key).name.substringAfter('.')
-        }
-        assertTrue("на компьютере у этих действий другой знак, чем на телефоне: $other", other.isEmpty())
+    fun `таблица знаков одна`() {
+        val copies = File(repo, "desktop/src/main/kotlin").walkTopDown()
+            .filter { it.extension == "kt" && it.readText().contains("fun lineIcon(") }
+            .map { it.name }
+            .toList()
+
+        assertTrue("знаки действий снова переписаны своей таблицей: $copies", copies.isEmpty())
     }
 
     @Test
-    fun `приложение на компьютере зовётся знаком «открыть в», как на телефоне`() {
-        assertEquals(lineIcon("open-in"), lineIcon("app:com.example.notes"))
+    fun `приложение зовётся знаком «открыть в»`() {
+        assertEquals(bubbleIcon("open-in"), bubbleIcon("app:com.example.notes"))
     }
 
     /** Знак вещи в кольце берётся у марки (#1233): таблица там таблица, а не «документ». */

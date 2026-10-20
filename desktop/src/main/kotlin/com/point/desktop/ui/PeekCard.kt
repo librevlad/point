@@ -21,6 +21,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
 import com.point.desktop.InboxItem
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.GlassTone
+import com.point.core.ui.kindIcon
+import com.point.core.ui.kindTint
 
 /**
  * Плашка прибытия — своё окошко Point, не системное уведомление: стекло того же окна, вид и имя
@@ -84,7 +88,7 @@ private fun PeekThumb(item: InboxItem) {
     } else {
         Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
             Plate(
-                icon = kindLine(item.obj.state.kind),
+                icon = kindIcon(item.obj.state.kind),
                 tint = kindTint(item.obj.state.kind),
                 size = 48.dp,
                 iconSize = 20.dp,

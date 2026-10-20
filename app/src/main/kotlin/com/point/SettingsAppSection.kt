@@ -13,8 +13,7 @@ internal fun AppSection(
     onToggleSound: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
-    BackToList(onBack)
-    ScreenHeader(title = APP_SECTION_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+    SectionTopBar(title = APP_SECTION_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
 
     SwitchCard(
         title = SOUND_TITLE,

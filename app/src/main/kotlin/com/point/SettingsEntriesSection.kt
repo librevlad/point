@@ -12,8 +12,7 @@ import com.point.core.ui.ScreenHeader
 /** Откуда Point открывается — про плитку человек мог не знать вовсе (#821). */
 @Composable
 internal fun EntriesSection(tileAdded: Boolean, onBack: () -> Unit) {
-    BackToList(onBack)
-    ScreenHeader(title = ENTRIES_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+    SectionTopBar(title = ENTRIES_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
 
     listOf(SHARE_ENTRY, if (tileAdded) TILE_ENTRY_ON else TILE_ENTRY_OFF).forEach {
         Text(

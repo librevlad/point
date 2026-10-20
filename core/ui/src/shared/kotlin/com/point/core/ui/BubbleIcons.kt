@@ -1,6 +1,58 @@
 package com.point.core.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Article
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.AutoFixNormal
+import androidx.compose.material.icons.outlined.BlurOn
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.Crop
+import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.EventRepeat
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.FolderZip
+import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.SaveAlt
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.outlined.Sms
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_AMOUNT
 import com.point.core.flow.KIND_DATE
@@ -11,124 +63,75 @@ import com.point.core.flow.KIND_PERSON
 import com.point.core.flow.KIND_PLACE
 import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Article
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.AutoFixNormal
-import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.BlurOn
-import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.Compress
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.Crop
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.EventRepeat
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.DocumentScanner
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.FormatListBulleted
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.FolderZip
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Print
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.QuestionAnswer
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.SaveAlt
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.Sms
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.Wallpaper
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import com.point.core.model.ObjectKind
 
+/**
+ * Знак действия — одна таблица на телефон и ПК (#849), контуром (макет 19.10.2026).
+ *
+ * Компьютер рисовал знаки контуром и держал свою копию этой таблицы (`lineIcon`), телефон —
+ * заливкой отсюда. С переходом телефона на стекло (решение владельца 20.10.2026) знак у
+ * действия один и в одном начертании: та же фигура Material, что была залита, теперь линией.
+ */
 fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "open-in" else key) {
-    "share" -> Icons.Filled.Share
-    "save" -> Icons.Filled.Save
-    "save-all" -> Icons.Filled.SaveAlt
-    "open" -> Icons.Filled.OpenInNew
-    "pdf" -> Icons.Filled.PictureAsPdf
-    "compress" -> Icons.Filled.Compress
-    "unzip" -> Icons.Filled.FolderZip
-    "folder" -> Icons.Filled.FolderOpen
-    "print" -> Icons.Filled.Print
-    "pages" -> Icons.Filled.Collections
-    "translate" -> Icons.Filled.Translate
-    "ai" -> Icons.Filled.AutoAwesome
+    "share" -> Icons.Outlined.Share
+    "save" -> Icons.Outlined.Save
+    "save-all" -> Icons.Outlined.SaveAlt
+    "open" -> Icons.Outlined.OpenInNew
+    "pdf" -> Icons.Outlined.PictureAsPdf
+    "compress" -> Icons.Outlined.Compress
+    "unzip" -> Icons.Outlined.FolderZip
+    "folder" -> Icons.Outlined.FolderOpen
+    "print" -> Icons.Outlined.Print
+    "pages" -> Icons.Outlined.Collections
+    "translate" -> Icons.Outlined.Translate
+    "ai" -> Icons.Outlined.AutoAwesome
     // Четыре соседа носили один знак и читались как дубли одного действия (#1384):
     // «Понять», «Исправить ошибки», «Исправить сильнее», «AI». Тон у них общий — они и
     // правда одна семья, — а знак у каждого свой, иначе список врёт про их число.
-    "fix" -> Icons.Filled.AutoFixNormal
-    "fix-more" -> Icons.Filled.AutoFixHigh
-    "ask" -> Icons.Filled.QuestionAnswer
-    "cart" -> Icons.Filled.ShoppingCart
-    "reply" -> Icons.Filled.Send
-    "link" -> Icons.Filled.Link
-    "office" -> Icons.Filled.Article
-    "excel" -> Icons.Filled.TableChart
-    "renew" -> Icons.Filled.EventRepeat
-    "pc" -> Icons.Filled.Computer
+    "fix" -> Icons.Outlined.AutoFixNormal
+    "fix-more" -> Icons.Outlined.AutoFixHigh
+    "ask" -> Icons.Outlined.QuestionAnswer
+    "cart" -> Icons.Outlined.ShoppingCart
+    "reply" -> Icons.Outlined.Send
 
-    "phone" -> Icons.Filled.Smartphone
-    "account" -> Icons.Filled.AccountCircle
+    // Ссылка нарисована по пути макета: знак Material у неё в контуре почти не читается.
+    "link" -> GlassIcons.Link
+    "office" -> Icons.Outlined.Article
+    "excel" -> Icons.Outlined.TableChart
+    "renew" -> Icons.Outlined.EventRepeat
+    "pc" -> Icons.Outlined.Computer
 
-    "settings" -> Icons.Filled.Settings
-    "scan" -> Icons.Filled.DocumentScanner
-    "camera" -> Icons.Filled.PhotoCamera
-    "cutout" -> Icons.Filled.ContentCut
+    "phone" -> Icons.Outlined.Smartphone
+    "account" -> Icons.Outlined.AccountCircle
+
+    "settings" -> Icons.Outlined.Settings
+    "scan" -> Icons.Outlined.DocumentScanner
+    "camera" -> Icons.Outlined.PhotoCamera
+    "cutout" -> Icons.Outlined.ContentCut
     // «Взять фрагмент» — та же группа преобразований, что вырезание (#1263).
-    "crop" -> Icons.Filled.Crop
-    "blur" -> Icons.Filled.BlurOn
-    "replace-bg" -> Icons.Filled.Wallpaper
-    "ocr" -> Icons.Filled.TextFields
+    "crop" -> Icons.Outlined.Crop
+    "blur" -> Icons.Outlined.BlurOn
+    "replace-bg" -> Icons.Outlined.Wallpaper
+    "ocr" -> Icons.Outlined.TextFields
 
-    "text" -> Icons.Filled.TextFields
-    "transcribe" -> Icons.Filled.RecordVoiceOver
-    "find" -> Icons.Filled.Search
-    "ocr-cloud" -> Icons.Filled.Cloud
+    "text" -> Icons.Outlined.TextFields
+    "transcribe" -> Icons.Outlined.RecordVoiceOver
+    "find" -> Icons.Outlined.Search
+    "ocr-cloud" -> Icons.Outlined.Cloud
 
-    "cloud" -> Icons.Filled.Cloud
-    "qr" -> Icons.Filled.QrCode2
-    "qr-scan" -> Icons.Filled.QrCodeScanner
-    "call" -> Icons.Filled.Call
-    "copy" -> Icons.Filled.ContentCopy
-    "list" -> Icons.Filled.FormatListBulleted
-    "message" -> Icons.Filled.Sms
-    "email" -> Icons.Filled.Email
-    "map" -> Icons.Filled.Place
-    "event" -> Icons.Filled.Event
-    "contact" -> Icons.Filled.PersonAdd
-    "open-in" -> Icons.Filled.Apps
-    else -> Icons.Filled.Bolt
+    "cloud" -> Icons.Outlined.Cloud
+    "qr" -> Icons.Outlined.QrCode2
+    "qr-scan" -> Icons.Outlined.QrCodeScanner
+    "call" -> Icons.Outlined.Call
+    "copy" -> Icons.Outlined.ContentCopy
+    "list" -> Icons.Outlined.FormatListBulleted
+    "message" -> Icons.Outlined.Sms
+    "email" -> Icons.Outlined.Email
+    "map" -> Icons.Outlined.Place
+    "event" -> Icons.Outlined.Event
+    "contact" -> Icons.Outlined.PersonAdd
+    "open-in" -> Icons.Outlined.Apps
+    else -> Icons.Outlined.Bolt
 }
 
 fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in" else key) {
@@ -185,26 +188,34 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     else -> Color(0xFF9AA0A6)
 }
 
+/**
+ * Знак вида объекта — в строке «Недавнего», у найденного, в пути и в кольце вещи без марки.
+ *
+ * Знаки Point (снимок, документ, ссылка, запись, папка) — по путям макета; найденные значения —
+ * контуры Material. Неизвестное рисуется документом: знак вопроса читался «Point не понял»,
+ * хотя у вещи просто нет своего знака.
+ */
 fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
-    ObjectKind.IMAGE -> Icons.Filled.Image
-    ObjectKind.TEXT -> Icons.Filled.Description
-    ObjectKind.PDF -> Icons.Filled.PictureAsPdf
-    ObjectKind.ZIP -> Icons.Filled.FolderZip
-    ObjectKind.OFFICE -> Icons.Filled.Article
-    ObjectKind.URL -> Icons.Filled.Link
-    ObjectKind.AUDIO -> Icons.Filled.GraphicEq
-    ObjectKind.COLLECTION -> Icons.Filled.FolderOpen
+    ObjectKind.IMAGE -> GlassIcons.Picture
+    ObjectKind.TEXT -> GlassIcons.Document
+    ObjectKind.PDF -> GlassIcons.Pdf
+    ObjectKind.ZIP -> GlassIcons.Archive
+    ObjectKind.OFFICE -> GlassIcons.Document
+    ObjectKind.URL -> GlassIcons.Link
+    ObjectKind.AUDIO -> GlassIcons.Mic
+    ObjectKind.COLLECTION -> GlassIcons.Folder
 
-    KIND_IDENTIFIER -> Icons.Filled.Tag
-    KIND_ADDRESS -> Icons.Filled.Place
-    KIND_DATE -> Icons.Filled.Event
-    KIND_PHONE -> Icons.Filled.Call
-    KIND_EMAIL -> Icons.Filled.Email
-    KIND_URL -> Icons.Filled.Link
-    KIND_ORGANIZATION -> Icons.Filled.Business
-    KIND_PERSON -> Icons.Filled.Person
+    KIND_IDENTIFIER -> Icons.Outlined.Tag
+    KIND_ADDRESS, KIND_PLACE -> Icons.Outlined.Place
+    KIND_DATE -> Icons.Outlined.Event
+    KIND_PHONE -> Icons.Outlined.Call
+    KIND_EMAIL -> Icons.Outlined.Email
+    KIND_URL -> GlassIcons.Link
+    KIND_ORGANIZATION -> Icons.Outlined.Business
+    KIND_PERSON -> Icons.Outlined.Person
+    KIND_AMOUNT -> Icons.Outlined.Payments
 
-    else -> Icons.Filled.HelpOutline
+    else -> GlassIcons.Document
 }
 
 fun kindLabel(kind: ObjectKind): String = when (kind) {

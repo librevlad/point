@@ -1,10 +1,16 @@
-package com.point.desktop.ui
+package com.point.core.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
  * Знак Point — светящийся портал.
@@ -15,6 +21,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
  *
  * Доли измерены по иконке телефона и живут теперь в одном месте вместе с генератором
  * `tools/make-icon.py`, который делает из них картинки для установщика и лаунчера.
+ *
+ * Рисунок лежит в общем каталоге: с макета 19.10.2026 знак стоит и в шапке окна компьютера, и
+ * на главном экране телефона, и это один и тот же знак (решение владельца 20.10.2026: «логотип
+ * только наш»), а не две похожие копии.
  */
 internal object PointMark {
 
@@ -89,4 +99,17 @@ internal fun DrawScope.drawPointMark(field: Boolean = true, badge: Boolean = fal
             center = Offset(size.width * 0.82f, size.height * 0.18f),
         )
     }
+}
+
+/**
+ * Знак Point на экране — наш портал, тот же, что у иконки приложения (решение владельца
+ * 20.10.2026: «логотип же только наш используй»).
+ *
+ * Макет 19.10.2026 рисовал на его месте свой знак — тонкое кольцо с точкой. Знак у Point один:
+ * экраны берут из макета стекло, а не другой логотип. Поле под кольцом здесь не нужно — фон у
+ * экрана уже свой; [field] включает его там, где знак стоит сам по себе, как иконка.
+ */
+@Composable
+fun PointGlyph(modifier: Modifier = Modifier, size: Dp = 16.dp, field: Boolean = false) {
+    Canvas(modifier.size(size)) { drawPointMark(field = field) }
 }

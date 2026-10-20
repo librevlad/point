@@ -25,8 +25,7 @@ internal fun MemorySection(
     onForgetAll: () -> Unit,
     onBack: () -> Unit,
 ) {
-    BackToList(onBack)
-    ScreenHeader(title = MEMORY_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+    SectionTopBar(title = MEMORY_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
 
     Text(
         memoryLine(memory),

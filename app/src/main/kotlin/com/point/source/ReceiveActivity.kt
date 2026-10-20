@@ -76,7 +76,7 @@ class ReceiveActivity : ComponentActivity() {
         link = box?.link
         setContent {
             PointTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                com.point.core.ui.PointScreen {
                     ReceiveScreen(
                         link = link,
                         failure = failure,

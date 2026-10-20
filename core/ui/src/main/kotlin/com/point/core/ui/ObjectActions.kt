@@ -36,6 +36,9 @@ import com.point.core.flow.yieldLabel
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import kotlinx.coroutines.delay
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import com.point.core.ui.theme.PointText
 
 /**
  * Разделы действий — каждый со своим заголовком: у раздела значения это само значение
@@ -59,17 +62,21 @@ internal fun ObjectActions(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { alpha = dim },
-        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         sections.forEach { section ->
             key(section.key) {
                 var expanded by rememberSaveable(section.key, section.items.size) { mutableStateOf(false) }
                 val shown = if (expanded) section.items else section.items.take(shownAtOnce(section))
-                Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                    val value = head(section)
-                    if (value != null) ValueHeader(value) else SectionLabel(section.title)
+                val value = head(section)
+                if (value != null) ValueHeader(value) else GroupHeader(section.title)
+
+                // Раздел — одна панель стекла, строки в ней через тонкую линию (макет
+                // 19.10.2026): список читается «заголовок → однородные строки», а не стопкой
+                // отдельных карточек.
+                GlassGroup {
                     shown.forEachIndexed { index, bubble ->
                         key(bubble.capabilityId.value) {
+                            if (index > 0) GroupSeam()
                             ActionRow(
                                 bubble = bubble,
                                 shared = shared,
@@ -84,13 +91,20 @@ internal fun ObjectActions(
                             )
                         }
                     }
-                    val hidden = section.items.size - shown.size
-                    if (hidden > 0 || expanded) {
-                        TextButton(onClick = { expanded = !expanded }, enabled = !working) {
-
-                            Text(if (expanded) "Свернуть" else "Показать ещё $hidden")
-                        }
-                    }
+                }
+                val hidden = section.items.size - shown.size
+                if (hidden > 0 || expanded) {
+                    Text(
+                        text = if (expanded) "Свернуть" else "Показать ещё $hidden",
+                        style = PointText.note,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(enabled = !working, role = Role.Button) { expanded = !expanded }
+                            .padding(vertical = 8.dp),
+                    )
                 }
             }
         }
@@ -127,7 +141,8 @@ private fun ValueHeader(head: ValueHead) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .padding(start = 10.dp, end = 10.dp, top = 12.dp, bottom = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
             .let { base ->
                 val copy = head.copy ?: return@let base
                 base.clickable {
@@ -135,7 +150,7 @@ private fun ValueHeader(head: ValueHead) {
                     copied = true
                 }
             }
-            .padding(vertical = 2.dp),
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         SectionLabel(head.name)
@@ -143,19 +158,15 @@ private fun ValueHeader(head: ValueHead) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (head.known) "✓" else "·",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = PointText.rowTitle.copy(fontSize = PointText.rowTitle.fontSize * 1.1f),
                     fontWeight = FontWeight.Bold,
-                    color = if (head.known) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = if (head.known) PointPalette.violet else PointPalette.muted,
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = if (copied) "Скопировано" else value,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    style = PointText.rowTitle.copy(fontSize = PointText.rowTitle.fontSize * 1.1f),
+                    color = if (copied) PointPalette.violet else PointPalette.text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -164,8 +175,7 @@ private fun ValueHeader(head: ValueHead) {
         head.other?.let { other ->
             Text(
                 text = "или: $other",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = PointText.note,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -193,10 +203,13 @@ private fun ActionRow(
         onClick = onClick,
         icon = bubbleIcon(bubble.icon),
         image = appIcon,
-        accent = if (isApp) MaterialTheme.colorScheme.primary else bubbleColor(bubble.icon),
-        ring = if (ai) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f) else null,
+        accent = if (isApp) PointPalette.violet else bubbleColor(bubble.icon),
+
+        // Действие с AI отмечено кромкой плашки: оно читает вещь моделью, и это видно до тапа.
+        ring = if (ai) PointPalette.cyan.copy(alpha = 0.7f) else null,
         primary = primary,
         enabled = enabled,
+        surface = false,
         appearIndex = index,
     )
 }

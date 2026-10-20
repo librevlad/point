@@ -67,9 +67,8 @@ fun ConsentScreen(
         PortalPlate(
             accent = MaterialTheme.colorScheme.tertiary,
             icon = bubbleIcon(CLOUD_ICON),
-            ring = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
+            ring = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f),
             size = 76.dp,
-            shape = RoundedCornerShape(24.dp),
         )
         Spacer(Modifier.height(18.dp))
         ScreenHeader(

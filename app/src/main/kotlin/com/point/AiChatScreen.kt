@@ -84,13 +84,7 @@ fun AiChatScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconButton(onClick = onClose) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            com.point.core.ui.RoundButton(com.point.core.ui.GlassIcons.ChevronLeft, LEAVE_BACK, onClose)
             Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
                 Portal(size = 38.dp, intensity = 0.75f)
             }
@@ -224,7 +218,7 @@ private fun ChatSuggestions(suggestions: List<String>, onSend: (String) -> Unit,
                     onClick = { onSend(s) },
                     icon = bubbleIcon(AI_ICON),
                     accent = bubbleColor(AI_ICON),
-                    ring = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
+                    ring = com.point.core.ui.PointPalette.cyan.copy(alpha = 0.7f),
                     appearIndex = index,
                 )
             }
@@ -253,7 +247,7 @@ private fun ChatBubble(message: ChatMessage) {
                 Text(
                     text = message.text,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (user) Color.White else MaterialTheme.colorScheme.onSurface,
+                    color = if (user) com.point.core.ui.PointPalette.ink else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -295,13 +289,15 @@ private fun ChatInput(pending: Boolean, onSend: (String) -> Unit, onCancel: () -
             modifier = Modifier.weight(1f),
             placeholder = { Text("Задайте вопрос…") },
             maxLines = 4,
+            shape = com.point.core.ui.GlassFieldShape,
+            colors = com.point.core.ui.glassFieldColors(),
         )
         val canSend = !pending && text.isNotBlank()
         val active = pending || canSend
 
         Box(
             modifier = Modifier
-                .clip(PortalPlateShape)
+                .clip(androidx.compose.foundation.shape.CircleShape)
                 .clickable(enabled = active) {
                     if (pending) onCancel() else { onSend(text); text = "" }
                 }
@@ -309,7 +305,7 @@ private fun ChatInput(pending: Boolean, onSend: (String) -> Unit, onCancel: () -
         ) {
             PortalPlate(
                 accent = MaterialTheme.colorScheme.primary,
-                icon = if (pending) Icons.Filled.Close else Icons.AutoMirrored.Filled.Send,
+                icon = if (pending) com.point.core.ui.GlassIcons.Close else com.point.core.ui.GlassIcons.Send,
                 onGlass = false,
                 modifier = Modifier.graphicsLayer { alpha = if (active) 1f else 0.45f },
             )

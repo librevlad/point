@@ -93,10 +93,7 @@ abstract class FlowHostActivity : ComponentActivity() {
 
         setContent {
             PointTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
+                com.point.core.ui.PointScreen {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
                     PointFlow(
                         state = state,

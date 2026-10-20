@@ -42,6 +42,9 @@ import com.point.desktop.sourceShort
 import com.point.desktop.whenLabel
 import java.time.Instant
 import java.time.ZoneId
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.heroLine
+import com.point.core.ui.drawObjectRing
 
 /*
  * Шапка экрана объекта (макет 19.10.2026): кольцо с вещью, её имя тем же словом, что на
@@ -52,41 +55,12 @@ import java.time.ZoneId
  * Кольцо вещи — граница, через которую она пришла. Внутри знак её вида, а у снимка — сам снимок:
  * он себе опознание, и знак вида поверх него лишний (#898).
  *
- * Кольцо стоит неподвижно: прежние встречные кольца портала двигались всегда и говорили «идёт
- * работа», которой не было.
+ * Рисунок кольца общий с телефоном (`drawObjectRing`).
  */
 @Composable
 internal fun ObjectRing(item: InboxItem, picture: ImageBitmap?, size: Dp = 84.dp) {
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            val w = this.size.minDimension
-            val middle = Offset(w / 2, w / 2)
-            drawCircle(
-                Brush.radialGradient(listOf(PointColors.violet.copy(alpha = 0.22f), Color.Transparent), middle, w * 0.78f),
-                radius = w * 0.78f,
-            )
-            drawCircle(
-                Brush.linearGradient(
-                    0f to PointColors.violet,
-                    0.55f to PointColors.blue,
-                    1f to PointColors.cyan,
-                    start = Offset.Zero,
-                    end = Offset(w, w),
-                ),
-                radius = w * 40f / 84f,
-                style = Stroke(width = 2.dp.toPx()),
-            )
-            val disk = w * 33f / 84f
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f)),
-                    center = Offset(w / 2, w / 2 - disk + disk * 2 * 0.28f),
-                    radius = disk * 2 * 0.7f,
-                ),
-                radius = disk,
-            )
-            drawCircle(Color.White.copy(alpha = 0.18f), radius = disk, style = Stroke(width = 1.dp.toPx()))
-        }
+        Canvas(Modifier.matchParentSize()) { drawObjectRing() }
         if (picture != null) {
             Image(
                 bitmap = picture,

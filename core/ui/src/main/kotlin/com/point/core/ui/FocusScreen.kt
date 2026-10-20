@@ -99,7 +99,8 @@ fun FocusScreen(
     var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     val fit = pageFit(container, image.width, image.height)
-    val accent = MaterialTheme.colorScheme.primary
+    // Обводка лежит на снимке, чаще всего на белой бумаге: пастель стекла на ней не видна.
+    val accent = PointPalette.highlight
     val page = PageBox(0f, 0f, image.width.toFloat(), image.height.toFloat())
     // Прилипание к содержимому делает snapSelection на той стороне ✓ — здесь только то,
     // что нарисовал палец, чтобы человек видел ровно своё движение.
@@ -286,7 +287,7 @@ private fun FocusTopBar(
             Icon(
                 Icons.Filled.Check,
                 contentDescription = "Готово",
-                tint = Color.White,
+                tint = if (canFinish) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.5f),
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
             )
         }

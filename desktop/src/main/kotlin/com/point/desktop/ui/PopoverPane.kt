@@ -29,6 +29,9 @@ import com.point.core.flow.ClipboardPayload
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
 import java.io.File
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.GlassTone
+import com.point.core.ui.PointGlyph
 
 /**
  * Панель у значка в трее (макет 19.10.2026): «Новый объект» и «Недавнее» без экрана объекта.

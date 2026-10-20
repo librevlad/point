@@ -184,15 +184,14 @@ internal fun UnderstoodSection(
     val detail = facts.filter { it.key != "semantic" }
     val trouble = failedNote(failed)
     if (detail.isEmpty() && enriching.isEmpty() && trouble == null) return
-    Surface(
-        shape = PortalCardShape,
-        color = MaterialTheme.colorScheme.surface,
+    Box(
         modifier = Modifier
             .padding(top = 16.dp)
             .widthIn(max = PortalColumnWidth)
-            .animateContentSize(tween(220)),
+            .animateContentSize(tween(220))
+            .portalCard(),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             detail.forEach { fact -> key(fact.key) { FactRow(fact) } }
             trouble?.let { note ->
                 Text(

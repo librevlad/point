@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.lightSurface
 
 /** Пункт меню способов взять объект: знак, имя, пояснение и клавиша. */
 data class MenuItem(

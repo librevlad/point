@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
-import com.point.desktop.ui.drawPointMark
+import com.point.core.ui.drawPointMark
 
 /**
  * Знак Point рисуется в одном месте.
@@ -23,8 +23,12 @@ import com.point.desktop.ui.drawPointMark
  */
 class MarkIsDrawnOnceTest {
 
-    private val sources = File("src/main/kotlin/com/point/desktop")
-        .walkTopDown().filter { it.name.endsWith(".kt") }.toList()
+    /**
+     * Всё, что собирает окно: свои исходники и общий с телефоном каталог, где знак и лежит с тех
+     * пор, как его рисует и главный экран телефона.
+     */
+    private val sources = listOf(File(repo, "desktop/src/main/kotlin"), File(repo, "core/ui/src/shared/kotlin"))
+        .flatMap { root -> root.walkTopDown().filter { it.name.endsWith(".kt") }.toList() }
 
     /** Цвета кольца: по ним видно, что рисуют именно знак, а не что-то своё. */
     private val ringColours = listOf("0xFFEAF0FF", "0xFF9B7BFF", "0xFF00A6FF")
@@ -61,7 +65,7 @@ class MarkIsDrawnOnceTest {
      */
     @Test
     fun `знак в окне нарисован нашим порталом, а не своим`() {
-        val glyph = render { com.point.desktop.ui.PointGlyph(size = 64.dp) }
+        val glyph = render { com.point.core.ui.PointGlyph(size = 64.dp) }
         val mark = render { androidx.compose.foundation.Canvas(Modifier.size(64.dp)) { drawPointMark(field = false) } }
 
         // Две пустые картинки равны друг другу: сначала — что портал вообще нарисован.

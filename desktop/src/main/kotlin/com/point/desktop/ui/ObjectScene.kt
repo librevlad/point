@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.point.core.model.ObjectKind
 import com.point.desktop.InboxItem
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.bubbleIcon
 
 /*
  * Содержимое объекта — правая колонка его экрана (макет 19.10.2026): снимок, найденное,
@@ -330,7 +332,7 @@ internal fun Station(
         title = title,
         subtitle = note,
         mark = where,
-        icon = lineIcon(icon),
+        icon = bubbleIcon(icon),
         accent = accent,
         primary = primary,
         appearIndex = appearIndex,
@@ -354,7 +356,7 @@ internal fun MutedStation(
         title = title,
         subtitle = reason,
         mark = where,
-        icon = lineIcon(icon),
+        icon = bubbleIcon(icon),
         accent = PointColors.muted,
         dim = true,
         appearIndex = appearIndex,

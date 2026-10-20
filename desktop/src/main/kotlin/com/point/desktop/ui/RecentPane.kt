@@ -28,6 +28,9 @@ import com.point.core.ui.kindLabel
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
 import java.time.ZoneId
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.kindIcon
+import com.point.core.ui.kindTint
 
 /**
  * «Недавнее» и способы взять новый объект — левая панель окна и выпадающая панель у трея (#836,
@@ -269,7 +272,7 @@ internal fun RecentList(
                 GlassRow(
                     title = line.name(),
                     subtitle = line.note(),
-                    icon = kindLine(line.kind()),
+                    icon = kindIcon(line.kind()),
                     tint = kindTint(line.kind()),
                     iconDescription = kindLabel(line.kind()),
                     selected = id != null && id == selectedId,

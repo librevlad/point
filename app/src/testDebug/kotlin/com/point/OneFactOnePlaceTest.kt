@@ -107,7 +107,8 @@ class OneFactOnePlaceTest {
     @Test fun `всё найденное в одном списке — число говорит правду`() {
         screen(card, cardFound)
 
-        compose.onNodeWithText("Нашёл · 3").assertExists()
+        // Заголовок группы набран прописными (макет 19.10.2026): сверяются слова и число, а не регистр.
+        compose.onNodeWithText("Нашёл · 3", ignoreCase = true).assertExists()
     }
 
     @Test fun `факты без готового действия остаются на месте — почта и адрес никуда не делись`() {
@@ -131,7 +132,7 @@ class OneFactOnePlaceTest {
 
         screen(parcel, listOf(found("p:num", KIND_IDENTIFIER, "20 4514 9154 9395")))
 
-        compose.onNodeWithText("Нашёл · 1").assertExists()
+        compose.onNodeWithText("Нашёл · 1", ignoreCase = true).assertExists()
         compose.onNodeWithText("20 4514 9154 9395").assertExists()
     }
 

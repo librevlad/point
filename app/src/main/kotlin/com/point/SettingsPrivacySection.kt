@@ -29,8 +29,7 @@ internal fun PrivacySection(
     onPickPrivacyLevel: (PrivacyLevel) -> Unit,
     onBack: () -> Unit,
 ) {
-    BackToList(onBack)
-    ScreenHeader(title = PRIVACY_SECTION_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+    SectionTopBar(title = PRIVACY_SECTION_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
 
     SwitchCard(
         title = "Отправка в облако",

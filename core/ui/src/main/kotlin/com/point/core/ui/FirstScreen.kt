@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,6 +86,16 @@ import com.point.core.model.PointObject
 import com.point.core.model.RelationType
 import com.point.core.model.Relation
 import com.point.core.model.ValueRef
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.EaseInOutSine
+import com.point.core.ui.theme.PointText
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -138,6 +149,9 @@ fun FirstScreen(
     focusPreview: ImageBitmap? = null,
     focused: Boolean = false,
     onClearFocus: () -> Unit = {},
+
+    /** Путь вещи под её именем — откуда пришла и во что превращалась (макет 19.10.2026). */
+    history: (@Composable () -> Unit)? = null,
 ) {
 
     val scroll = rememberScrollState()
@@ -146,7 +160,7 @@ fun FirstScreen(
             .fillMaxSize()
 
             .verticalScroll(scroll)
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val facts = understoodFacts(obj)
@@ -230,6 +244,8 @@ fun FirstScreen(
             focusEntry = obj.state.kind == ObjectKind.IMAGE,
         )
 
+        history?.invoke()
+
         madeFrom?.let { source ->
             Spacer(Modifier.height(8.dp))
             MadeFromRow(source = source, onOpen = { onFound(source) })
@@ -249,6 +265,8 @@ fun FirstScreen(
             PortalRow(
                 title = messageOffer,
                 onClick = onMessageOffer,
+                icon = bubbleIcon("ai"),
+                accent = bubbleColor("ai"),
                 modifier = Modifier.widthIn(max = PortalColumnWidth),
             )
         }
@@ -340,11 +358,7 @@ private fun LatentHints(latent: List<LatentBubble>) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = "Почти доступно",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-        )
+        SectionLabel("Почти доступно")
         latent.forEach { hint ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -353,13 +367,12 @@ private fun LatentHints(latent: List<LatentBubble>) {
                 Icon(
                     imageVector = bubbleIcon(hint.icon),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(18.dp),
+                    tint = PointPalette.faint,
+                    modifier = Modifier.size(16.dp),
                 )
                 Text(
                     text = "${hint.title} · ${hint.missing}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    style = PointText.note,
                 )
             }
         }
@@ -376,51 +389,27 @@ private fun LatentHints(latent: List<LatentBubble>) {
 private fun MadeHere(made: List<PointObject>, onOpen: (PointObject) -> Unit) {
     Column(
         modifier = Modifier
-            .padding(top = 14.dp)
+            .padding(top = 6.dp)
             .widthIn(max = PortalColumnWidth)
             .fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SectionLabel(MADE_HERE_LABEL)
-        made.asReversed().forEach { result ->
-            key("made:" + result.id) {
-                Surface(
-                    onClick = { onOpen(result) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            imageVector = kindIcon(result.state.kind),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = foundHeadline(result),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = kindLabel(result.state.kind),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Text(
-                            text = "открыть ›",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+        GroupHeader(MADE_HERE_LABEL)
+        GlassGroup {
+            made.asReversed().forEachIndexed { index, result ->
+                key("made:" + result.id) {
+                    if (index > 0) GroupSeam()
+                    PortalRow(
+                        title = foundHeadline(result),
+                        subtitle = kindLabel(result.state.kind),
+                        onClick = { onOpen(result) },
+                        icon = kindIcon(result.state.kind),
+                        accent = kindTint(result.state.kind),
+                        surface = false,
+                        chevron = false,
+                        trailing = {
+                            Text(text = "открыть ›", style = PointText.note.copy(color = PointPalette.link))
+                        },
+                    )
                 }
             }
         }
@@ -432,8 +421,8 @@ private fun MadeHere(made: List<PointObject>, onOpen: (PointObject) -> Unit) {
 private fun MadeFromRow(source: PointObject, onOpen: () -> Unit) {
     Text(
         text = "$MADE_FROM_LABEL ${foundHeadline(source)} ›",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
+        style = PointText.note,
+        color = PointPalette.link,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
@@ -466,8 +455,7 @@ private fun WorkingStage(stage: String?) {
             Spacer(Modifier.width(9.dp))
             Text(
                 text = shown,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = PointText.note,
                 textAlign = TextAlign.Center,
             )
         }
@@ -481,138 +469,114 @@ private fun FoundObjects(
     partShownAbove: Boolean,
     onFound: (PointObject) -> Unit,
 ) {
-    Spacer(Modifier.height(16.dp))
     Column(
-        modifier = Modifier.widthIn(max = 340.dp).fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 6.dp).widthIn(max = PortalColumnWidth).fillMaxWidth(),
     ) {
-        Text(
-            text = foundHeader(found.size, partShownAbove),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        GroupHeader(foundHeader(found.size, partShownAbove))
+
         // Однородная сотня — строкой-классом (#1058): знание не урезается, меняется
         // представление. Раскрытый класс можно свернуть обратно.
         val expanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf<com.point.core.model.ObjectKind>()) }
         val rows = foldFound(found)
-        rows.forEach { row ->
-            if (row is FoundRow.Group && row.kind !in expanded.value) {
-                key("fold:" + row.kind.name) {
-                    Surface(
-                        onClick = { expanded.value = expanded.value + row.kind },
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Icon(
-                                imageVector = kindIcon(row.kind),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Text(
-                                text = kindLabel(row.kind) + " · " + row.items.size,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                text = "раскрыть ›",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                return@forEach
-            }
-            val group = (row as? FoundRow.Group)?.items ?: listOf((row as FoundRow.Single).obj)
-            if (row is FoundRow.Group) {
-                key("unfold:" + row.kind.name) {
-                    Text(
-                        text = kindLabel(row.kind) + " · " + row.items.size + " — свернуть",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { expanded.value = expanded.value - row.kind }
-                            .padding(vertical = 4.dp),
-                    )
-                }
-            }
-            group.forEach { obj ->
-            key(obj.id) {
-                Surface(
-                    onClick = { onFound(obj) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            imageVector = kindIcon(obj.state.kind),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
+        GlassGroup {
+            rows.forEachIndexed { rowIndex, row ->
+                if (rowIndex > 0) GroupSeam()
+                if (row is FoundRow.Group && row.kind !in expanded.value) {
+                    key("fold:" + row.kind.name) {
+                        PortalRow(
+                            title = kindLabel(row.kind) + " · " + row.items.size,
+                            onClick = { expanded.value = expanded.value + row.kind },
+                            icon = kindIcon(row.kind),
+                            accent = kindTint(row.kind),
+                            surface = false,
+                            chevron = false,
+                            trailing = { Text(text = "раскрыть ›", style = PointText.note) },
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = foundHeadline(obj),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = listOfNotNull(
-                                    kindLabel(obj.state.kind),
-                                    roleOf(obj, relations),
-
-                                    ownerOfFound(obj, relations, found),
-
-                                    foundProvenance(obj),
-
-                                    "возможно".takeIf { isDoubtful(obj.metadata) },
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-
-                            foundCaption(obj)?.let { said ->
-                                Text(
-                                    text = said,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-
-                            otherReading(obj)?.let { other ->
-                                Text(
-                                    text = "или: $other",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                    }
+                    return@forEachIndexed
+                }
+                val group = (row as? FoundRow.Group)?.items ?: listOf((row as FoundRow.Single).obj)
+                if (row is FoundRow.Group) {
+                    key("unfold:" + row.kind.name) {
+                        Text(
+                            text = kindLabel(row.kind) + " · " + row.items.size + " — свернуть",
+                            style = PointText.note,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable { expanded.value = expanded.value - row.kind }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                group.forEachIndexed { index, obj ->
+                    key(obj.id) {
+                        if (index > 0) GroupSeam()
+                        FoundRowView(obj, relations, found, onFound)
                     }
                 }
             }
+        }
+    }
+}
+
+/** Строка найденного: вид знаком, само значение, а под ним — чьё оно, откуда и чем подписано. */
+@Composable
+private fun FoundRowView(
+    obj: PointObject,
+    relations: List<Relation>,
+    found: List<PointObject>,
+    onFound: (PointObject) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .clip(PortalCardShape)
+            .clickable { onFound(obj) }
+            .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        PortalPlate(accent = kindTint(obj.state.kind), icon = kindIcon(obj.state.kind))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = foundHeadline(obj),
+                style = PointText.rowTitle.copy(color = PointPalette.text),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = listOfNotNull(
+                    kindLabel(obj.state.kind),
+                    roleOf(obj, relations),
+
+                    ownerOfFound(obj, relations, found),
+
+                    foundProvenance(obj),
+
+                    "возможно".takeIf { isDoubtful(obj.metadata) },
+                ).joinToString(" · "),
+                style = PointText.note,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+
+            foundCaption(obj)?.let { said ->
+                Text(
+                    text = said,
+                    style = PointText.note,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            otherReading(obj)?.let { other ->
+                Text(
+                    text = "или: $other",
+                    style = PointText.note,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -693,10 +657,11 @@ fun foundCaption(obj: PointObject): String? {
  */
 @Composable
 internal fun FocusStrip(preview: ImageBitmap?, onClear: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+    Box(
+        modifier = Modifier
+            .widthIn(max = PortalColumnWidth)
+            .fillMaxWidth()
+            .portalCard(accent = PointPalette.violet),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -713,16 +678,16 @@ internal fun FocusStrip(preview: ImageBitmap?, onClear: () -> Unit) {
             }
             Text(
                 text = FOCUS_HERE,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = PointText.rowTitle,
+                color = PointPalette.text,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onClear) {
                 Icon(
-                    imageVector = Icons.Rounded.Close,
+                    imageVector = GlassIcons.Close,
                     contentDescription = FOCUS_DROP,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    tint = PointPalette.text,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -866,24 +831,17 @@ private fun CollectionItems(
 ) {
 
     var page by rememberSaveable(items.size) { mutableStateOf(COLLECTION_PAGE) }
-    Text(
-        text = collectionLabel(items.size, total, atLeast),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(12.dp))
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    GroupHeader(collectionLabel(items.size, total, atLeast), top = 0.dp)
+    Column(modifier = Modifier.fillMaxWidth()) {
         // Стрелки ходят в пределах показанного: страница не уезжает в скрытую часть списка
         // за «Показать ещё» — там её не видно и вернуть нечем.
         val shown = items.take(page)
+        GlassGroup {
         shown.forEachIndexed { index, item ->
             // Строка привязана к странице, а не к месту в списке: после перестановки
             // миниатюра едет вместе со страницей, а не читается заново.
             key(item.id) {
+                if (index > 0) GroupSeam()
                 CollectionItemRow(
                     item = item,
                     onClick = { onItem(item) },
@@ -894,9 +852,10 @@ private fun CollectionItems(
                 )
             }
         }
+        }
         if (page < items.size) {
-            TextButton(onClick = { page += COLLECTION_PAGE }) {
-                Text(showMoreLabel(items.size - page))
+            TextButton(onClick = { page += COLLECTION_PAGE }, modifier = Modifier.fillMaxWidth()) {
+                Text(showMoreLabel(items.size - page), style = PointText.note)
             }
         }
     }
@@ -913,15 +872,14 @@ private fun CollectionItemRow(
 ) {
     var thumb by remember(item.id) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(item.id) { thumb = previewFor(item) }
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth(),
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PortalCardShape)
+            .clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.padding(start = 14.dp, end = if (arrows) 4.dp else 14.dp, top = 8.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 10.dp, end = if (arrows) 4.dp else 12.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -937,18 +895,13 @@ private fun CollectionItemRow(
                         modifier = Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)),
                     )
                 } else {
-                    Icon(
-                        imageVector = kindIcon(item.state.kind),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
-                    )
+                    PortalPlate(accent = kindTint(item.state.kind), icon = kindIcon(item.state.kind))
                 }
             }
             Text(
                 text = item.metadata["name"] ?: kindLabel(item.state.kind),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = PointText.rowTitle,
+                color = PointPalette.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -956,10 +909,10 @@ private fun CollectionItemRow(
             if (arrows) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { onUp?.invoke() }, enabled = onUp != null) {
-                        Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = PAGE_UP)
+                        Icon(GlassIcons.ChevronUp, contentDescription = PAGE_UP, modifier = Modifier.size(18.dp))
                     }
                     IconButton(onClick = { onDown?.invoke() }, enabled = onDown != null) {
-                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = PAGE_DOWN)
+                        Icon(GlassIcons.ChevronDown, contentDescription = PAGE_DOWN, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -982,27 +935,15 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
     val shown = if (expanded) text else head
 
     val rendered = remember(shown, markdown) { if (markdown) markdownToAnnotated(shown) else AnnotatedString(shown) }
-    Text(
-        text = "Текст",
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(12.dp))
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    GroupHeader("Текст", top = 0.dp)
+    Box(modifier = Modifier.fillMaxWidth().portalCard()) {
         SelectionContainer {
             Text(
                 text = rendered,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                style = PointText.reading,
 
                 maxLines = if (expanded) Int.MAX_VALUE else COLLAPSED_PREVIEW_LINES,
                 overflow = TextOverflow.Ellipsis,
@@ -1012,14 +953,13 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
     }
     if (clipped || head.length < text.length) {
         TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) COLLAPSE_LABEL else expandTextLabel(text.length - head.length, truncated))
+            Text(if (expanded) COLLAPSE_LABEL else expandTextLabel(text.length - head.length, truncated), style = PointText.note.copy(color = PointPalette.link))
         }
     }
     if (expanded && truncated) {
         Text(
             text = truncatedPreviewNotice(text.length),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = PointText.note,
         )
     }
 }
@@ -1067,9 +1007,9 @@ private fun ObjectHeader(
         // целиком и в своих пропорциях: прежде их вырезали кругом внутри светящегося кольца
         // портала, и человек видел не свою фотографию, а её середину в чужой рамке. Портал —
         // знак границы, через которую вещь пришла и уйдёт, а не рама для неё.
-        val frame = heroFrameFor(preview)
-        val shape = RoundedCornerShape(HERO_CORNER)
-
+        //
+        // Вещь без снимка стоит в кольце макета (19.10.2026): та же граница, что у окна
+        // компьютера, и знак её вида линией внутри — тем же знаком, что в «Недавнем».
         Box(
             contentAlignment = Alignment.Center,
 
@@ -1079,20 +1019,23 @@ private fun ObjectHeader(
                 enabled = onTap != null,
             ) { onTap?.invoke() },
         ) {
-            AliveSurface(
-                kind = obj.state.kind,
-                thinking = thinking,
-                understanding = auraLevel(factCount),
-                shape = shape,
-                size = frame.width,
-                height = frame.height,
-            ) {
-                if (preview != null) {
+            if (preview != null) {
+                val frame = heroFrameFor(preview)
+                val shape = RoundedCornerShape(HERO_CORNER)
+                AliveSurface(
+                    kind = obj.state.kind,
+                    thinking = thinking,
+                    understanding = auraLevel(factCount),
+                    shape = shape,
+                    size = frame.width,
+                    height = frame.height,
+                ) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .size(frame.width, frame.height)
-                            .background(MaterialTheme.colorScheme.surface),
+                            .background(PointPalette.surfaceDeep)
+                            .border(1.dp, glassEdge(0.28f, 0.12f), shape),
                     ) {
                         Image(
                             bitmap = preview,
@@ -1101,86 +1044,100 @@ private fun ObjectHeader(
                             modifier = Modifier.size(frame.width, frame.height),
                         )
                     }
-                } else if (kindMarkOf(obj) != KindMark.UNKNOWN) {
-
-                    // Марка на каждый вид (#825): экран объекта одинаково живой, чем бы объект
-                    // ни был. Раньше нарисованной была одна таблица, а всё прочее брало плоскую
-                    // системную иконку — и объект то оживал, то становился строкой из списка
-                    // приложений.
-                    KindMarkIcon(
-                        mark = kindMarkOf(obj),
-                        size = frame.width * MARK_IN_FRAME,
-                        motion = rememberMotionEnabled(),
-                        contentDescription = obj.metadata["name"] ?: kindMarkLabel(kindMarkOf(obj)),
-                    )
-                } else {
-                    Surface(
-                        shape = shape,
-
-                        // Та же пара, что у аватара «Недавнего»: тёмная подложка и светлый знак.
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shadowElevation = 0.dp,
-                        modifier = Modifier.size(frame.width, frame.height),
+                }
+                if (focusEntry && onTap != null) {
+                    Box(
+                        modifier = Modifier.size(frame.width + 12.dp, frame.height + 12.dp),
+                        contentAlignment = Alignment.BottomEnd,
                     ) {
-                        Icon(
-                            imageVector = kindIcon(obj.state.kind),
-                            contentDescription = obj.state.kind.name,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier
-                                .padding(frame.width * ICON_INSET)
-                                .fillMaxSize(),
-                        )
+                        FocusEntryMark(onClick = onTap)
                     }
                 }
-            }
+            } else {
+                HeroRing(obj, thinking = thinking)
 
-            // Вход в обводку рисуется ПОВЕРХ превью и в цвете акцента (#798, решение
-            // владельца 11.08.2026: «вынести вперёд и подсветить»). Прежде он лежал под
-            // кругом почти прозрачным пятном и на тёмном снимке терялся: за ним прячутся
-            // три способности — «Понять область», «Взять фрагмент» и «Замазать».
-            if (focusEntry && onTap != null) {
-                Box(
-                    modifier = Modifier.size(frame.width + 12.dp, frame.height + 12.dp),
-                    contentAlignment = Alignment.BottomEnd,
-                ) {
-                    FocusEntryMark(onClick = onTap)
+                // Вход в обводку рисуется ПОВЕРХ героя и в цвете акцента (#798, решение
+                // владельца 11.08.2026: «вынести вперёд и подсветить»): за ним прячутся три
+                // способности — «Понять область», «Взять фрагмент» и «Замазать».
+                if (focusEntry && onTap != null) {
+                    Box(modifier = Modifier.size(HERO_RING + 8.dp), contentAlignment = Alignment.BottomEnd) {
+                        FocusEntryMark(onClick = onTap)
+                    }
                 }
             }
         }
         Spacer(Modifier.height(14.dp))
 
         val verdict = objectVerdict(obj)
+        val name = obj.metadata["name"]?.takeIf { it.isNotBlank() }
         Text(
             text = verdict.headline,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
+            style = PointText.screenTitle.copy(color = PointPalette.text),
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
-        // Вид крупно, имя тише, мера самым тихим (#879). Раньше три строки шли почти одним
-        // весом, и глаз не знал, что здесь главное.
-        verdict.subline?.let { sub ->
-            Text(
-                text = sub,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-        }
 
-        verdict.measure?.let { measure ->
+        // Вид крупно, мера и подпись тише, имя файла самым тихим (#879): так макет делит шапку
+        // вещи — «Запись · 1 мин · голосовое из WhatsApp · AUD-….m4a». Имя файла моно-строкой:
+        // это имя на диске, а не слова о вещи.
+        listOfNotNull(verdict.measure, verdict.subline?.takeIf { it != name })
+            .joinToString(" · ")
+            .takeIf { it.isNotBlank() }
+            ?.let { line ->
+                Text(
+                    text = line,
+                    style = PointText.subline,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 5.dp),
+                )
+            }
+        name?.takeIf { it != verdict.headline }?.let { file ->
             Text(
-                text = measure,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                text = file,
+                style = PointText.mono,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 3.dp),
             )
         }
+    }
+}
+
+/**
+ * Кольцо вещи без снимка: граница, через которую она пришла, и знак её вида внутри.
+ *
+ * Пока Point вещь читает, свечение кольца дышит — работа видна там, где её делают; когда
+ * читать нечего, кольцо стоит неподвижно и не изображает работу, которой нет.
+ */
+@Composable
+private fun HeroRing(obj: PointObject, thinking: Boolean) {
+    val mark = kindMarkOf(obj)
+    val reading = thinking && rememberMotionEnabled()
+    val glow = if (reading) {
+        rememberInfiniteTransition(label = "ring").animateFloat(
+            initialValue = 0.55f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1100, easing = EaseInOutSine), RepeatMode.Reverse),
+            label = "ring-glow",
+        ).value
+    } else {
+        1f
+    }
+    Box(Modifier.size(HERO_RING), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.matchParentSize().graphicsLayer { alpha = glow }) { drawObjectRing() }
+        Icon(
+            imageVector = heroLine(obj),
+
+            // Знак называется человеческим словом, а не именем вида в коде (#825): голосовой
+            // доступ читает «Изображение», а не «IMAGE».
+            contentDescription = obj.metadata["name"] ?: kindMarkLabel(mark),
+            tint = PointPalette.text,
+            modifier = Modifier.size(HERO_RING * 40f / 112f),
+        )
     }
 }
 
@@ -1210,20 +1167,17 @@ private fun AmendmentInput(
     ) {
         Text(
             text = prompt,
-            style = MaterialTheme.typography.bodyLarge,
+            style = PointText.rowTitle.copy(fontSize = PointText.rowTitle.fontSize * 1.1f, color = PointPalette.text),
             textAlign = TextAlign.Center,
         )
         if (suggestions.isNotEmpty()) {
 
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 suggestions.forEach { suggestion ->
-                    SuggestionChip(
-                        onClick = { onSubmit(suggestion) },
-                        label = { Text(suggestion) },
-                    )
+                    GlassPill(label = suggestion, onClick = { onSubmit(suggestion) })
                 }
             }
         }
@@ -1232,21 +1186,21 @@ private fun AmendmentInput(
             onValueChange = { text = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             singleLine = true,
+            shape = GlassFieldShape,
+            colors = glassFieldColors(),
+            textStyle = PointText.rowTitle,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onCancel) { Text("Отмена") }
-            Button(onClick = { onSubmit(text) }) { Text("Готово") }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            GlassButton("Отмена", onClick = onCancel, modifier = Modifier.weight(1f))
+            LightButton("Готово", onClick = { onSubmit(text) }, modifier = Modifier.weight(1f))
         }
     }
 }
 
-/** Рисованный знак вида и есть лицо вещи без снимка: рамку он занимает почти целиком. */
-private const val MARK_IN_FRAME = 0.84f
-
-/** Отступ значка внутри рамки: та же зрительная величина, что была у квадрата 96 dp. */
-private const val ICON_INSET = 0.27f
+/** Кольцо вещи без снимка — размер макета «Объект · телефон». */
+private val HERO_RING = 112.dp
 
 private val HERO_CORNER = 18.dp
 

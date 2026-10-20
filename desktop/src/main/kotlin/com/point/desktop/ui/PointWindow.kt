@@ -45,6 +45,8 @@ import com.point.desktop.InboxItem
 import com.point.desktop.PcConfig
 import java.io.File
 import kotlinx.coroutines.flow.StateFlow
+import com.point.core.ui.GlassIcons
+import com.point.core.ui.PointGlyph
 
 /**
  * Окно Point на компьютере (макет 19.10.2026): шапка с поиском, слева «Новый объект» и

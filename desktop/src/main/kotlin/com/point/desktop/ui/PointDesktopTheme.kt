@@ -9,94 +9,79 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.sp
+import com.point.core.ui.PointPalette
 
 /**
- * Цвета окна компьютера — стекло поверх тёплой сливовой земли (макет владельца «Point · концепт
- * в стиле Gestalt», 19.10.2026).
+ * Цвета окна компьютера — общая палитра Point (`PointPalette`, #851) под именами окна.
  *
- * До макета ПК брал телефонную палитру целиком (#851): почти чёрный холст, яркий фиолетовый и
- * плоские тёмные карточки — на большом экране это выглядело телефоном в узком окне. Макет даёт
- * компьютеру свой язык: мягкий контраст, три вида стекла (окно, панель, строка) и приглушённый
- * фиолетовый Point вместо терракоты Gestalt. Значки и цвета действий остаются общими с телефоном
- * (`bubbleIcon`, `bubbleColor`): одно действие узнаётся на обоих устройствах.
- *
- * Полупрозрачные тона ложатся на обои окна (`GlassBackdrop`); там, где нужна плотная заливка
- * (меню, поле ввода, диалог), есть свои непрозрачные значения.
+ * С макета 19.10.2026 ПК на несколько часов получил свою палитру — стекло поверх тёплой
+ * сливовой земли, — а телефон остался на прежней. С 20.10.2026 тем же стеклом рисуется и
+ * телефон (решение владельца), и цвета снова одни: здесь только имена, литералов нет.
+ * Значки и цвета действий тоже общие (`bubbleIcon`, `bubbleColor`): одно действие узнаётся на
+ * обоих устройствах.
  */
 object PointColors {
 
-    /** Земля под стеклом: то, что видно сквозь окно, без пятен обоев. */
-    val canvas = Color(0xFF2B2531)
+    val canvas = PointPalette.canvas
 
-    /** Стекло окна, сведённое на землю в один цвет, — для мест, где сквозь него ничего не видно. */
-    val window = Color(0xFF26212C)
+    val window = PointPalette.window
 
-    /** Панель внутри окна: группа действий, блок содержимого. */
-    val surface = Color.White.copy(alpha = 0.055f)
+    val surface = PointPalette.surface
 
-    /** Плотная тёмная поверхность: меню, поле ввода, диалог. */
-    val surfaceDeep = Color(0xFF282230)
+    val surfaceDeep = PointPalette.surfaceDeep
 
-    /** Кромка стекла. */
-    val border = Color.White.copy(alpha = 0.12f)
+    val border = PointPalette.border
 
-    /** Тонкая линия между частями окна. */
-    val hairline = Color.White.copy(alpha = 0.08f)
+    val hairline = PointPalette.hairline
 
-    val text = Color(0xFFEDE7EA)
+    val text = PointPalette.text
 
-    /** Вторая строка о самом объекте: вид, откуда пришёл, когда. */
-    val soft = text.copy(alpha = 0.74f)
+    val soft = PointPalette.soft
 
-    /** Подпись, обещание действия, счётчик. */
-    val muted = text.copy(alpha = 0.58f)
+    val muted = PointPalette.muted
 
-    /** Самое тихое: время в строке, моно-строка файла. */
-    val faint = text.copy(alpha = 0.48f)
+    val faint = PointPalette.faint
 
-    /** Цвет самого Point — приглушённый фиолетовый. */
-    val violet = Color(0xFFB6A3E3)
+    val violet = PointPalette.violet
 
-    /** Фиолетовый для слова-ссылки на тёмном стекле: светлее, чтобы читался. */
-    val link = Color(0xFFCBBEEE)
+    val link = PointPalette.link
 
-    val blue = Color(0xFF8FB4E8)
+    val blue = PointPalette.blue
 
-    val cyan = Color(0xFF8BC9D6)
+    val cyan = PointPalette.cyan
 
-    val pink = Color(0xFFE39DB9)
+    val pink = PointPalette.pink
 
-    val orange = Color(0xFFE3A27C)
+    val orange = PointPalette.orange
 
-    /** Телефон рядом и на связи. */
-    val green = Color(0xFF86CBA6)
+    val green = PointPalette.green
 
-    val yellow = Color(0xFFE0CC8B)
+    val yellow = PointPalette.yellow
 
     /** Кнопка «закрыть» в шапке окна — единственное место тёплого тона. */
-    val close = Color(0xFFD98B63)
+    val close = PointPalette.warm
 
-    /** Тёмный текст на светлой главной строке. */
-    val ink = Color(0xFF2B2531)
+    val ink = PointPalette.ink
 
-    /** Светлая главная строка: верх и низ её мягкого градиента. */
-    val lightTop = Color(0xF7F1ECF4)
-    val lightBottom = Color(0xEBE5DEED)
+    val lightTop = PointPalette.lightTop
+    val lightBottom = PointPalette.lightBottom
 }
 
 /**
  * Шрифт окна — Ubuntu (макет владельца, 19.10.2026), моно-строки — Ubuntu Mono.
  *
- * Файлы лежат в ресурсах ПК вместе с лицензией (`fonts/UFL.txt`, Ubuntu Font Licence 1.0).
+ * Файлы общие с телефоном: лежат в шрифтах `core/ui` (`res/font`), лицензия — рядом в его
+ * `assets/fonts/UFL.txt` (Ubuntu Font Licence 1.0); окно подключает оба каталога ресурсами,
+ * как звуки из `data` (#650).
  * Каждый вес — свой файл, поэтому вес текста задаёт сам файл, а не ось переменного шрифта:
  * беды #626 (весь текст ExtraLight по умолчанию оси) здесь не бывает по устройству.
  */
 internal object DesktopFonts {
 
-    const val REGULAR = "fonts/ubuntu-regular.ttf"
-    const val MEDIUM = "fonts/ubuntu-medium.ttf"
-    const val BOLD = "fonts/ubuntu-bold.ttf"
-    const val MONO = "fonts/ubuntu-mono-regular.ttf"
+    const val REGULAR = "ubuntu_regular.ttf"
+    const val MEDIUM = "ubuntu_medium.ttf"
+    const val BOLD = "ubuntu_bold.ttf"
+    const val MONO = "ubuntu_mono_regular.ttf"
 
     /** Начертание файла так, как его видит Skia: по нему тест сверяет вес с выбранным. */
     fun face(resource: String): org.jetbrains.skia.Typeface {
