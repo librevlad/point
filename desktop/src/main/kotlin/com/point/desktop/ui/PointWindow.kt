@@ -36,7 +36,6 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.ClipboardPayload
@@ -295,7 +294,7 @@ fun PointWindow(
                             when {
                                 showSettings -> settingsPane(Modifier.fillMaxSize())
                                 opened != null -> objectPane(opened, Modifier.fillMaxSize())
-                                else -> NothingOpen(empty = items.isEmpty() && journal.isEmpty(), linked = signedInAs != null)
+                                else -> NothingOpen(empty = items.isEmpty() && journal.isEmpty())
                             }
                         }
                     }
@@ -443,9 +442,12 @@ internal fun linkLine(signedIn: Boolean, others: List<com.point.core.flow.Circle
 /** Строка связи без входа: подключать устройства — дело входа, а не ожидания. */
 internal const val DEVICES_NOT_LINKED = "устройства не подключены"
 
-/** Справа пусто, пока объект не выбран: что сюда встанет и как его принести. */
+/**
+ * Справа пусто, пока объект не выбран: что сюда встанет. Как его принести, сказано слева, под
+ * «Новым объектом», — второй раз здесь это был бы второй вход в то же действие.
+ */
 @Composable
-private fun NothingOpen(empty: Boolean, linked: Boolean) {
+private fun NothingOpen(empty: Boolean) {
     Column(
         Modifier.fillMaxSize().padding(40.dp),
         verticalArrangement = Arrangement.Center,
@@ -456,12 +458,6 @@ private fun NothingOpen(empty: Boolean, linked: Boolean) {
             if (empty) "Здесь откроется объект" else "Выберите объект слева",
             style = PointType.title,
             modifier = Modifier.padding(top = 16.dp),
-        )
-        Text(
-            howToBring(linked),
-            style = PointType.small,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 6.dp).widthIn(max = 360.dp),
         )
     }
 }
