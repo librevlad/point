@@ -22,6 +22,8 @@ class PointApplication : Application() {
 
     @Inject lateinit var objects: com.point.core.flow.ObjectStore
 
+    @Inject lateinit var knockTrace: com.point.core.flow.KnockTrace
+
     override fun onCreate() {
         super.onCreate()
         val started = android.os.SystemClock.uptimeMillis()
@@ -57,20 +59,36 @@ class PointApplication : Application() {
      * Зовётся и при запуске, и сразу после того, как человек разрешил уведомления (#1118):
      * прежде включённая настройка начинала работать только со следующего запуска, и человек
      * решал, что она не работает вовсе.
+     *
+     * И когда в круге появился компьютер (#1449): адрес, выданный до входа в аккаунт, иначе
+     * ждал бы следующего холодного запуска, а сервер всё это время стучал бы по старому.
+     * Каждый выход оставляет строку в `knock-log.txt` — так живой прогон видит, ушёл ли
+     * свежий адрес на сервер, а не гадает.
      */
     fun tellWhereToKnock() {
         val account = accounts.current() ?: return
         val app = runCatching { com.google.firebase.FirebaseApp.getApps(this) }.getOrNull()
-        if (app.isNullOrEmpty()) return
+        if (app.isNullOrEmpty()) {
+            knockTrace.note("Firebase в этой сборке не поднят — адрес не спрошен")
+            return
+        }
 
         runCatching {
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token
                 .addOnSuccessListener { address ->
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        runCatching { accountClient.tellPushAddress(account, address) }
+                        val sent = runCatching { accountClient.tellPushAddress(account, address) }
+                        knockTrace.note(
+                            when {
+                                sent.getOrDefault(false) -> "адрес отправлен серверу"
+                                sent.isSuccess -> "адрес сервер не принял"
+                                else -> "адрес не отправлен: " + (sent.exceptionOrNull()?.message ?: "без причины")
+                            },
+                        )
                     }
                 }
-        }
+                .addOnFailureListener { error -> knockTrace.note("Google не выдал адрес: " + (error.message ?: "без причины")) }
+        }.onFailure { error -> knockTrace.note("адрес не спрошен: " + (error.message ?: "без причины")) }
     }
 
     /**

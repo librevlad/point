@@ -1642,6 +1642,7 @@ class FlowViewModel @Inject constructor(
                 // Связка с компьютером принадлежит аккаунту и уходит вместе с ним (#1076).
                 // Тема связки — не аккаунт: убирает её свой держатель, а зовёт — этот шов.
                 pcFlow.forget()
+                _ui.update { it.copy(pcInCircle = false) }
             },
         )
     }
@@ -1695,6 +1696,8 @@ class FlowViewModel @Inject constructor(
             advertised = ::phoneAdvertised,
         )
         if (changed) refreshFromPc(force = true)
+        val known = pcFlow.current() != null
+        _ui.update { if (it.pcInCircle == known) it else it.copy(pcInCircle = known) }
     }
 
     private val settingsSync by lazy {
@@ -2638,7 +2641,12 @@ class FlowViewModel @Inject constructor(
 
                 // Уход объекта на соседнее устройство звучит своим звуком, а не общим
                 // успехом (#650): на той стороне его подхватит парный, того же тембра.
-                runCatching { if (leavesForPc(bubble.capabilityId, on?.state)) sensory.sent() else sensory.success() }
+                val sentToPc = leavesForPc(bubble.capabilityId, on?.state)
+                runCatching { if (sentToPc) sensory.sent() else sensory.success() }
+
+                // Объект ушёл на компьютер — значит, компьютер есть, и его ответ будет стучать
+                // в этот телефон (#1449).
+                if (sentToPc) _ui.update { it.copy(pcInCircle = true) }
 
                 // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
                 // merge-путём, что и находки исследований, а не выбрасывается.

@@ -217,6 +217,15 @@ data class FlowUiState(
 
     val devicesScreen: DevicesScreenState? = null,
 
+    /**
+     * В круге человека есть компьютер (#1449): ему есть кому стучать в этот телефон.
+     *
+     * Узнаётся из круга устройств или из первого ухода объекта на компьютер. По нему Point
+     * сам предлагает разрешить уведомления — прежде это можно было найти только строкой в
+     * «Моих устройствах».
+     */
+    val pcInCircle: Boolean = false,
+
     val signIn: com.point.core.flow.SignIn? = null,
 
     val soundEnabled: Boolean = true,

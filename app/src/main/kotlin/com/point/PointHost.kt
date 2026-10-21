@@ -448,6 +448,17 @@ fun PointHost(
                 modifier = Modifier.padding(24.dp),
             )
         }
+
+        // Point сам предлагает разрешить уведомления, когда стучать становится кому (#1449).
+        KnockOffer(
+            pcInCircle = state.pcInCircle,
+            blocked = state.signIn != null || state.cloudConsent || state.busy != null,
+            onGranted = { knockOff = false },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .widthIn(max = com.point.core.ui.PortalColumnWidth)
+                .padding(16.dp),
+        )
     }
 }
 
