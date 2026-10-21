@@ -16,6 +16,18 @@ if (file("google-services.json").exists()) {
     apply(plugin = libs.plugins.google.services.get().pluginId)
 }
 
+// Номер сборки выводится из версии (#1470). Play принимает сборку, только если номер больше
+// прежнего, а набранный числом он стоял на 3 от 0.3.0 до 0.3.7: второе обновление закрытого
+// теста упёрлось бы в отказ. Бамп версии теперь двигает и номер: 0.3.7 → 3007.
+val pointVersion = providers.gradleProperty("pointVersion").get()
+val pointVersionCode = pointVersion.substringBefore('-').split('.').map(String::toInt)
+    .let { (major, minor, patch) ->
+        require(minor < 1000 && patch < 1000) {
+            "pointVersion=$pointVersion: минор и патч до 999, иначе номер сборки повторится"
+        }
+        major * 1_000_000 + minor * 1_000 + patch
+    }
+
 android {
     namespace = "com.point"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -25,8 +37,8 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
 
-        versionCode = 3
-        versionName = providers.gradleProperty("pointVersion").get()
+        versionCode = pointVersionCode
+        versionName = pointVersion
 
         ndk {
             abiFilters += "arm64-v8a"
