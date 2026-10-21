@@ -73,7 +73,7 @@ import com.point.executors.FindCapabilityOnPhone
 import com.point.executors.FindRealizerOnPhone
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageRealizer
-import com.point.executors.MergePdfCapability
+import com.point.executors.MergePdfCapabilityOnPhone
 import com.point.executors.MergePdfRealizer
 import com.point.executors.CopyCapability
 import com.point.executors.CopyCardCapability
@@ -154,7 +154,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun saveCap(c: SaveCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun saveAllCap(c: SaveAllCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shareAllCap(c: ShareAllCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun mergePdfCap(c: MergePdfCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun mergePdfCap(c: MergePdfCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanPdfCap(c: ScanPdfCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shootMoreCap(c: ShootMoreCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openCap(c: OpenCapability): Capability
