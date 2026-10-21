@@ -15,12 +15,16 @@
 /* Стекло Point, то же, что у телефона, окна ПК и страниц сервера (макет «Point · концепт в
    стиле Gestalt», 19.10.2026; палитра — core/ui/src/shared/.../PointPalette.kt, обои —
    GlassSurfaces.kt, страницы сервера — relay/point_server/pages.py). Шрифт Ubuntu — только если
-   он уже стоит у человека: лендинг не тянет шрифты с чужих доменов, как и страницы сервера. */
+   он уже стоит у человека: лендинг не тянет шрифты с чужих доменов, как и страницы сервера.
+
+   Весь текст страницы — в разметке, ни слова в CSS или скрипте: так его можно перевести, не
+   разбирая вёрстку. Иллюстрации нарисованы блоками и SVG прямо здесь — ни одной картинки. */
 :root{
   --canvas:#2B2531;--text:#EDE7EA;--muted:#EDE7EABD;--faint:#EDE7EA94;
   --glass:#241F2AA3;--panel:#FFFFFF0E;--edge:#FFFFFF1F;--edge-top:#FFFFFF38;--line:#FFFFFF14;
   --violet:#B6A3E3;--link:#CBBEEE;--blue:#8FB4E8;--cyan:#8BC9D6;--pink:#E39DB9;
-  --orange:#E3A27C;--green:#86CBA6;--yellow:#E0CC8B;
+  --orange:#E3A27C;--green:#86CBA6;--yellow:#E0CC8B;--hi:#8B6CFF;
+  --portal:conic-gradient(from 200deg,#EAF0FF,#9B7BFF,#00A6FF,#8BC9D6,#EAF0FF);
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -37,11 +41,23 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 main{overflow-x:clip}
 a{color:var(--link);text-decoration:underline;text-underline-offset:2px}
 a:hover{color:#E2D9F7}
-::selection{background:#8B6CFF;color:#fff}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+::selection{background:var(--hi);color:#fff}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 .glass{background:var(--glass);border:1px solid var(--edge);border-top-color:var(--edge-top);
   box-shadow:0 24px 60px #00000040;-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
 .mark{flex:none;display:block}
+.grad{background:linear-gradient(100deg,#EAF0FF 0%,#C9B8F2 40%,#8BC9D6 80%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.4px;color:var(--faint);
+  padding:6px 12px 6px 8px;border-radius:999px;background:var(--panel);border:1px solid var(--line)}
+.eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes flow{to{stroke-dashoffset:-40}}
+@keyframes ride{0%{offset-distance:0%}100%{offset-distance:100%}}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@keyframes scanline{0%{top:8%}100%{top:86%}}
 
 /* Шапка */
 header{position:sticky;top:0;z-index:10;background:#2B2531B8;border-bottom:1px solid var(--line);
@@ -51,77 +67,178 @@ header b{font-size:18px;font-weight:500;letter-spacing:.2px}
 header nav{margin-left:auto;display:flex;gap:22px;align-items:center;font-size:15px}
 header nav a{color:var(--muted);text-decoration:none}
 header nav a:hover{color:var(--text)}
+header nav a.pill{color:var(--canvas);padding:7px 14px;border-radius:10px;background:linear-gradient(#F1ECF4F7,#E5DEEDEB)}
 
 /* Кнопки: главная — светлая строка с тёмным текстом, как первое действие в приложении. */
-.get{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.get{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
 .btn{display:inline-flex;align-items:center;gap:12px;padding:13px 20px;border-radius:14px;text-decoration:none;
-  font-size:16px;font-weight:500;line-height:1.2;transition:transform .15s ease,box-shadow .15s ease}
-.btn:hover{transform:translateY(-1px)}
+  font-size:16px;font-weight:500;line-height:1.2;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
+.btn:hover{transform:translateY(-2px)}
 .btn svg{flex:none;width:22px;height:22px}
 .btn small{display:block;font-size:12px;font-weight:400;opacity:.7;margin-top:2px}
-.btn.light{color:var(--canvas);border:1px solid #FFFFFFF2;background:linear-gradient(#F1ECF4F7,#E5DEEDEB);box-shadow:0 8px 20px #00000033}
-.btn.light:hover{color:var(--canvas);box-shadow:0 12px 28px #00000044}
+.btn.light{color:var(--canvas);border:1px solid #FFFFFFF2;background:linear-gradient(#F1ECF4F7,#E5DEEDEB);box-shadow:0 8px 20px #00000033,0 0 0 0 #B6A3E300}
+.btn.light:hover{color:var(--canvas);box-shadow:0 14px 30px #00000044,0 0 34px #B6A3E355}
 .btn.dark{color:var(--text);background:var(--panel);border:1px solid var(--edge);border-top-color:var(--edge-top)}
 .btn.dark:hover{color:var(--text);background:#FFFFFF16}
 .build{margin-top:14px;font-size:13px;color:var(--faint);min-height:1.5em}
 .build a{color:var(--faint)}
 
 /* Первый экран */
-.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding:88px 0 72px}
-h1{margin:0;font-size:clamp(38px,5.4vw,60px);line-height:1.05;font-weight:500;letter-spacing:-1px}
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding:80px 0 56px}
+h1{margin:22px 0 0;font-size:clamp(40px,5.6vw,66px);line-height:1.03;font-weight:500;letter-spacing:-1.4px}
 .lead{margin:22px 0 0;font-size:19px;line-height:1.55;color:var(--muted);max-width:30em}
 
-/* Телефон-витрина: один настоящий сценарий, без анимации и скриптов. */
-.phone{position:relative;justify-self:center;width:100%;max-width:340px;border-radius:34px;padding:18px}
-.phone::before{content:"";position:absolute;inset:-60px;z-index:-1;border-radius:50%;
-  background:radial-gradient(circle,#9B7BFF55,#9B7BFF00 62%);filter:blur(10px)}
-.thing{display:flex;align-items:center;gap:14px;padding:6px 4px 16px;border-bottom:1px solid var(--line)}
-.ring{flex:none;width:52px;height:52px;border-radius:50%;padding:5px;background:conic-gradient(from 200deg,#EAF0FF,#9B7BFF,#00A6FF,#EAF0FF)}
-.ring span{display:block;width:100%;height:100%;border-radius:50%;background:#2E2836;
-  background-image:linear-gradient(135deg,#E3A27C33,#8FB4E833)}
+.stage{position:relative;height:560px;display:grid;place-items:center}
+/* Портал Point за телефоном: то же кольцо, что у знака, только большое и живое. */
+.portal{position:absolute;width:470px;height:470px;border-radius:50%}
+.portal::before{content:"";position:absolute;inset:-30px;border-radius:50%;background:var(--portal);filter:blur(60px);opacity:.55;animation:pulse 7s ease-in-out infinite}
+.portal::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--portal);animation:spin 26s linear infinite;
+  -webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 34px),#000 calc(100% - 33px));mask:radial-gradient(farthest-side,#0000 calc(100% - 34px),#000 calc(100% - 33px))}
+.phone{position:relative;z-index:2;width:300px;border-radius:36px;padding:16px;animation:float 8s ease-in-out infinite}
+.thing{display:flex;align-items:center;gap:14px;padding:6px 4px 14px;border-bottom:1px solid var(--line)}
+.ring{flex:none;width:52px;height:52px;border-radius:50%;padding:5px;background:var(--portal)}
+.ring span{display:block;width:100%;height:100%;border-radius:50%;background:#2E2836;background-image:linear-gradient(135deg,#E3A27C44,#8FB4E844)}
 .thing b{display:block;font-weight:500;font-size:16px}
 .thing i{display:block;font-style:normal;font-size:13px;color:var(--faint);margin-top:3px}
-.found{display:flex;flex-wrap:wrap;gap:6px;padding:14px 0 6px}
+.found{display:flex;flex-wrap:wrap;gap:6px;padding:12px 0 4px}
 .found span{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--muted)}
 .acts{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
-.acts li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;font-size:15px;background:var(--panel);border:1px solid var(--line)}
+.acts li{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;font-size:15px;background:var(--panel);border:1px solid var(--line)}
 .acts li:first-child{color:var(--canvas);background:linear-gradient(#F1ECF4F7,#E5DEEDEB);border-color:#FFFFFFF2}
 .acts li em{font-style:normal;margin-left:auto;font-size:12px;color:var(--faint)}
 .acts svg{flex:none;width:18px;height:18px}
+/* Вещи, которые прилетают в Point. */
+.orbit{position:absolute;z-index:3;display:flex;align-items:center;gap:8px;padding:9px 13px 9px 9px;border-radius:14px;font-size:13px;white-space:nowrap;animation:float 6s ease-in-out infinite}
+.orbit svg{width:26px;height:26px;padding:5px;border-radius:8px;background:var(--panel)}
+.o1{top:8%;left:-2%;animation-delay:-1s}
+.o2{top:30%;right:-4%;animation-delay:-3s}
+.o3{bottom:18%;left:-6%;animation-delay:-2s}
+.o4{bottom:4%;right:4%;animation-delay:-4.5s}
+
+/* Бегущая строка видов вещей */
+.kinds{position:relative;overflow:hidden;padding:18px 0;border-block:1px solid var(--line);
+  -webkit-mask:linear-gradient(90deg,#0000,#000 12%,#000 88%,#0000);mask:linear-gradient(90deg,#0000,#000 12%,#000 88%,#0000)}
+.kinds div{display:flex;gap:42px;width:max-content;animation:marquee 38s linear infinite}
+.kinds span{display:inline-flex;align-items:center;gap:10px;font-size:18px;color:var(--muted);white-space:nowrap}
+.kinds span::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c,var(--violet));box-shadow:0 0 12px var(--c,var(--violet))}
 
 /* Разделы */
-section{padding:64px 0}
-h2{margin:0;font-size:clamp(28px,3.6vw,38px);font-weight:500;letter-spacing:-.5px;line-height:1.15}
-.sub{margin:12px 0 0;font-size:17px;line-height:1.55;color:var(--muted);max-width:36em}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:36px}
-.card{border-radius:22px;padding:22px}
-.card svg{width:26px;height:26px;display:block;margin-bottom:16px}
-.card h3{margin:0;font-size:18px;font-weight:500}
-.card p{margin:8px 0 0;font-size:15px;line-height:1.55;color:var(--muted)}
+section{padding:84px 0}
+h2{margin:0;font-size:clamp(30px,4vw,44px);font-weight:500;letter-spacing:-.7px;line-height:1.1}
+.sub{margin:14px 0 0;font-size:18px;line-height:1.55;color:var(--muted);max-width:36em}
 
-.doors{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:36px}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:36px}
-.hand{border-radius:26px;padding:28px;display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:start}
-.hand .qr{width:84px;height:84px;border-radius:18px;padding:12px;background:linear-gradient(#F1ECF4,#E5DEED)}
-.hand .qr svg{width:100%;height:100%;display:block}
-.hand h3{margin:0;font-size:21px;font-weight:500}
-.hand p{margin:8px 0 0;font-size:16px;line-height:1.55;color:var(--muted)}
+/* Путь одной вещи: каждый шаг даёт новую вещь, с которой можно идти дальше. */
+.path{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:48px}
+.path svg.wire{position:absolute;left:0;top:52px;width:100%;height:20px;overflow:visible;z-index:0}
+.path svg.wire path{fill:none;stroke:url(#wireg);stroke-width:2;stroke-dasharray:6 8;animation:flow 1.6s linear infinite}
+.step{position:relative;z-index:1;border-radius:22px;padding:20px}
+.step .dot{width:64px;height:64px;border-radius:50%;padding:6px;background:conic-gradient(from 200deg,var(--c),#FFFFFF33,var(--c));margin-bottom:16px}
+.step .dot span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:#2E2836}
+.step .dot svg{width:24px;height:24px}
+.step b{display:block;font-size:17px;font-weight:500}
+.step p{margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--muted)}
+.step .tag{display:inline-block;margin-top:12px;font-size:12px;padding:4px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--faint)}
+
+/* Что умеет: плитки разного размера, у каждой — своя маленькая картинка. */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+.tile{position:relative;overflow:hidden;border-radius:26px;padding:24px;display:flex;flex-direction:column}
+.tile.wide{grid-column:span 2}
+.tile.full{grid-column:1/-1;flex-direction:row;align-items:center;gap:32px}
+.tile h3{margin:0;font-size:20px;font-weight:500}
+.tile p{margin:8px 0 0;font-size:15px;line-height:1.55;color:var(--muted);max-width:30em}
+.tile::after{content:"";position:absolute;width:260px;height:260px;right:-90px;top:-110px;border-radius:50%;background:radial-gradient(circle,var(--c) ,#0000 65%);opacity:.22;pointer-events:none}
+.art{position:relative;height:170px;margin-bottom:22px;border-radius:16px;overflow:hidden;background:#FFFFFF08;border:1px solid var(--line)}
+
+/* Картинка «текст со снимка» */
+.snap{position:absolute;inset:16px 22px;border-radius:12px;background:linear-gradient(160deg,#5B4A63,#3A3448 60%,#2F3A4E);padding:20px 22px;display:grid;align-content:start;gap:10px;transform:rotate(-2deg)}
+.snap i{display:block;height:9px;border-radius:5px;background:#EDE7EA55}
+.snap i.sel{background:#8B6CFF66;outline:2px solid #B6A3E3;outline-offset:3px;border-radius:3px}
+.snap::after{content:"";position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,#0000,#8BC9D6,#0000);box-shadow:0 0 14px #8BC9D6;animation:scanline 3.2s ease-in-out infinite alternate}
+.chip{position:absolute;z-index:2;font-size:12px;padding:6px 11px;border-radius:10px;color:var(--canvas);background:linear-gradient(#F1ECF4F7,#E5DEEDEB);box-shadow:0 8px 18px #00000040}
+
+/* Картинка «PDF» */
+.pages{position:absolute;inset:0;display:grid;place-items:center}
+.pages i{position:absolute;width:92px;height:122px;border-radius:8px;background:#F4F0F6;box-shadow:0 10px 24px #00000055;
+  background-image:repeating-linear-gradient(#0000 0 14px,#2B253122 14px 17px);background-size:70% 100%;background-position:50% 18px;background-repeat:no-repeat}
+.pages i:nth-child(1){transform:translate(-46px,6px) rotate(-10deg);opacity:.7}
+.pages i:nth-child(2){transform:translate(46px,6px) rotate(9deg);opacity:.7}
+.pages i:nth-child(3){transform:translateY(-4px)}
+.pages b{position:absolute;bottom:16px;font-size:11px;font-weight:500;padding:3px 8px;border-radius:6px;background:#D98B63;color:#fff}
+
+/* Картинка «номера и адреса» */
+.ents{position:absolute;inset:0;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:8px;padding:16px}
+.ents span{display:inline-flex;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border-radius:12px;background:#FFFFFF10;border:1px solid var(--line)}
+.ents span::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+
+/* Картинка «фото»: вырезанный предмет на шахматке прозрачности. */
+.cut{position:absolute;inset:0;background-color:#FFFFFF0A;background-image:linear-gradient(45deg,#FFFFFF10 25%,#0000 25%,#0000 75%,#FFFFFF10 75%),linear-gradient(45deg,#FFFFFF10 25%,#0000 25%,#0000 75%,#FFFFFF10 75%);background-size:22px 22px;background-position:0 0,11px 11px}
+.cut i{position:absolute;left:50%;bottom:-20px;width:120px;height:150px;margin-left:-60px;border-radius:60px 60px 30px 30px;background:linear-gradient(170deg,#E39DB9,#9B7BFF);box-shadow:0 0 0 2px #FFFFFFAA,0 0 0 6px #FFFFFF22}
+.cut i::before{content:"";position:absolute;left:50%;top:-58px;width:64px;height:64px;margin-left:-32px;border-radius:50%;background:linear-gradient(170deg,#EFBE9F,#E39DB9);box-shadow:0 0 0 2px #FFFFFFAA}
+
+/* Картинка «QR» */
+.qr{position:absolute;inset:0;display:grid;place-items:center}
+.qr svg{width:120px;height:120px;padding:10px;border-radius:14px;background:#F4F0F6;box-shadow:0 10px 24px #00000055}
+
+/* Картинка «телефон и компьютер» */
+.devices{position:relative;flex:none;width:380px;height:200px}
+.devices .pc{position:absolute;right:0;top:10px;width:230px;height:148px;border-radius:14px;border:2px solid #FFFFFF44;background:linear-gradient(160deg,#3A3248,#2B2531)}
+.devices .pc::after{content:"";position:absolute;left:50%;bottom:-30px;width:80px;height:6px;margin-left:-40px;border-radius:3px;background:#FFFFFF33}
+.devices .ph{position:absolute;left:0;top:40px;width:80px;height:150px;border-radius:16px;border:2px solid #FFFFFF44;background:linear-gradient(160deg,#3A3248,#2B2531)}
+.devices .doc{position:absolute;width:40px;height:52px;border-radius:5px;background:#F4F0F6}
+.devices .ph .doc{left:18px;top:40px}
+.devices .pc .doc{left:94px;top:44px;width:46px;height:60px;box-shadow:0 0 30px #8FB4E8}
+.devices svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.devices svg path{fill:none;stroke:#8FB4E8;stroke-width:2;stroke-dasharray:4 7;animation:flow 1.4s linear infinite}
+.devices .bead{position:absolute;left:0;top:0;width:12px;height:12px;border-radius:50%;background:#EAF0FF;box-shadow:0 0 14px #8FB4E8,0 0 30px #9B7BFF;
+  offset-path:path("M 60 60 C 120 -20, 220 -20, 270 55");animation:ride 2.6s ease-in-out infinite}
+
+/* Отдать и забрать файл: ссылка или QR, у другой стороны — только браузер. */
+.swap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:44px}
+.swap .tile{padding:28px}
+.swap .art{height:210px;display:flex;align-items:center;justify-content:center;gap:22px}
+.mini{position:relative;width:86px;height:150px;border-radius:18px;border:2px solid #FFFFFF44;background:linear-gradient(160deg,#3A3248,#2B2531);flex:none}
+.mini .doc{position:absolute;left:21px;top:42px;width:40px;height:52px;border-radius:5px;background:#F4F0F6}
+.mini.recv .doc{animation:land 3.2s ease-in-out infinite}
+@keyframes land{0%,35%{opacity:0;transform:translateY(-26px)}55%,100%{opacity:1;transform:none}}
+.linkcard{display:grid;gap:10px;justify-items:center}
+.linkcard .url{font-size:12px;padding:7px 11px;border-radius:10px;background:#FFFFFF12;border:1px solid var(--line);color:var(--link);white-space:nowrap}
+.linkcard svg.q{width:84px;height:84px;padding:7px;border-radius:10px;background:#F4F0F6;box-shadow:0 0 30px #9B7BFF66}
+.arrow{width:40px;height:2px;background:linear-gradient(90deg,#0000,var(--c));position:relative;flex:none}
+.arrow::after{content:"";position:absolute;right:-1px;top:-4px;border:5px solid #0000;border-left-color:var(--c)}
+.browser{width:150px;height:118px;border-radius:12px;border:2px solid #FFFFFF44;background:linear-gradient(160deg,#3A3248,#2B2531);position:relative;flex:none;overflow:hidden}
+.browser::before{content:"";position:absolute;left:0;right:0;top:0;height:18px;background:#FFFFFF14;border-bottom:1px solid var(--line)}
+.browser i{position:absolute;left:50%;top:58%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--portal);
+  -webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 7px),#000 calc(100% - 6px));mask:radial-gradient(farthest-side,#0000 calc(100% - 7px),#000 calc(100% - 6px));animation:spin 4s linear infinite}
 .facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
 .facts span{font-size:13px;padding:6px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--muted)}
-.door{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;border-radius:18px;background:var(--panel);border:1px solid var(--line)}
-.door svg{flex:none;width:22px;height:22px;margin-top:1px}
+
+/* Где найти */
+.doors{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:44px}
+.door{display:flex;gap:16px;align-items:flex-start;padding:20px;border-radius:20px;background:var(--panel);border:1px solid var(--line);transition:background .2s ease,transform .2s ease}
+.door:hover{background:#FFFFFF14;transform:translateY(-2px)}
+.door .ic{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:radial-gradient(circle at 30% 25%,#FFFFFF22,#0000 70%),var(--c);box-shadow:0 8px 20px #00000033}
+.door .ic svg{width:22px;height:22px}
 .door b{display:block;font-weight:500;font-size:16px}
 .door span{display:block;margin-top:4px;font-size:14px;line-height:1.5;color:var(--muted)}
 
-.yours{border-radius:26px;padding:36px;display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
-.yours ul{list-style:none;margin:0;padding:0;display:grid;gap:16px}
-.yours li{display:flex;gap:12px;font-size:16px;line-height:1.5;color:var(--muted)}
-.yours li b{color:var(--text);font-weight:500}
-.yours li::before{content:"";flex:none;width:8px;height:8px;margin-top:8px;border-radius:50%;background:var(--green)}
+/* Твоё остаётся твоим */
+.yours{position:relative;overflow:hidden;border-radius:30px;padding:44px;display:grid;grid-template-columns:.9fr 1.1fr;gap:40px;align-items:center}
+.shield{position:relative;width:200px;height:200px;margin-top:28px}
+.shield i{position:absolute;inset:0;border-radius:50%;border:1px solid #86CBA655;animation:pulse 4s ease-in-out infinite}
+.shield i:nth-child(2){inset:26px;animation-delay:-1.3s}
+.shield i:nth-child(3){inset:52px;animation-delay:-2.6s;background:radial-gradient(circle,#86CBA633,#0000 70%)}
+.shield svg{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px}
+.yours ul{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.yours li{padding:18px 20px;border-radius:18px;background:var(--panel);border:1px solid var(--line);font-size:16px;line-height:1.5;color:var(--muted)}
+.yours li b{display:block;color:var(--text);font-weight:500;margin-bottom:2px}
 
-.end{text-align:center;padding:72px 0 88px}
+.end{position:relative;text-align:center;padding:110px 0 120px}
 .end .get{justify-content:center}
-.end .mark{margin:0 auto 22px}
+.end h2{font-size:clamp(34px,5vw,56px)}
+.end .big{position:relative;width:120px;height:120px;margin:0 auto 30px}
+.end .big::before{content:"";position:absolute;inset:-40px;border-radius:50%;background:var(--portal);filter:blur(50px);opacity:.45}
+.end .big::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--portal);animation:spin 14s linear infinite;
+  -webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 22px),#000 calc(100% - 21px));mask:radial-gradient(farthest-side,#0000 calc(100% - 22px),#000 calc(100% - 21px))}
 
 footer{border-top:1px solid var(--line);padding:24px 0 32px;font-size:14px;color:var(--faint)}
 footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center}
@@ -131,36 +248,71 @@ footer .langs{display:flex;gap:12px}
 footer .langs a{text-decoration:none}
 footer .langs a[aria-current]{color:var(--text)}
 
-@media (max-width:900px){
-  .hero{grid-template-columns:1fr;gap:48px;padding:56px 0 40px}
-  .grid{grid-template-columns:1fr 1fr}
-  .yours{grid-template-columns:1fr;padding:26px}
-  .pair{grid-template-columns:1fr}
+/* Появление при прокрутке — только если скрипт есть: без него всё видно сразу. */
+.js .rise{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+.js .rise.in{opacity:1;transform:none}
+
+@media (max-width:960px){
+  .hero{grid-template-columns:1fr;gap:20px;padding:56px 0 32px}
+  .stage{height:540px}
+  .path{grid-template-columns:1fr 1fr}
+  .path svg.wire{display:none}
+  .bento{grid-template-columns:1fr 1fr}
+  .swap{grid-template-columns:1fr}
+  .tile.wide{grid-column:1/-1}
+  .tile.full{flex-direction:column;align-items:stretch}
+  .devices{margin:0 auto;max-width:100%}
+  .doors{grid-template-columns:1fr 1fr}
+  .yours{grid-template-columns:1fr;padding:28px}
+  .shield{display:none}
 }
 @media (max-width:600px){
   .wrap{padding:0 16px}
   header nav a.opt{display:none}
-  .grid,.doors{grid-template-columns:1fr}
-  .hand{grid-template-columns:1fr;padding:22px}
   .btn{width:100%}
-  section{padding:48px 0}
+  section{padding:60px 0}
   .lead{font-size:17px}
+  .stage{height:500px}
+  .portal{width:340px;height:340px}
+  .phone{width:270px}
+  .o1{left:0}.o2{right:0}.o3{left:0}.o4{right:0}
+  .path,.bento,.doors{grid-template-columns:1fr}
+  .swap .tile{padding:20px}
+  .swap .art{gap:10px;height:180px}
+  .mini{width:66px;height:118px}
+  .mini .doc{left:15px;top:32px;width:32px;height:42px}
+  .browser{width:112px;height:92px}
+  .arrow{width:22px}
+  .linkcard .url{font-size:10px;padding:5px 8px}
+  .linkcard svg.q{width:70px;height:70px}
+  .devices{transform:scale(.8);transform-origin:left top;height:170px}
   footer .right{margin-left:0}
 }
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn{transition:none}}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .js .rise{opacity:1;transform:none}
+}
 </style>
 </head>
 <body>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="pm" gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="19"><stop offset="0" stop-color="#EAF0FF"/><stop offset=".45" stop-color="#9B7BFF"/><stop offset="1" stop-color="#00A6FF"/></linearGradient>
+    <linearGradient id="wireg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E3A27C"/><stop offset=".35" stop-color="#8BC9D6"/><stop offset=".7" stop-color="#B6A3E3"/><stop offset="1" stop-color="#8FB4E8"/></linearGradient>
+  </defs>
+</svg>
+
 <header>
   <div class="wrap">
-    <svg class="mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="pm" gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="19"><stop offset="0" stop-color="#EAF0FF"/><stop offset=".45" stop-color="#9B7BFF"/><stop offset="1" stop-color="#00A6FF"/></linearGradient></defs><circle cx="12" cy="12" r="5.46" fill="none" stroke="url(#pm)" stroke-width="3.08"/></svg>
+    <svg class="mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5.46" fill="none" stroke="url(#pm)" stroke-width="3.08"/></svg>
     <b>Point</b>
     <nav>
       <a class="opt" href="#what" data-i18n="nav.what">What it does</a>
       <a class="opt" href="#pass" data-i18n="nav.pass">Files by link</a>
       <a class="opt" href="#where" data-i18n="nav.where">Where to find it</a>
-      <a href="#download" data-i18n="nav.download">Download</a>
+      <a class="pill" href="#download" data-i18n="nav.download">Download</a>
     </nav>
   </div>
 </header>
@@ -170,7 +322,8 @@ footer .langs a[aria-current]{color:var(--text)}
 
   <div class="hero">
     <div>
-      <h1 data-i18n="hero.title">Share anything into Point. See what you can do with it.</h1>
+      <span class="eyebrow"><i></i><span data-i18n="hero.eyebrow">Android and Windows</span></span>
+      <h1 data-i18n="hero.title">Share anything into Point. <span class="grad">See what you can do with it.</span></h1>
       <p class="lead" data-i18n="hero.lead">A photo, a PDF, a screenshot, a link, an archive. Point looks at it and offers the next step: copy the text, make a clean PDF, call the number, put the address on a map, send it to your computer.</p>
       <div class="get" id="download">
         <a class="btn light" data-get="android" href="https://github.com/librevlad/point/releases">
@@ -185,60 +338,70 @@ footer .langs a[aria-current]{color:var(--text)}
       <div class="build" data-build></div>
     </div>
 
-    <div class="phone glass" aria-label="Point on a phone: a business card photo with its next steps" data-i18n-label="demo.label">
-      <div class="thing">
-        <div class="ring"><span></span></div>
-        <div><b data-i18n="demo.photo">Photo</b><i data-i18n="demo.card">Business card · just now</i></div>
+    <div class="stage">
+      <div class="portal" aria-hidden="true"></div>
+
+      <div class="orbit glass o1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#E39DB9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>IMG_2041.jpg</div>
+      <div class="orbit glass o2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#E3A27C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>contract.pdf</div>
+      <div class="orbit glass o3" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#8FB4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span data-i18n="orbit.link">a link from a chat</span></div>
+      <div class="orbit glass o4" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#E0CC8B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>photos.zip</div>
+
+      <div class="phone glass" aria-label="Point on a phone: a business card photo with its next steps" data-i18n-label="demo.label">
+        <div class="thing">
+          <div class="ring"><span></span></div>
+          <div><b data-i18n="demo.photo">Photo</b><i data-i18n="demo.card">Business card · just now</i></div>
+        </div>
+        <div class="found">
+          <span>+380 67 214 55 09</span><span>anna@studio.ua</span><span data-i18n="demo.address">12 Sichovykh Striltsiv St</span>
+        </div>
+        <ul class="acts">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.8-5.5 7-5.5s6 2 7 5.5"/></svg><span data-i18n="demo.contact">Save as contact</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#86CBA6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg><span data-i18n="demo.call">Call</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#E3A27C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg><span data-i18n="demo.map">Show on map</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#8BC9D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span data-i18n="demo.copy">Copy text</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#8FB4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span data-i18n="demo.pc">Open on computer</span><em data-i18n="demo.nearby">nearby</em></li>
+        </ul>
       </div>
-      <div class="found">
-        <span>+380 67 214 55 09</span><span>anna@studio.ua</span><span data-i18n="demo.address">12 Sichovykh Striltsiv St</span>
-      </div>
-      <ul class="acts">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.8-5.5 7-5.5s6 2 7 5.5"/></svg><span data-i18n="demo.contact">Save as contact</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#86CBA6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg><span data-i18n="demo.call">Call</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#E3A27C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg><span data-i18n="demo.map">Show on map</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#8BC9D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span data-i18n="demo.copy">Copy text</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#8FB4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span data-i18n="demo.pc">Open on computer</span><em data-i18n="demo.nearby">nearby</em></li>
-      </ul>
     </div>
   </div>
-
 </div>
 
-<section id="what">
+<div class="kinds" aria-hidden="true">
+  <div>
+    <span style="--c:#E39DB9" data-i18n="kind.photo">Photo</span><span style="--c:#E3A27C">PDF</span><span style="--c:#8BC9D6" data-i18n="kind.screenshot">Screenshot</span><span style="--c:#8FB4E8" data-i18n="kind.link">Link</span><span style="--c:#E0CC8B" data-i18n="kind.archive">Archive</span><span style="--c:#B6A3E3" data-i18n="kind.word">Word document</span><span style="--c:#86CBA6" data-i18n="kind.contact">Contact</span><span style="--c:#E3A27C" data-i18n="kind.place">Place</span><span style="--c:#8BC9D6" data-i18n="kind.text">Selected text</span><span style="--c:#E39DB9" data-i18n="kind.print">Printed page</span>
+    <span style="--c:#E39DB9" data-i18n="kind.photo">Photo</span><span style="--c:#E3A27C">PDF</span><span style="--c:#8BC9D6" data-i18n="kind.screenshot">Screenshot</span><span style="--c:#8FB4E8" data-i18n="kind.link">Link</span><span style="--c:#E0CC8B" data-i18n="kind.archive">Archive</span><span style="--c:#B6A3E3" data-i18n="kind.word">Word document</span><span style="--c:#86CBA6" data-i18n="kind.contact">Contact</span><span style="--c:#E3A27C" data-i18n="kind.place">Place</span><span style="--c:#8BC9D6" data-i18n="kind.text">Selected text</span><span style="--c:#E39DB9" data-i18n="kind.print">Printed page</span>
+  </div>
+</div>
+
+<section>
   <div class="wrap">
-    <h2 data-i18n="what.title">One place for whatever you just got</h2>
-    <p class="sub" data-i18n="what.sub">You only see the steps that fit the thing in front of you. Each result is a new file or a finished action, and you can keep going from it.</p>
-    <div class="grid">
-      <div class="card glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#8BC9D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-        <h3 data-i18n="ocr.t">Text out of a picture</h3>
-        <p data-i18n="ocr.p">Screenshots, photos of signs, pages and receipts. Copy the text, find a word, take a table out of it.</p>
+    <h2 class="rise" data-i18n="path.title">Every step gives you <span class="grad">something new</span></h2>
+    <p class="sub rise" data-i18n="path.sub">And the new thing has its own next steps. Go as far as you need, stop whenever you like.</p>
+    <div class="path">
+      <svg class="wire" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><path d="M12 10 H88" vector-effect="non-scaling-stroke"/></svg>
+      <div class="step glass rise" style="--c:#E39DB9">
+        <div class="dot"><span><svg viewBox="0 0 24 24" fill="none" stroke="#E39DB9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="3"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg></span></div>
+        <b data-i18n="step1.t">A photo of a contract</b>
+        <p data-i18n="step1.p">Taken at an angle, in bad light.</p>
+        <span class="tag" data-i18n="step1.tag">you share it</span>
       </div>
-      <div class="card glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#B6A3E3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
-        <h3 data-i18n="pdf.t">Clean PDFs</h3>
-        <p data-i18n="pdf.p">Photograph a document and get a straight, white, readable scan. Join several into one PDF or split one into pages.</p>
+      <div class="step glass rise" style="--c:#8BC9D6">
+        <div class="dot"><span><svg viewBox="0 0 24 24" fill="none" stroke="#8BC9D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div>
+        <b data-i18n="step2.t">Point reads it</b>
+        <p data-i18n="step2.p">Text, two dates, an amount and a phone number.</p>
+        <span class="tag" data-i18n="step2.tag">found inside</span>
       </div>
-      <div class="card glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#86CBA6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>
-        <h3 data-i18n="found.t">Numbers and addresses</h3>
-        <p data-i18n="found.p">Phones, emails, addresses and dates found inside become a call, a contact, a route or a calendar event.</p>
+      <div class="step glass rise" style="--c:#B6A3E3">
+        <div class="dot"><span><svg viewBox="0 0 24 24" fill="none" stroke="#B6A3E3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span></div>
+        <b data-i18n="step3.t">A clean PDF</b>
+        <p data-i18n="step3.p">Straightened, white, easy to read and to sign.</p>
+        <span class="tag" data-i18n="step3.tag">one tap</span>
       </div>
-      <div class="card glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#E39DB9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
-        <h3 data-i18n="photo.t">Photos</h3>
-        <p data-i18n="photo.p">Cut out the subject, blur or replace the background, hide a part before sending, strip the hidden location data.</p>
-      </div>
-      <div class="card glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#E0CC8B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-7"/></svg>
-        <h3 data-i18n="qr.t">QR codes</h3>
-        <p data-i18n="qr.p">Read a QR code from a photo or a screenshot and open what it holds. Make one from a link or a piece of text.</p>
-      </div>
-      <div class="card glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#8FB4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="13" height="9" rx="1.5"/><rect x="16" y="9" width="5.5" height="11" rx="1.5"/><path d="M6 17h6"/></svg>
-        <h3 data-i18n="pc.t">Phone and computer</h3>
-        <p data-i18n="pc.p">Send something to your computer in one tap and carry on there. The result comes back to the phone.</p>
+      <div class="step glass rise" style="--c:#8FB4E8">
+        <div class="dot"><span><svg viewBox="0 0 24 24" fill="none" stroke="#8FB4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg></span></div>
+        <b data-i18n="step4.t">On your computer</b>
+        <p data-i18n="step4.p">Open it there, print it, keep working.</p>
+        <span class="tag" data-i18n="step4.tag">one more tap</span>
       </div>
     </div>
   </div>
@@ -246,55 +409,119 @@ footer .langs a[aria-current]{color:var(--text)}
 
 <section id="pass">
   <div class="wrap">
-    <h2 data-i18n="pass.title">Hand over a file with a link or a QR code</h2>
-    <p class="sub" data-i18n="pass.sub">No messenger, no cable. The other person needs only a browser.</p>
-    <div class="pair">
-      <div class="hand glass">
-        <div class="qr"><svg viewBox="0 0 21 21" fill="#2B2531" aria-hidden="true"><path d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5V1zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2z" fill-rule="evenodd"/><path d="M9 0h2v2H9zM9 3h1v3H9zM11 4h2v2h-2zM8 8h2v1H8zM11 8h3v2h-3zM15 9h2v2h-2zM18 8h3v2h-3zM0 9h2v2H0zM3 9h3v1H3zM9 11h2v3H9zM12 12h3v2h-3zM17 12h2v3h-2zM20 12h1v2h-1zM9 16h3v2H9zM14 15h2v3h-2zM10 19h3v2h-3zM17 17h4v1h-4zM15 19h4v2h-4zM20 19h1v2h-1z"/></svg></div>
-        <div>
-          <h3 data-i18n="give.t">Give a file</h3>
-          <p data-i18n="give.p">Point uploads it and gives you a link. Send the link, or show it as a QR code to someone next to you. They open it in a browser, or straight in Point if they have it.</p>
+    <h2 class="rise" data-i18n="pass.title">Give a file. <span class="grad">Get a file.</span></h2>
+    <p class="sub rise" data-i18n="pass.sub">By a link or a QR code. No messenger, no cable: the other person needs only a browser.</p>
+    <div class="swap">
+      <div class="tile glass rise" style="--c:#B6A3E3">
+        <div class="art" aria-hidden="true">
+          <div class="mini"><div class="doc"></div></div>
+          <div class="arrow"></div>
+          <div class="linkcard"><span class="url">point.leerio.app/d/…</span><svg class="q" viewBox="0 0 21 21" shape-rendering="crispEdges"><path fill="#2B2531" d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5V1zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2zM8 0h1v2H8zM10 1h2v1h-2zM9 3h3v1H9zM8 5h2v2H8zM11 5h1v3h-1zM0 8h2v1H0zM3 8h3v1H3zM8 8h2v1H8zM13 8h2v2h-2zM16 8h1v1h-1zM18 8h3v1h-3zM1 10h2v2H1zM5 10h3v1H5zM9 10h3v1H9zM15 10h2v1h-2zM19 10h1v3h-1zM4 12h1v1H4zM7 12h2v2H7zM11 12h3v1h-3zM16 12h2v1h-2zM8 15h1v3H8zM10 14h2v1h-2zM13 14h1v2h-1zM15 14h3v1h-3zM20 15h1v2h-1zM10 16h2v2h-2zM14 17h4v1h-4zM9 19h3v2H9zM13 19h1v1h-1zM15 19h2v2h-2zM19 18h2v3h-2z"/></svg></div>
         </div>
+        <h3 data-i18n="give.t">Give a file</h3>
+        <p data-i18n="give.p">Point uploads it and gives you a link. Send the link, or show it as a QR code to someone next to you. They open it in a browser, or straight in Point if they have it.</p>
       </div>
-      <div class="hand glass">
-        <div class="qr" style="transform:scaleX(-1)"><svg viewBox="0 0 21 21" fill="#2B2531" aria-hidden="true"><path d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5V1zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2z" fill-rule="evenodd"/><path d="M9 0h2v2H9zM9 3h1v3H9zM11 4h2v2h-2zM8 8h2v1H8zM11 8h3v2h-3zM15 9h2v2h-2zM18 8h3v2h-3zM0 9h2v2H0zM3 9h3v1H3zM9 11h2v3H9zM12 12h3v2h-3zM17 12h2v3h-2zM20 12h1v2h-1zM9 16h3v2H9zM14 15h2v3h-2zM10 19h3v2h-3zM17 17h4v1h-4zM15 19h4v2h-4zM20 19h1v2h-1z"/></svg></div>
-        <div>
-          <h3 data-i18n="take.t">Get a file</h3>
-          <p data-i18n="take.p">Point shows a QR code and a link. The other person opens it in a browser and drops in the file. It lands in Point on your phone.</p>
+      <div class="tile glass rise" style="--c:#8BC9D6">
+        <div class="art" aria-hidden="true">
+          <div class="browser"><i></i></div>
+          <div class="arrow"></div>
+          <div class="mini recv"><div class="doc"></div></div>
         </div>
+        <h3 data-i18n="take.t">Get a file</h3>
+        <p data-i18n="take.p">Point shows a QR code and a link. The other person opens it in a browser and drops in the file. It lands in Point on your phone.</p>
       </div>
     </div>
-    <div class="facts"><span data-i18n="pass.browser">Works in any browser</span><span data-i18n="pass.day">The link lives for a day</span></div>
+    <div class="facts rise"><span data-i18n="pass.browser">Works in any browser</span><span data-i18n="pass.day">The link lives for a day</span></div>
+  </div>
+</section>
+
+<section id="what">
+  <div class="wrap">
+    <h2 class="rise" data-i18n="what.title">One place for <span class="grad">whatever you just got</span></h2>
+    <p class="sub rise" data-i18n="what.sub">You only see the steps that fit the thing in front of you.</p>
+    <div class="bento">
+
+      <div class="tile glass wide rise" style="--c:#8BC9D6">
+        <div class="art" aria-hidden="true">
+          <div class="snap"><i style="width:62%"></i><i style="width:88%"></i><i class="sel" style="width:54%"></i><i style="width:76%"></i><i style="width:40%"></i></div>
+          <span class="chip" style="right:26px;top:22px" data-i18n="demo.copy">Copy text</span>
+        </div>
+        <h3 data-i18n="ocr.t">Text out of a picture</h3>
+        <p data-i18n="ocr.p">Screenshots, photos of signs, pages and receipts. Copy the text, find a word, take a table out of it.</p>
+      </div>
+
+      <div class="tile glass rise" style="--c:#B6A3E3">
+        <div class="art" aria-hidden="true"><div class="pages"><i></i><i></i><i></i><b>PDF</b></div></div>
+        <h3 data-i18n="pdf.t">Clean PDFs</h3>
+        <p data-i18n="pdf.p">A straight, white scan from a photo. Join several into one or split one into pages.</p>
+      </div>
+
+      <div class="tile glass rise" style="--c:#86CBA6">
+        <div class="art" aria-hidden="true">
+          <div class="ents"><span style="--c:#86CBA6">+380 67 214 55 09</span><span style="--c:#8FB4E8">anna@studio.ua</span><span style="--c:#E3A27C" data-i18n="ent.address">Sichovykh Striltsiv, 12</span><span style="--c:#E0CC8B" data-i18n="ent.date">Fri, 24 Oct</span></div>
+        </div>
+        <h3 data-i18n="found.t">Numbers and addresses</h3>
+        <p data-i18n="found.p">Found inside, they become a call, a contact, a route or a calendar event.</p>
+      </div>
+
+      <div class="tile glass rise" style="--c:#E39DB9">
+        <div class="art" aria-hidden="true"><div class="cut"><i></i></div></div>
+        <h3 data-i18n="photo.t">Photos</h3>
+        <p data-i18n="photo.p">Cut out the subject, blur or replace the background, hide a part, strip the hidden location.</p>
+      </div>
+
+      <div class="tile glass rise" style="--c:#E0CC8B">
+        <div class="art" aria-hidden="true"><div class="qr">
+          <svg viewBox="0 0 21 21" shape-rendering="crispEdges"><path fill="#2B2531" d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5V1zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2zM8 0h1v2H8zM10 1h2v1h-2zM9 3h3v1H9zM8 5h2v2H8zM11 5h1v3h-1zM0 8h2v1H0zM3 8h3v1H3zM8 8h2v1H8zM13 8h2v2h-2zM16 8h1v1h-1zM18 8h3v1h-3zM1 10h2v2H1zM5 10h3v1H5zM9 10h3v1H9zM15 10h2v1h-2zM19 10h1v3h-1zM4 12h1v1H4zM7 12h2v2H7zM11 12h3v1h-3zM16 12h2v1h-2zM8 15h1v3H8zM10 14h2v1h-2zM13 14h1v2h-1zM15 14h3v1h-3zM20 15h1v2h-1zM10 16h2v2h-2zM14 17h4v1h-4zM9 19h3v2H9zM13 19h1v1h-1zM15 19h2v2h-2zM19 18h2v3h-2z"/></svg>
+        </div></div>
+        <h3 data-i18n="qr.t">QR codes</h3>
+        <p data-i18n="qr.p">Read one from a photo or a screenshot and open what it holds. Make one from a link or text.</p>
+      </div>
+
+      <div class="tile glass full rise" style="--c:#8FB4E8">
+        <div class="devices" aria-hidden="true">
+          <div class="ph"><div class="doc"></div></div>
+          <div class="pc"><div class="doc"></div></div>
+          <svg viewBox="0 0 380 200"><path d="M 60 60 C 120 -20, 220 -20, 270 55"/></svg>
+          <div class="bead"></div>
+        </div>
+        <div>
+          <h3 data-i18n="pc.t">Phone and computer, one Point</h3>
+          <p data-i18n="pc.p">Send something to your computer in one tap and carry on there. Whatever you make on the computer comes back to the phone.</p>
+        </div>
+      </div>
+
+    </div>
   </div>
 </section>
 
 <section id="where">
   <div class="wrap">
-    <h2 data-i18n="where.title">Already where you are</h2>
-    <p class="sub" data-i18n="where.sub">No need to open Point first. It waits in the places you already use.</p>
+    <h2 class="rise" data-i18n="where.title">Already <span class="grad">where you are</span></h2>
+    <p class="sub rise" data-i18n="where.sub">No need to open Point first. It waits in the places you already use.</p>
     <div class="doors">
-      <div class="door">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#B6A3E3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+      <div class="door rise">
+        <div class="ic" style="--c:#6F5BA8"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg></div>
         <div><b data-i18n="door.share">Share and Open with</b><span data-i18n="door.share.p">From the gallery, a chat, the files app or the browser.</span></div>
       </div>
-      <div class="door">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#8BC9D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M5 12h9M5 17h11"/><path d="M15 10h5v4h-5z"/></svg>
+      <div class="door rise">
+        <div class="ic" style="--c:#3F7F8C"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M5 12h9M5 17h11"/><path d="M15 10h5v4h-5z"/></svg></div>
         <div><b data-i18n="door.text">Selected text</b><span data-i18n="door.text.p">Select a few words in any app and send them to Point.</span></div>
       </div>
-      <div class="door">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#E3A27C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>
+      <div class="door rise">
+        <div class="ic" style="--c:#A0634A"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg></div>
         <div><b data-i18n="door.print">Print</b><span data-i18n="door.print.p">Print to Point from any app and get a PDF of the page.</span></div>
       </div>
-      <div class="door">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#86CBA6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+      <div class="door rise">
+        <div class="ic" style="--c:#4C7F64"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></div>
         <div><b data-i18n="door.tile">Quick settings</b><span data-i18n="door.tile.p">A tile in the notification shade for the clipboard or a new photo.</span></div>
       </div>
-      <div class="door">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#8FB4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg>
+      <div class="door rise">
+        <div class="ic" style="--c:#4D6A9A"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg></div>
         <div><b data-i18n="door.windows">On Windows</b><span data-i18n="door.windows.p">Right-click a file, Send to, Point. It waits in the tray.</span></div>
       </div>
-      <div class="door">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#E39DB9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+      <div class="door rise">
+        <div class="ic" style="--c:#9A5677"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></div>
         <div><b data-i18n="door.link">A Point link from someone</b><span data-i18n="door.link.p">Opens straight in Point, with everything you can do with the file.</span></div>
       </div>
     </div>
@@ -303,15 +530,18 @@ footer .langs a[aria-current]{color:var(--text)}
 
 <section>
   <div class="wrap">
-    <div class="yours glass">
+    <div class="yours glass rise">
       <div>
-        <h2 data-i18n="yours.title">Your files stay yours</h2>
+        <h2 data-i18n="yours.title">Your files <span class="grad">stay yours</span></h2>
         <p class="sub" data-i18n="yours.sub">Point does what it can on your own devices.</p>
+        <div class="shield" aria-hidden="true"><i></i><i></i><i></i>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#86CBA6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg>
+        </div>
       </div>
       <ul>
-        <li><span data-i18n="yours.yes"><b>Nothing leaves without a yes.</b> If a step needs an online service, Point asks first.</span></li>
-        <li><span data-i18n="yours.day"><b>Nothing piles up.</b> Point keeps a copy of what you shared for a day at most, then deletes it.</span></li>
-        <li><span data-i18n="yours.account"><b>No account to start.</b> Sign in only when you want to link your phone and computer.</span></li>
+        <li><span data-i18n="yours.yes"><b>Nothing leaves without a yes</b>If a step needs an online service, Point asks first.</span></li>
+        <li><span data-i18n="yours.day"><b>Nothing piles up</b>Point keeps a copy of what you shared for a day at most, then deletes it.</span></li>
+        <li><span data-i18n="yours.account"><b>No account to start</b>Sign in only when you want to link your phone and computer.</span></li>
       </ul>
     </div>
   </div>
@@ -319,8 +549,9 @@ footer .langs a[aria-current]{color:var(--text)}
 
 <div class="end">
   <div class="wrap">
-    <svg class="mark" width="56" height="56" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="pm2" gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="19"><stop offset="0" stop-color="#EAF0FF"/><stop offset=".45" stop-color="#9B7BFF"/><stop offset="1" stop-color="#00A6FF"/></linearGradient></defs><circle cx="12" cy="12" r="5.46" fill="none" stroke="url(#pm2)" stroke-width="3.08"/></svg>
-    <h2 data-i18n="end.title">Get Point</h2>
+    <div class="big" aria-hidden="true"></div>
+    <h2 class="rise" data-i18n="end.title">Get Point</h2>
+    <p class="sub rise" style="margin-left:auto;margin-right:auto" data-i18n="end.sub">Install it on your phone and your computer.</p>
     <div class="get">
       <a class="btn light" data-get="android" href="https://github.com/librevlad/point/releases">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
@@ -346,6 +577,17 @@ footer .langs a[aria-current]{color:var(--text)}
   </div>
 </footer>
 
+<script>
+// Появление блоков при прокрутке. Без IntersectionObserver класс js не ставится, и всё видно сразу.
+(function () {
+  if (!('IntersectionObserver' in window)) return;
+  document.documentElement.classList.add('js');
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.rise').forEach(function (el) { io.observe(el); });
+})();
+</script>
 <script src="i18n.js"></script>
 <script src="releases.js"></script>
 </body>
