@@ -15,6 +15,7 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,7 +35,7 @@ class PhoneAppsCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "call"
     override val meta = CapabilityMeta(priority = 12, latency = Latency.INSTANT, handsOff = true)
-    override fun label(state: ObjectState) = "Открыть номер в приложении"
+    override fun label(state: ObjectState) = tr("Открыть номер в приложении")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
@@ -52,24 +53,24 @@ class PhoneAppsRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             val phone = phoneOf(input)
-                ?: return@withContext ActionResult.Failure("Номер не найден", recoverable = false)
+                ?: return@withContext ActionResult.Failure(tr("Номер не найден"), recoverable = false)
             val apps = runCatching { launcher.handlersForPhone(phone) }.getOrDefault(emptyList())
             if (apps.isEmpty()) {
                 // Пустого списка человек не увидит: молчание тут хуже слов.
                 return@withContext ActionResult.Failure(
-                    "На этом телефоне нет приложения, которое умеет номера",
+                    tr("На этом телефоне нет приложения, которое умеет номера"),
                     recoverable = false,
                 )
             }
             val chosen = chosenApp(apps, amendment)
                 ?: return@withContext ActionResult.NeedsInput(
-                    prompt = "Чем открыть $phone?",
+                    prompt = tr("Чем открыть {0}?", phone),
                     suggestions = apps.map { it.label },
                 )
             runCatching { launcher.launchWithPhone(chosen, phone) }
                 .fold(
-                    onSuccess = { ActionResult.Done("Открыл ${chosen.label}: $phone") },
-                    onFailure = { ActionResult.Failure("Не удалось открыть ${chosen.label}", recoverable = true) },
+                    onSuccess = { ActionResult.Done(tr("Открыл {0}: {1}", chosen.label, phone)) },
+                    onFailure = { ActionResult.Failure(tr("Не удалось открыть {0}", chosen.label), recoverable = true) },
                 )
         }
 

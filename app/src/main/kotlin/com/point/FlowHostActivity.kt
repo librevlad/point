@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.point.core.model.tr
 import com.point.core.ui.theme.PointTheme
 
 abstract class FlowHostActivity : ComponentActivity() {
@@ -124,4 +125,4 @@ abstract class FlowHostActivity : ComponentActivity() {
 }
 
 /** Слово на пустое выделение (#1096): ответ прошен нажатием пункта меню. */
-internal const val EMPTY_SELECTION_WORDS = "Выделение пустое — выделите текст"
+internal val EMPTY_SELECTION_WORDS: String get() = tr("Выделение пустое — выделите текст")

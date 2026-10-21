@@ -14,6 +14,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,7 +24,7 @@ class CopyCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "copy"
     override val meta = CapabilityMeta(priority = 55)
-    override fun label(state: ObjectState) = "Скопировать"
+    override fun label(state: ObjectState) = tr("Скопировать")
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.TEXT || state.kind == ObjectKind.URL ||
 
@@ -50,13 +51,13 @@ class CopyRealizer @Inject constructor(
                     input.uri.value.trim()
                 }
                 if (text.isBlank()) {
-                    ActionResult.Failure("Нечего копировать", recoverable = true)
+                    ActionResult.Failure(tr("Нечего копировать"), recoverable = true)
                 } else {
                     clipboard.copy(text, "Point")
                     circle.offer(text)
-                    ActionResult.Done("Скопировано")
+                    ActionResult.Done(tr("Скопировано"))
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось скопировать", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось скопировать"), recoverable = true) }
         }
 }
 
@@ -64,7 +65,7 @@ class CopyCardCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "copy"
     override val meta = CapabilityMeta(priority = 17)
-    override fun label(state: ObjectState) = "Скопировать карту"
+    override fun label(state: ObjectState) = tr("Скопировать карту")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_CARD)
     override fun produces(state: ObjectState) = state
 
@@ -82,12 +83,12 @@ class CopyCardRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val card = com.point.core.flow.firstEntity(extractor, input, EntityType.PAYMENT_CARD) ?: error("Карта не найдена")
+                val card = com.point.core.flow.firstEntity(extractor, input, EntityType.PAYMENT_CARD) ?: error(tr("Карта не найдена"))
                 val digits = card.filter { it.isDigit() }
                 clipboard.copy(digits, "Card")
 
                 circle.offer(digits)
-                ActionResult.Done("Скопирован номер карты")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось скопировать", recoverable = true) }
+                ActionResult.Done(tr("Скопирован номер карты"))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось скопировать"), recoverable = true) }
         }
 }

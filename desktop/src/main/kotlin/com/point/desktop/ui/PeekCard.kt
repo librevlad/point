@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
+import com.point.core.model.tr
 import com.point.desktop.InboxItem
 import com.point.core.ui.GlassIcons
 import com.point.core.ui.GlassTone
@@ -48,20 +49,20 @@ fun PeekCard(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     when (source) {
-                        com.point.desktop.ObjectSource.LOCAL -> "ГОТОВО НА КОМПЬЮТЕРЕ"
-                        else -> "ПРИШЛО С ТЕЛЕФОНА"
+                        com.point.desktop.ObjectSource.LOCAL -> tr("ГОТОВО НА КОМПЬЮТЕРЕ")
+                        else -> tr("ПРИШЛО С ТЕЛЕФОНА")
                     },
                     style = PointType.label,
                 )
                 Text(
-                    item.obj.metadata["name"] ?: "Объект",
+                    item.obj.metadata["name"] ?: tr("Объект"),
                     style = PointType.rowTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 PeekHint(item)
             }
-            RoundButton(GlassIcons.Close, "Скрыть", onDismiss)
+            RoundButton(GlassIcons.Close, tr("Скрыть"), onDismiss)
         }
     }
 }

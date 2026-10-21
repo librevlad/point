@@ -10,6 +10,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.Image
@@ -24,10 +25,10 @@ class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
         withContext(Dispatchers.IO) {
             runCatching {
                 val source = File(input.uri.value).takeIf(File::isFile)
-                    ?: return@withContext ActionResult.Failure("Файла картинки нет на диске", recoverable = false)
+                    ?: return@withContext ActionResult.Failure(tr("Файла картинки нет на диске"), recoverable = false)
                 val image = ImageIO.read(source)
                     ?: return@withContext ActionResult.Failure(
-                        "Это не картинка или формат, который компьютер не читает",
+                        tr("Это не картинка или формат, который компьютер не читает"),
                         recoverable = false,
                     )
                 val scale = minOf(1.0, MAX_SIDE.toDouble() / maxOf(image.width, image.height))
@@ -35,7 +36,7 @@ class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
                 if (scale >= 1.0 && !transparent && source.length() < ALREADY_SMALL) {
 
                     return@withContext ActionResult.Failure(
-                        "Эта картинка и так лёгкая — уменьшать нечего",
+                        tr("Эта картинка и так лёгкая — уменьшать нечего"),
                         recoverable = false,
                     )
                 }
@@ -56,12 +57,12 @@ class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
                         mime = if (transparent) "image/png" else "image/jpeg",
                         uri = ScratchRef(out.absolutePath),
                         metadata = mapOf(
-                            "name" to ("Лёгкая · " + mb(out.length()) + " · " + width + "×" + height),
+                            "name" to (tr("Лёгкая · ") + mb(out.length()) + " · " + width + "×" + height),
                         ),
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure("Уменьшить не вышло — этот формат картинки компьютер не открывает", recoverable = true)
+                ActionResult.Failure(tr("Уменьшить не вышло — этот формат картинки компьютер не открывает"), recoverable = true)
             }
         }
 

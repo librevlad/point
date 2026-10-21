@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import com.point.core.model.tr
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,10 +78,10 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
     val summary = obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
     return buildList {
 
-        if (state.has(Feature.IS_MEETING)) add(UnderstoodFact("semantic", "Это встреча", summary))
-        if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", "Это покупка", summary))
-        if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", "Это рецепт", summary))
-        if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", "Это вакансия", summary))
+        if (state.has(Feature.IS_MEETING)) add(UnderstoodFact("semantic", tr("Это встреча"), summary))
+        if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", tr("Это покупка"), summary))
+        if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", tr("Это рецепт"), summary))
+        if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", tr("Это вакансия"), summary))
         // Строку номера собирает знание, а не экран (#932): рядом с номером — то, что про
         // него известно, вид и чужая страна словом. Своя страна не называется — человек
         // знает, где живёт.
@@ -91,17 +92,17 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.HAS_PHONE)) {
             val phone = entity("phone")
                 ?.let { com.point.core.flow.shownKnowledge(com.point.core.flow.META_ENTITY_PHONE, it, obj.metadata) }
-            add(UnderstoodFact("phone", "Нашёл телефон", phone, note("phone"), known("phone")))
+            add(UnderstoodFact("phone", tr("Нашёл телефон"), phone, note("phone"), known("phone")))
         }
-        if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email"), note("email"), known("email")))
-        if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl(), note("url"), known("url")))
-        if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address"), note("address"), known("address")))
-        if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", "Нашёл дату", entity("date"), note("date"), known("date")))
+        if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", tr("Нашёл почту"), entity("email"), note("email"), known("email")))
+        if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", tr("Нашёл ссылку"), entity("url")?.readableUrl(), note("url"), known("url")))
+        if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", tr("Нашёл адрес"), entity("address"), note("address"), known("address")))
+        if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", tr("Нашёл дату"), entity("date"), note("date"), known("date")))
         if (state.has(Feature.HAS_CARD)) {
             add(
                 UnderstoodFact(
                     "card",
-                    "Нашёл карту",
+                    tr("Нашёл карту"),
                     entity("card")?.let { maskedForScreen(META_ENTITY_PREFIX + "card", it) },
                     note("card"),
                     known("card"),
@@ -113,29 +114,29 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         // незачем: строка говорит только то, что код на кадре есть, и это Point видел сам.
         if (state.has(Feature.HAS_QR)) {
             val content = entity("qr")?.readableUrl()
-            add(UnderstoodFact("qr", "Есть QR-код", content, note("qr"), content?.let { known("qr") } ?: true))
+            add(UnderstoodFact("qr", tr("Есть QR-код"), content, note("qr"), content?.let { known("qr") } ?: true))
         }
 
         // Цифры кода видны и копируются одним тапом (#445). Про сам товар Point молчит:
         // название, производитель и цена — чужая уверенность, а не наблюдение Point.
         if (state.has(Feature.HAS_BARCODE)) {
-            add(UnderstoodFact("barcode", "Штрихкод", entity("barcode"), note("barcode")))
+            add(UnderstoodFact("barcode", tr("Штрихкод"), entity("barcode"), note("barcode")))
         }
 
         // Снимок рассказывает о себе (#547). Координаты показываются и когда их нашла модель
         // в тексте, и когда они пришли из самого снимка — строка одна на оба источника.
         if (state.has(Feature.HAS_SHOT_AT)) {
-            add(UnderstoodFact("shot-at", "Снято", obj.metadata[com.point.core.flow.META_SHOT_AT]))
+            add(UnderstoodFact("shot-at", tr("Снято"), obj.metadata[com.point.core.flow.META_SHOT_AT]))
         }
         if (state.has(Feature.HAS_GEO) || obj.metadata[com.point.core.flow.META_ENTITY_GEO] != null) {
-            add(UnderstoodFact("geo", "Место съёмки", entity("geo"), note("geo")))
+            add(UnderstoodFact("geo", tr("Место съёмки"), entity("geo"), note("geo")))
         }
-        if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", "Это визитка"))
+        if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", tr("Это визитка")))
         // Признак отвечает на один вопрос: достаётся ли текст из самого файла (#933, #995).
         // «Текст не выделяется» было правдой только про пустой слой; у документа с подменённой
         // раскладкой шрифта слой есть и выделяется — мусором. Названо то, что Point проверил.
-        if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Текст из файла не достаётся"))
-        if (state.has(Feature.ZIP_OF_IMAGES)) add(UnderstoodFact("zip-images", "Архив из фотографий"))
+        if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", tr("Текст из файла не достаётся")))
+        if (state.has(Feature.ZIP_OF_IMAGES)) add(UnderstoodFact("zip-images", tr("Архив из фотографий")))
 
         // Всё остальное знание — тем же списком (#935).
         //
@@ -319,7 +320,7 @@ private fun FactRow(fact: UnderstoodFact) {
         fact.value?.let { value ->
             Spacer(Modifier.width(6.dp))
             Text(
-                text = if (copied) "Скопировано" else value,
+                text = if (copied) tr("Скопировано") else value,
                 style = MaterialTheme.typography.labelLarge,
                 color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

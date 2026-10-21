@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.CalendarContract
 import com.point.core.flow.CalendarInserter
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDate
 import java.time.ZoneId
@@ -42,6 +43,6 @@ class AndroidCalendarInserter @Inject constructor(
 
     companion object {
         private const val DAY_MS = 24L * 60 * 60 * 1000
-        const val NO_CALENDAR = "На этом устройстве нет календаря"
+        val NO_CALENDAR: String get() = tr("На этом устройстве нет календаря")
     }
 }

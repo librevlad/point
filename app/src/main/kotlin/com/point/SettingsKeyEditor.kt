@@ -32,6 +32,7 @@ import com.point.core.flow.keyOfAnotherService
 import com.point.core.flow.keyWorksLine
 import com.point.core.flow.looksLikeApiKey
 import com.point.core.flow.providerOfKey
+import com.point.core.model.tr
 import com.point.core.ui.GlassFieldShape
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeCard
@@ -104,10 +105,10 @@ internal fun ServiceEditor(
     ) {
         if (provider != null) {
             PortalRow(
-                title = "Открыть сайт ${provider.name}",
+                title = tr("Открыть сайт {0}", provider.name),
                 subtitle = listOfNotNull(
                     offerSentence(provider),
-                    "Там выдают ключ: заведите аккаунт, скопируйте ключ — и вернитесь сюда.",
+                    tr("Там выдают ключ: заведите аккаунт, скопируйте ключ — и вернитесь сюда."),
                 ).joinToString(" "),
                 onClick = { onOpenUrl(provider.keyUrl) },
                 icon = bubbleIcon("open"),
@@ -124,7 +125,7 @@ internal fun ServiceEditor(
                 draft.pasteNote = ""
                 draft.elsewhere = ""
             },
-            label = { Text("Ключ ${line.name}") },
+            label = { Text(tr("Ключ {0}", line.name)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             // Вставленный ключ можно увидеть: точки не говорят, тот ли ключ встал и целиком ли.
@@ -132,7 +133,7 @@ internal fun ServiceEditor(
             trailingIcon = if (draft.key.isNotBlank()) {
                 {
                     TextButton(onClick = { draft.revealed = !draft.revealed }) {
-                        Text(if (draft.revealed) "Скрыть" else "Показать", style = PointText.note)
+                        Text(if (draft.revealed) tr("Скрыть") else tr("Показать"), style = PointText.note)
                     }
                 }
             } else {
@@ -158,8 +159,8 @@ internal fun ServiceEditor(
 
         if (draft.key.isBlank()) {
             PortalRow(
-                title = "Вставить из буфера",
-                subtitle = "Скопировали ключ на странице сервиса — он встанет сюда и сразу проверится.",
+                title = tr("Вставить из буфера"),
+                subtitle = tr("Скопировали ключ на странице сервиса — он встанет сюда и сразу проверится."),
                 onClick = {
                     val pastedNow = onPasteKey()?.trim()
                     if (pastedNow == null || !looksLikeApiKey(pastedNow)) {
@@ -188,7 +189,7 @@ internal fun ServiceEditor(
             Text(keyOfAnotherService(other.name, line.name), style = PointText.note)
             PortalRow(
                 title = checkAsKeyOf(other.name),
-                subtitle = "Ключ встанет к ${other.name} и проверится там.",
+                subtitle = tr("Ключ встанет к {0} и проверится там.", other.name),
                 onClick = { onElsewhere(draft.key, other.id) },
                 icon = bubbleIcon(AI_ICON),
                 chevron = false,
@@ -196,10 +197,10 @@ internal fun ServiceEditor(
         }
 
         DisclosureRow(
-            title = if (account == null) "Модель и адрес" else "Модель",
+            title = if (account == null) tr("Модель и адрес") else tr("Модель"),
             subtitle = listOf(draft.model, if (account == null) draft.baseUrl else "")
                 .filter { it.isNotBlank() }.joinToString(" · ")
-                .ifBlank { "как у сервиса — набирать не нужно" },
+                .ifBlank { tr("как у сервиса — набирать не нужно") },
             open = draft.advancedOpen,
             onToggle = { draft.advancedOpen = !draft.advancedOpen },
         )
@@ -208,7 +209,7 @@ internal fun ServiceEditor(
                 OutlinedTextField(
                     value = draft.model,
                     onValueChange = { draft.model = it },
-                    label = { Text("Модель") },
+                    label = { Text(tr("Модель")) },
                     singleLine = true,
                     shape = GlassFieldShape,
                     colors = glassFieldColors(),
@@ -220,7 +221,7 @@ internal fun ServiceEditor(
                     OutlinedTextField(
                         value = draft.baseUrl,
                         onValueChange = { draft.baseUrl = it },
-                        label = { Text("Адрес сервиса") },
+                        label = { Text(tr("Адрес сервиса")) },
                         singleLine = true,
                         shape = GlassFieldShape,
                         colors = glassFieldColors(),
@@ -231,8 +232,8 @@ internal fun ServiceEditor(
         }
 
         PortalRow(
-            title = if (checking) "Проверяю…" else "Проверить и включить",
-            subtitle = "Point спросит сервис одним коротким словом. Ваш объект при этом никуда не отправляется.",
+            title = if (checking) tr("Проверяю…") else tr("Проверить и включить"),
+            subtitle = tr("Point спросит сервис одним коротким словом. Ваш объект при этом никуда не отправляется."),
             onClick = { onCheck(draft.entered()) },
             icon = bubbleIcon(AI_ICON),
             primary = verdict !is KeyVerdict.Works,
@@ -246,7 +247,7 @@ internal fun ServiceEditor(
         when (verdict) {
             is KeyVerdict.Works -> OutcomeCard(
                 title = keyWorksLine(verdict),
-                detail = "Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают.",
+                detail = tr("Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают."),
                 outcome = Outcome.DONE,
                 modifier = Modifier.fillMaxWidth().bringIntoViewRequester(verdictView),
             )
@@ -263,14 +264,14 @@ internal fun ServiceEditor(
 
         if (draft.key.isNotBlank() && verdict !is KeyVerdict.Works) {
             TextButton(onClick = { onSave(draft.entered()) }) {
-                Text("Сохранить без проверки", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(tr("Сохранить без проверки"), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
         if (line.mine) {
             PortalRow(
-                title = "Удалить ключ",
-                subtitle = "Point сотрёт его с устройства. ${line.name} снова замолчит, пока не впишете новый.",
+                title = tr("Удалить ключ"),
+                subtitle = tr("Point сотрёт его с устройства. {0} снова замолчит, пока не впишете новый.", line.name),
                 onClick = {
                     draft.key = ""
                     draft.pasteNote = ""

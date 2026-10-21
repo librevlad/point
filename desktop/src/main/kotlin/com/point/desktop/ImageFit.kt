@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.model.tr
 import java.awt.Image
 import java.awt.image.BufferedImage
 import java.io.File
@@ -91,7 +92,7 @@ object ImageFit {
 
 /** Слова человеку о подмене: он отдавал одно, а читалось другое. */
 fun shrunkNote(fitted: Fitted): String =
-    "читал уменьшенную копию — " + weight(fitted.was) + " не принимает сервис, ушло " + weight(fitted.now)
+    tr("читал уменьшенную копию — {0} не принимает сервис, ушло {1}", weight(fitted.was), weight(fitted.now))
 
 /** Сколько это весит — общим правилом обоих устройств (#840). */
 private fun weight(bytes: Long): String = com.point.core.flow.humanWeight(bytes).orEmpty()

@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import androidx.core.content.FileProvider
 import com.point.core.flow.Viewer
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -55,6 +56,6 @@ class AndroidViewer @Inject constructor(
     private companion object {
 
         const val NO_APP_FOR_IT =
-            "На телефоне нет приложения, которое открывает такие файлы — сохраните файл и откройте его оттуда"
+            tr("На телефоне нет приложения, которое открывает такие файлы — сохраните файл и откройте его оттуда")
     }
 }

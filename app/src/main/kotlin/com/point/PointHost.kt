@@ -45,6 +45,7 @@ import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
+import com.point.core.model.tr
 import com.point.core.ui.BusyPortal
 import com.point.core.ui.FindScreen
 import com.point.core.ui.FirstScreen
@@ -442,7 +443,7 @@ fun PointHost(
             }
 
             else -> Text(
-                text = "Поделитесь объектом в Point",
+                text = tr("Поделитесь объектом в Point"),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(24.dp),
@@ -488,10 +489,10 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, spent: I
 }
 
 internal fun shareAgainHint(outcome: Outcome): String? =
-    if (outcome == Outcome.FAILED) "Попробуйте поделиться объектом в Point ещё раз" else null
+    if (outcome == Outcome.FAILED) tr("Попробуйте поделиться объектом в Point ещё раз") else null
 
 internal fun messageExitLabel(outcome: Outcome): String =
-    if (outcome == Outcome.FAILED) "Понятно" else "Готово"
+    if (outcome == Outcome.FAILED) tr("Понятно") else tr("Готово")
 
 // «Долгая страница» — утверждение о самом объекте, а Point на этом экране не знает,
 // длинная страница или нет: сеть сама по себе проверена заранее (#690, #691) и не
@@ -528,7 +529,7 @@ private fun PickingImageScreen(title: String) {
         ) {
             ThinkingDot()
             Text(
-                text = "Выберите изображение",
+                text = tr("Выберите изображение"),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -555,7 +556,7 @@ private fun AppPickerScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ScreenHeader(
-            title = "Открыть в",
+            title = tr("Открыть в"),
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(bottom = 15.dp),
         )
@@ -576,7 +577,7 @@ private fun AppPickerScreen(
         }
         Spacer(Modifier.height(16.dp))
         TextButton(onClick = onDismiss) {
-            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Отмена"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -625,7 +626,7 @@ private fun PreviewScreen(preview: Preview, onConfirm: () -> Unit, onCancel: () 
         }
         Spacer(Modifier.height(10.dp))
         TextButton(onClick = onCancel) {
-            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Отмена"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -660,9 +661,9 @@ private fun PreviewActionPreview() = PointTheme(darkTheme = true) {
     )
 }
 
-const val LEAVE_TO_HOME = "Недавнее"
+val LEAVE_TO_HOME: String get() = tr("Недавнее")
 
-const val LEAVE_BACK = "Назад"
+val LEAVE_BACK: String get() = tr("Назад")
 
 /**
  * Выход с экрана вещи — пилюлей стекла со стрелкой и словом, куда он ведёт (макет 19.10.2026).

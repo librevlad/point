@@ -13,6 +13,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -25,7 +26,7 @@ class CutoutCapability @Inject constructor() : Capability {
     // разворачивается минутами, и «быстрое» объявление оставляло человека перед мёртвым
     // экраном — без «Идёт N с» и без «Отменить», которые положены всякой долгой работе.
     override val meta = CapabilityMeta(priority = 40, latency = Latency.SLOW)
-    override fun label(state: ObjectState) = "Убрать фон"
+    override fun label(state: ObjectState) = tr("Убрать фон")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
@@ -41,9 +42,9 @@ class CutoutRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Отделяю объект от фона")
+                reportStage(tr("Отделяю объект от фона"))
                 val ref = remover.cutout(input.uri.value)
                 ActionResult.Success(ResultObject(ObjectKind.IMAGE, "image/png", ref, mapOf("op" to "cutout")))
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось убрать фон", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось убрать фон"), recoverable = true) }
         }
 }

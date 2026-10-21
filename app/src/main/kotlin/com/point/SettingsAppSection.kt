@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+import com.point.core.model.tr
 /** Раздел «Поведение Point» на телефоне (#834). */
 @Composable
 internal fun AppSection(
@@ -16,7 +17,7 @@ internal fun AppSection(
 
     SwitchCard(
         title = SOUND_TITLE,
-        description = "Тихий фирменный отклик на каждое действие. Вибрация управляется системной настройкой касаний.",
+        description = tr("Тихий фирменный отклик на каждое действие. Вибрация управляется системной настройкой касаний."),
         checked = soundEnabled,
         onCheckedChange = onToggleSound,
     )

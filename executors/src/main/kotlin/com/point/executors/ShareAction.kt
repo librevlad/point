@@ -9,6 +9,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import javax.inject.Inject
 
 class ShareCapability @Inject constructor() : Capability {
@@ -16,7 +17,7 @@ class ShareCapability @Inject constructor() : Capability {
     override val icon = "share"
     // Шаг кончается системным диалогом «Поделиться»: дальше выбирает человек (#1131).
     override val meta = CapabilityMeta(priority = 80, handsOff = true)
-    override fun label(state: ObjectState) = "Поделиться"
+    override fun label(state: ObjectState) = tr("Поделиться")
 
     /**
      * Поделиться можно всем, кроме набора (#820, решение владельца 12.08.2026).
@@ -39,6 +40,6 @@ class ShareRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
             sharer.share(input)
-            ActionResult.Done("Открыт диалог «Поделиться»")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось поделиться", recoverable = true) }
+            ActionResult.Done(tr("Открыт диалог «Поделиться»"))
+        }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось поделиться"), recoverable = true) }
 }

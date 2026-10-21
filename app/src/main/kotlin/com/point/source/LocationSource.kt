@@ -7,15 +7,16 @@ import android.location.Geocoder
 import android.location.LocationManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import com.point.core.model.tr
 import java.util.Locale
 import javax.inject.Inject
 
 class LocationSource @Inject constructor() : ObjectSource {
 
     override val id = "location"
-    override val label = "Взять место"
+    override val label = tr("Взять место")
 
-    override val what = "то, где вы сейчас, станет объектом"
+    override val what = tr("то, где вы сейчас, станет объектом")
     override val icon = "map"
 
     override val permissions = listOf(
@@ -40,7 +41,7 @@ class LocationSource @Inject constructor() : ObjectSource {
 
         if (location == null) {
 
-            Toast.makeText(context, "Место пока не определилось", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Место пока не определилось"), Toast.LENGTH_SHORT).show()
             return null
         }
 

@@ -26,6 +26,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.ClipboardPayload
+import com.point.core.model.tr
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
 import java.io.File
@@ -92,10 +93,10 @@ fun PopoverPane(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    Text("Открыть окно", style = PointType.small.copy(color = PointColors.link))
+                    Text(tr("Открыть окно"), style = PointType.small.copy(color = PointColors.link))
                     Icon(GlassIcons.OpenOut, contentDescription = null, tint = PointColors.link, modifier = Modifier.size(12.dp))
                 }
-                RoundButton(GlassIcons.Close, "Закрыть", onHide)
+                RoundButton(GlassIcons.Close, tr("Закрыть"), onHide)
             }
             RecentPane(
                 state = state,

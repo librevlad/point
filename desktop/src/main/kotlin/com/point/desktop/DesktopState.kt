@@ -6,6 +6,7 @@ import com.point.core.flow.knownBy
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
+import com.point.core.model.tr
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
@@ -322,7 +323,7 @@ class DesktopState(
     /** Факт забирается в буфер одним кликом — на ПК буфер и есть главная валюта (P4). */
     fun copyFact(value: String) {
         runCatching { clipboard.copy(value) }
-        _message.value = "В буфере: $value"
+        _message.value = tr("В буфере: {0}", value)
     }
 
     /**
@@ -332,9 +333,9 @@ class DesktopState(
     fun copyText(ref: String) {
         val text = runCatching { java.io.File(ref).readText() }.getOrNull()?.takeIf { it.isNotBlank() }
         _message.value = when {
-            text == null -> "Текст не прочитался — скопировать нечего"
-            runCatching { clipboard.copy(text) }.isFailure -> "Скопировать не вышло"
-            else -> "Текст в буфере"
+            text == null -> tr("Текст не прочитался — скопировать нечего")
+            runCatching { clipboard.copy(text) }.isFailure -> tr("Скопировать не вышло")
+            else -> tr("Текст в буфере")
         }
     }
 
@@ -482,7 +483,7 @@ class DesktopState(
             }.onFailure { failed ->
                 val why = (failed as? TooBigForPhone)?.message ?: RESULT_NOT_QUEUED
                 _message.value = why
-                note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
+                note(item, id, titleOf(id, item) + tr(" · результат в очередь"), ActionResult.Failure(why, recoverable = true))
             }
         }
         return ActionResult.Done(com.point.core.flow.PC_STILL_WORKING)
@@ -531,19 +532,19 @@ class DesktopState(
 
     companion object {
 
-        private const val DID_NOT_RUN = "Действие не выполнилось — попробуйте ещё раз"
+        private val DID_NOT_RUN: String get() = tr("Действие не выполнилось — попробуйте ещё раз")
 
-        private const val RESULT_NOT_QUEUED = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
+        private val RESULT_NOT_QUEUED: String get() = tr("Результат не лёг в очередь для телефона — проверьте, что на диске есть место")
 
         /** Как компьютер называет себя в происхождении знания (#1127). */
         const val PC_EXECUTOR = "pc"
 
         /** Имена вопросов, заданных другой поверхностью: её capability здесь не зарегистрированы. */
         private val PHONE_QUESTIONS = mapOf(
-            "image-text" to "Текст на снимке",
-            "qr-content" to "QR-код",
-            "understand" to "Понимание",
-            "entities" to "Контакты и номера",
+            "image-text" to tr("Текст на снимке"),
+            "qr-content" to tr("QR-код"),
+            "understand" to tr("Понимание"),
+            "entities" to tr("Контакты и номера"),
         )
     }
 
@@ -586,7 +587,7 @@ class DesktopState(
         quiet: Boolean = false,
     ): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
-        val step = if (stationTitle != null) title else "$title · с телефона"
+        val step = if (stationTitle != null) title else tr("{0} · с телефона", title)
 
         // Одна воронка на все входы (#1269): режим проверяется здесь, а не только на пути
         // клика по экрану. Просьба телефона была единственным входом мимо него — человек
@@ -650,8 +651,8 @@ class DesktopState(
         } catch (e: kotlinx.coroutines.CancellationException) {
             if (!quiet) {
                 _working.value = null
-                _message.value = "Отменено"
-                note(item, id, title, ActionResult.Failure("отменено", recoverable = true))
+                _message.value = tr("Отменено")
+                note(item, id, title, ActionResult.Failure(tr("отменено"), recoverable = true))
             }
             throw e
         } finally {
@@ -689,7 +690,7 @@ class DesktopState(
             quiet -> _message.value
 
             result is ActionResult.Done -> result.message
-            result is ActionResult.Success -> result.result.metadata["name"] ?: "Готово"
+            result is ActionResult.Success -> result.result.metadata["name"] ?: tr("Готово")
             else -> _message.value
         }
 
@@ -728,7 +729,7 @@ class DesktopState(
         born: InboxItem?,
     ): ActionResult {
         val item = _items.value.firstOrNull { it.obj.id == homeId }
-            ?: return ActionResult.Failure("объекта уже нет на компьютере", recoverable = false)
+            ?: return ActionResult.Failure(tr("объекта уже нет на компьютере"), recoverable = false)
         val f = com.point.core.flow.PcResultFields
         val action = meta[com.point.core.flow.PcExecFields.ACTION].orEmpty()
         val label = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
@@ -742,9 +743,9 @@ class DesktopState(
         }
 
         if (meta[f.OUTCOME] == f.FAILED) {
-            val why = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "телефон не смог выполнить «$label»"
+            val why = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: tr("телефон не смог выполнить «{0}»", label)
             _message.value = why
-            note(item, action, "$label · на телефоне", ActionResult.Failure(why, recoverable = true))
+            note(item, action, tr("{0} · на телефоне", label), ActionResult.Failure(why, recoverable = true))
             return ActionResult.Failure(why, recoverable = true)
         }
 
@@ -752,9 +753,9 @@ class DesktopState(
         // спрашивают человека. Прежде это приезжало как «не вышло», и на компьютере поверх
         // честного «ждёт телефона» ложился провал работы, которая ещё не начиналась (#1269).
         if (meta[f.OUTCOME] == f.AWAITING) {
-            val why = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "«$label» ждёт продолжения на телефоне"
+            val why = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: tr("«{0}» ждёт продолжения на телефоне", label)
             _message.value = why
-            noteAwaiting(item, action, "$label · на телефоне", why)
+            noteAwaiting(item, action, tr("{0} · на телефоне", label), why)
             return ActionResult.NeedsInput(why)
         }
 
@@ -767,9 +768,9 @@ class DesktopState(
             )
             onReceived(born.copy(obj = lineage), ObjectSource.PHONE_RELAY)
         }
-        val detail = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "$label — готово"
+        val detail = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: tr("{0} — готово", label)
         _message.about(item.obj.id, detail)
-        note(item, action, "$label · на телефоне", ActionResult.Done(detail))
+        note(item, action, tr("{0} · на телефоне", label), ActionResult.Done(detail))
         return ActionResult.Done(detail)
     }
 
@@ -875,7 +876,7 @@ class DesktopState(
                     // узнавать о границе связки, ткнув в действие и подождав напрасно.
                     unavailable = when {
                         !phoneRunsRequests -> PHONE_DOES_NOT_RUN_REQUESTS
-                        else -> action.unavailable?.ifBlank { "телефон сейчас не может это сделать" }
+                        else -> action.unavailable?.ifBlank { tr("телефон сейчас не может это сделать") }
                     },
                     remote = action,
                     icon = "phone",
@@ -929,11 +930,11 @@ class DesktopState(
             _phoneAsk.value = PhoneAsk(
                 item = item,
                 action = action,
-                title = "«${action.label}» делает телефон, а он сейчас не на связи",
+                title = tr("«{0}» делает телефон, а он сейчас не на связи", action.label),
                 // Просьба лежит здесь, на этом компьютере, — не «в почте»: телефон сам
                 // придёт за ней, когда человек его откроет (#817).
-                what = "Просьба подождёт здесь и выполнится, когда вы откроете Point на телефоне " +
-                    "и заберёте объект. Пока этого не случилось, здесь ничего не изменится.",
+                what = tr("Просьба подождёт здесь и выполнится, когда вы откроете Point на телефоне " +
+                    "и заберёте объект. Пока этого не случилось, здесь ничего не изменится."),
             )
             return
         }
@@ -950,7 +951,7 @@ class DesktopState(
     /** Отказ не наказывает: действие остаётся доступным на потом. */
     fun declinePhone() {
         _phoneAsk.value = null
-        _message.value = "Ничего не отправлено — объект остался на компьютере. Действие доступно, если передумаете"
+        _message.value = tr("Ничего не отправлено — объект остался на компьютере. Действие доступно, если передумаете")
     }
 
     private fun queueForPhone(
@@ -984,15 +985,15 @@ class DesktopState(
                 _message.about(
                     item.obj.id,
                     if (silent) {
-                        "${action.label} — ждёт телефона: выполнится, когда вы его откроете"
+                        tr("{0} — ждёт телефона: выполнится, когда вы его откроете", action.label)
                     } else {
-                        "${action.label} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект"
+                        tr("{0} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект", action.label)
                     },
                 )
 
                 // Шаг поставлен в очередь, а не выполнен (#1112): исхода у него ещё нет, и
                 // галочка «получилось» здесь была неправдой — на компьютере ничего не появилось.
-                noteAwaiting(item, action.id, "${action.label} · ждёт телефона", WAITS_FOR_PHONE, queued)
+                noteAwaiting(item, action.id, tr("{0} · ждёт телефона", action.label), WAITS_FOR_PHONE, queued)
 
                 // Сказанное про сон телефона стареет и здесь: телефон, заговоривший позже
                 // срока, отменяет его сам ([phoneSpokeLate]) — обеим дорогам одинаково.
@@ -1002,14 +1003,14 @@ class DesktopState(
                 knockPhoneAndWatch(
                     about = item.obj.id,
                     told = { why ->
-                        noteAwaiting(item, action.id, "${action.label} · ждёт телефона", why, queued)
+                        noteAwaiting(item, action.id, tr("{0} · ждёт телефона", action.label), why, queued)
                     },
                 )
             }.onFailure {
-                _message.value = "Не удалось положить в очередь"
+                _message.value = tr("Не удалось положить в очередь")
                 note(
-                    item, action.id, "${action.label} · на телефон",
-                    ActionResult.Failure("Не удалось отправить — проверьте, что на диске есть место", recoverable = true),
+                    item, action.id, tr("{0} · на телефон", action.label),
+                    ActionResult.Failure(tr("Не удалось отправить — проверьте, что на диске есть место"), recoverable = true),
                 )
             }
         }
@@ -1160,7 +1161,7 @@ class DesktopState(
         if (item.obj.state.kind == ObjectKind.TEXT) {
             _clipboardText.value = runCatching { File(item.obj.uri.value).readText() }.getOrNull()
         }
-        _message.value = "Получено: ${item.obj.metadata["name"]}"
+        _message.value = tr("Получено: {0}", item.obj.metadata["name"])
         autoInvestigate(item)
     }
 
@@ -1264,7 +1265,7 @@ class DesktopState(
         _cloudAsk.value = null
 
         // Отказ не наказывает: действие остаётся доступным на потом (P11).
-        _message.value = "Ничего не отправлено — объект остался на компьютере. Действие доступно, если передумаете"
+        _message.value = tr("Ничего не отправлено — объект остался на компьютере. Действие доступно, если передумаете")
     }
 
     /**
@@ -1289,7 +1290,7 @@ class DesktopState(
             val reopened = runCatching { reopenPath(entry.path) }.getOrNull()
             if (reopened == null) {
 
-                _message.value = "Файла больше нет: ${entry.name}"
+                _message.value = tr("Файла больше нет: {0}", entry.name)
                 return@launch
             }
 
@@ -1485,7 +1486,7 @@ fun DesktopState.receiveFiles(inbox: Inbox, paths: List<String>, source: ObjectS
  * при первом же своём обращении к серверу. Обещание было хуже отсутствия действия —
  * человек ждал результата, которого никто не собирался делать.
  */
-const val PHONE_DOES_NOT_RUN_REQUESTS = "телефон пока не выполняет просьбы с компьютера"
+val PHONE_DOES_NOT_RUN_REQUESTS: String get() = tr("телефон пока не выполняет просьбы с компьютера")
 
 /**
  * Сколько живёт на экране плашка сообщения (#1108).
@@ -1520,7 +1521,7 @@ const val PHONE_WAKES_WITHIN_MS = 12_000L
  * ждут они одного и того же. Дальше эту строку сменяет правда про стук — ту же самую,
  * одну, а не вторую рядом.
  */
-const val WAITS_FOR_PHONE = "ждёт телефона"
+val WAITS_FOR_PHONE: String get() = tr("ждёт телефона")
 
 /**
  * Телефон пришёл и забрал просьбу (#1336).
@@ -1528,7 +1529,7 @@ const val WAITS_FOR_PHONE = "ждёт телефона"
  * Шаг всё ещё ждёт — исхода работы у него нет, и он придёт с телефона ([onExecutionResult]).
  * Но ждёт он уже другого: не того, что человек откроет Point, а того, что телефон доделает.
  */
-const val PHONE_TOOK_IT = "телефон забрал"
+val PHONE_TOOK_IT: String get() = tr("телефон забрал")
 
 /**
  * Очередь забыла просьбу по сроку (#1344, #1317).
@@ -1536,13 +1537,13 @@ const val PHONE_TOOK_IT = "телефон забрал"
  * Это исход, а не ожидание: объекта в очереди больше нет, и звать за ним человека нельзя.
  * Сказать, что просьба не уехала, честнее, чем оставить «ждёт телефона» звать за пустотой.
  */
-const val QUEUE_FORGOT_IT = "не уехало — просьба пролежала сутки и убрана"
+val QUEUE_FORGOT_IT: String get() = tr("не уехало — просьба пролежала сутки и убрана")
 
 /** Телефон не проснулся: сказать это честно лучше, чем ждать за человека (#1108). */
-const val PHONE_DID_NOT_WAKE = "Телефон не проснулся — откройте Point на телефоне и заберите объект"
+val PHONE_DID_NOT_WAKE: String get() = tr("Телефон не проснулся — откройте Point на телефоне и заберите объект")
 
 /** То же самое строкой журнала: шаг всё ещё ждёт, но названо, чего именно он ждёт. */
-const val PHONE_DID_NOT_WAKE_NOTE = "телефон не проснулся"
+val PHONE_DID_NOT_WAKE_NOTE: String get() = tr("телефон не проснулся")
 
 /**
  * Постучать не вышло: письма не взяли — и про сам телефон компьютер не знает ничего (#1108).
@@ -1551,10 +1552,10 @@ const val PHONE_DID_NOT_WAKE_NOTE = "телефон не проснулся"
  * и тот же, а вот причина другая, и называть её сном телефона нельзя: это утверждение о
  * телефоне, которого компьютер не делал.
  */
-const val COULD_NOT_KNOCK = "Не удалось постучать в телефон — откройте Point на телефоне и заберите объект"
+val COULD_NOT_KNOCK: String get() = tr("Не удалось постучать в телефон — откройте Point на телефоне и заберите объект")
 
 /** То же самое строкой журнала. */
-const val COULD_NOT_KNOCK_NOTE = "не удалось постучать"
+val COULD_NOT_KNOCK_NOTE: String get() = tr("не удалось постучать")
 
 /**
  * Телефон заговорил позже, чем компьютер его ждал (#1108).
@@ -1565,10 +1566,10 @@ const val COULD_NOT_KNOCK_NOTE = "не удалось постучать"
  * компьютером. Забрал ли он объект и сделал ли просьбу, компьютер отсюда не видит и не
  * обещает — это скажет исход работы, когда вернётся с телефона.
  */
-const val PHONE_SPOKE_LATE = "Телефон отозвался — позже, чем компьютер его ждал"
+val PHONE_SPOKE_LATE: String get() = tr("Телефон отозвался — позже, чем компьютер его ждал")
 
 /** То же самое строкой журнала. */
-const val PHONE_SPOKE_LATE_NOTE = "телефон отозвался позже"
+val PHONE_SPOKE_LATE_NOTE: String get() = tr("телефон отозвался позже")
 
 /**
  * Два исхода стука одним набором (#1108).

@@ -3,6 +3,7 @@ package com.point.source
 import com.point.core.flow.stampedObjectName
 import com.point.core.flow.textObjectName
 
+import com.point.core.model.tr
 data class Produced(val uri: String, val mime: String, val name: String? = null)
 
 const val EXTRA_OBJECT_NAME = "com.point.source.OBJECT_NAME"
@@ -25,4 +26,4 @@ fun captureToProduced(
     sizeBytes: Long,
     epochMillis: Long = System.currentTimeMillis(),
 ): Produced? =
-    if (sizeBytes > 0) Produced(path, "image/jpeg", stampedObjectName("Снимок", epochMillis)) else null
+    if (sizeBytes > 0) Produced(path, "image/jpeg", stampedObjectName(tr("Снимок"), epochMillis)) else null

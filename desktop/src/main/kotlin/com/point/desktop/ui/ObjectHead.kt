@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.point.core.model.tr
 import com.point.core.ui.ObjectVerdict
 import com.point.desktop.InboxItem
 import com.point.desktop.JournalEntry
@@ -155,7 +156,7 @@ internal fun History(entry: JournalEntry, current: String, now: Long, zone: Zone
     var open by remember(entry.path) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("ИСТОРИЯ", style = PointType.label.copy(color = PointColors.muted))
+            Text(tr("ИСТОРИЯ"), style = PointType.label.copy(color = PointColors.muted))
             BoxWithConstraints(Modifier.weight(1f)) {
                 SegmentBar(historySegments(entry, current, zone, historyStepsFit(maxWidth)), onClick = { open = !open })
             }
@@ -165,7 +166,7 @@ internal fun History(entry: JournalEntry, current: String, now: Long, zone: Zone
                 Modifier.fillMaxWidth().glassPanel().padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PathStop(PointColors.violet, "Приехал · ${sourceLabel(entry.source)}", null, whenLabel(entry.at, now, zone))
+                PathStop(PointColors.violet, tr("Приехал · {0}", sourceLabel(entry.source)), null, whenLabel(entry.at, now, zone))
                 entry.steps.forEach { step ->
                     PathStop(
                         dot = when (step.outcome) {
@@ -178,7 +179,7 @@ internal fun History(entry: JournalEntry, current: String, now: Long, zone: Zone
                         time = whenLabel(step.at, now, zone),
                     )
                 }
-                if (entry.steps.isEmpty()) Text("Пока ничего не делали — действия рядом", style = PointType.note)
+                if (entry.steps.isEmpty()) Text(tr("Пока ничего не делали — действия рядом"), style = PointType.note)
             }
         }
     }
@@ -207,7 +208,7 @@ internal fun historySegments(
     add(Segment(sourceShort(entry.source), icon = sourceIcon(entry.source)))
     add(Segment(current, current = true))
     val hidden = entry.steps.size - steps
-    if (hidden > 0) add(Segment("ещё $hidden", faded = true))
+    if (hidden > 0) add(Segment(tr("ещё {0}", hidden), faded = true))
     entry.steps.takeLast(steps).forEach { step ->
         add(Segment(stepLabel(step, zone), faded = step.outcome == StepOutcome.FAILED))
     }
@@ -216,8 +217,8 @@ internal fun historySegments(
 /** Шаг в полосе: что сделали и когда; несостоявшийся — чем кончился, а не временем. */
 internal fun stepLabel(step: JournalStep, zone: ZoneId): String = when (step.outcome) {
     StepOutcome.DONE -> step.title + " · " + clockOf(step.at, zone)
-    StepOutcome.FAILED -> step.title + " · не вышло"
-    StepOutcome.AWAITING -> step.title + " · " + step.note.ifBlank { "ждёт" }
+    StepOutcome.FAILED -> step.title + tr(" · не вышло")
+    StepOutcome.AWAITING -> step.title + " · " + step.note.ifBlank { tr("ждёт") }
 }
 
 private fun clockOf(at: Long, zone: ZoneId): String =

@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.model.tr
 import java.io.File
 
 /**
@@ -25,7 +26,7 @@ data class TextHead(val text: String, val atLimit: Boolean)
  * знания принадлежит одному объекту, а не имени без расширения.
  */
 fun textBesideDocument(source: File): File =
-    File(source.parentFile, source.name + " — текст.txt")
+    File(source.parentFile, source.name + tr(" — текст.txt"))
 
 /**
  * Положить прочитанное рядом с документом. `null` — записать не вышло (#995, #997).

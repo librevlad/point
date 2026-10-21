@@ -57,6 +57,7 @@ import com.point.core.flow.aiChainLine
 import com.point.core.flow.aiKeysSummary
 import com.point.core.flow.aiServiceLines
 import com.point.core.flow.urlWithAccount
+import com.point.core.model.tr
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
 import com.point.core.ui.portalCard
@@ -204,7 +205,7 @@ fun KeyScreen(
         TextButton(onClick = onCancel) {
 
             Text(
-                if (verdict is KeyVerdict.Works) "Готово" else "Отмена",
+                if (verdict is KeyVerdict.Works) tr("Готово") else tr("Отмена"),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -235,7 +236,7 @@ private fun SettingsList(
         SettingsGroup(ACCOUNT_GROUP_TITLE) {
             SettingsRow(
                 title = MY_DEVICES_TITLE,
-                subtitle = "Вход, круг устройств и выход.",
+                subtitle = tr("Вход, круг устройств и выход."),
                 onClick = onOpenDevices,
                 appearIndex = 0,
             )
@@ -265,7 +266,7 @@ private fun SettingsList(
         SettingsGroup(APP_SECTION_TITLE) {
             SettingsRow(
                 title = SOUND_TITLE,
-                subtitle = "Тихий фирменный отклик на каждое действие.",
+                subtitle = tr("Тихий фирменный отклик на каждое действие."),
                 onClick = { onOpen(SettingsSection.APP) },
                 appearIndex = 3,
                 trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound, colors = glassSwitchColors()) },
@@ -350,46 +351,46 @@ internal fun SectionTopBar(title: String, onBack: () -> Unit, modifier: Modifier
     ScreenTopBar(title = title, onBack = onBack, backLabel = SETTINGS_TITLE, modifier = modifier)
 }
 
-private const val AI_GROUP_TITLE = "AI и приватность"
-private const val ACCOUNT_GROUP_TITLE = "Аккаунт и устройства"
+private val AI_GROUP_TITLE: String get() = tr("AI и приватность")
+private val ACCOUNT_GROUP_TITLE: String get() = tr("Аккаунт и устройства")
 
 // Имена разделов «Ключи AI», «Отправка и приватность» и «Что Point помнит» переехали в
 // :core:flow к SETTINGS_TITLE (#1249): те же разделы открываются в окне компьютера, и слово
 // у них теперь одно на оба устройства.
-internal const val APP_SECTION_TITLE = "Поведение Point"
+internal val APP_SECTION_TITLE: String get() = tr("Поведение Point")
 
-private const val DATA_GROUP_TITLE = "Данные"
+private val DATA_GROUP_TITLE: String get() = tr("Данные")
 
-private const val INTEGRATIONS_GROUP_TITLE = "Интеграции"
-internal const val SOUND_TITLE = "Звук действий"
+private val INTEGRATIONS_GROUP_TITLE: String get() = tr("Интеграции")
+internal val SOUND_TITLE: String get() = tr("Звук действий")
 
-internal const val ENTRIES_TITLE = "Точки входа"
+internal val ENTRIES_TITLE: String get() = tr("Точки входа")
 
 
-internal const val SHARE_ENTRY = "Системное «Поделиться» — Point принимает объект из любого приложения."
-internal const val TILE_ENTRY_ON = "Плитка в шторке — Point открывается одним касанием сверху."
-internal const val TILE_ENTRY_OFF = "Плитку в шторке можно добавить из «Нового объекта»."
+internal val SHARE_ENTRY: String get() = tr("Системное «Поделиться» — Point принимает объект из любого приложения.")
+internal val TILE_ENTRY_ON: String get() = tr("Плитка в шторке — Point открывается одним касанием сверху.")
+internal val TILE_ENTRY_OFF: String get() = tr("Плитку в шторке можно добавить из «Нового объекта».")
 
 internal const val MEMORY_WHAT =
-    "Point держит последние ${com.point.core.flow.HistoryFootprint.KEPT} объектов — копии " +
-        "лежат на телефоне, чтобы «Недавнее» открывалось без исходника. Старое забывается само."
+    tr("Point держит последние {0} объектов — копии " +
+        "лежат на телефоне, чтобы «Недавнее» открывалось без исходника. Старое забывается само.", com.point.core.flow.HistoryFootprint.KEPT)
 
-internal const val DROP_LINKS_LIVE = "Ссылки, которыми вы делились через сервер, перестают действовать через сутки."
+internal val DROP_LINKS_LIVE: String get() = tr("Ссылки, которыми вы делились через сервер, перестают действовать через сутки.")
 
-internal const val FORGET_ALL = "Забыть всё"
+internal val FORGET_ALL: String get() = tr("Забыть всё")
 
 internal fun entriesLine(tileAdded: Boolean): String =
-    if (tileAdded) "Системное «Поделиться» и плитка в шторке" else "Системное «Поделиться»"
+    if (tileAdded) tr("Системное «Поделиться» и плитка в шторке") else tr("Системное «Поделиться»")
 
 internal fun memoryLine(memory: com.point.core.flow.HistoryFootprint?): String = when {
     memory == null -> MEMORY_TITLE_UNKNOWN
-    memory.count == 0 -> "Пока ничего не сохранено"
-    else -> "Объектов: ${memory.count} · ${com.point.core.flow.humanWeight(memory.bytes) ?: NOTHING_KEPT}"
+    memory.count == 0 -> tr("Пока ничего не сохранено")
+    else -> tr("Объектов: {0} · {1}", memory.count, com.point.core.flow.humanWeight(memory.bytes) ?: NOTHING_KEPT)
 }
 
-internal const val NOTHING_KEPT = "пусто"
+internal val NOTHING_KEPT: String get() = tr("пусто")
 
-internal const val MEMORY_TITLE_UNKNOWN = "Сколько занято — сейчас посчитаем"
+internal val MEMORY_TITLE_UNKNOWN: String get() = tr("Сколько занято — сейчас посчитаем")
 
 
 internal class KeyDraft(saved: UserAiKey) {

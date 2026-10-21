@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import com.point.core.flow.Sharer
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -51,7 +52,7 @@ class AndroidSharer @Inject constructor(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
-        val chooser = Intent.createChooser(send, "Поделиться").apply {
+        val chooser = Intent.createChooser(send, tr("Поделиться")).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)
@@ -65,7 +66,7 @@ class AndroidSharer @Inject constructor(
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(send, "Поделиться").apply {
+        val chooser = Intent.createChooser(send, tr("Поделиться")).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)

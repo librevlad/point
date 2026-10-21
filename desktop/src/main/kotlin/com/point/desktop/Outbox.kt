@@ -5,6 +5,7 @@ import com.point.core.flow.collectionOrder
 import com.point.core.flow.decodePcMeta
 import com.point.core.flow.encodePcMeta
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import java.io.File
 
 class Outbox(
@@ -154,15 +155,18 @@ internal const val PHONE_ROAD_BYTES: Long = com.point.core.flow.PC_MAX_LETTER_BY
 
 /** Вещь не помещается в письмо телефону — отказ называет размер и предел (#1456). */
 class TooBigForPhone(val bytes: Long) : IllegalStateException(
-    "Файл ${com.point.core.flow.megabytes(bytes)} — на телефон за раз уходит до " +
+    tr(
+        "Файл {0} — на телефон за раз уходит до {1}",
+        com.point.core.flow.megabytes(bytes),
         com.point.core.flow.megabytes(com.point.core.flow.PC_MAX_LETTER_BYTES.toLong()),
+    ),
 )
 
 /** Набор едет телефону архивом (#1414): так его байты целиком помещаются в одно письмо. */
 internal const val SET_ARCHIVE_MIME = "application/zip"
 
 /** Набор не собрался в архив — телефону это отказ, а не обещание. */
-internal const val SET_NOT_PACKED = "Набор не собрался для телефона — попробуйте ещё раз"
+internal val SET_NOT_PACKED: String get() = tr("Набор не собрался для телефона — попробуйте ещё раз")
 
 internal fun setArchiveName(name: String): String =
     if (name.endsWith(".zip", ignoreCase = true)) name else "$name.zip"

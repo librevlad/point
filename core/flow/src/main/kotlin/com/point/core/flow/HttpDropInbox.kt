@@ -214,6 +214,7 @@ class HttpDropInbox(
             // живая, но медленная закачка файла не обрывается.
             connectTimeout = connectTimeoutMs
             readTimeout = readTimeoutMs
+            speakPointLanguage()
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 

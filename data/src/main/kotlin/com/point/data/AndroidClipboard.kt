@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import com.point.core.flow.Clipboard
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,7 @@ class AndroidClipboard @Inject constructor(
 
     override suspend fun copy(text: String, label: String) = withContext(Dispatchers.Main) {
         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            ?: error("Буфер обмена недоступен")
+            ?: error(tr("Буфер обмена недоступен"))
         manager.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 }

@@ -13,6 +13,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 
@@ -25,7 +26,7 @@ import javax.inject.Inject
  * «error.NonExistentClass» без указания на виновника.
  */
 class ReadDocumentCapabilityOnPhone @Inject constructor() : Capability {
-    private val inner = com.point.core.flow.ReadDocumentCapability(promise = "текст всех страниц · на телефоне")
+    private val inner = com.point.core.flow.ReadDocumentCapability(promise = tr("текст всех страниц · на телефоне"))
     override val id get() = inner.id
     override val icon get() = inner.icon
     override val meta get() = inner.meta

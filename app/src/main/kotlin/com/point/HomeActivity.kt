@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.point.core.model.tr
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -133,9 +134,9 @@ class HomeActivity : ComponentActivity() {
     private fun shareCrashReport(report: String) {
         val send = android.content.Intent(android.content.Intent.ACTION_SEND)
             .setType("text/plain")
-            .putExtra(android.content.Intent.EXTRA_SUBJECT, "Point - отчёт о падении")
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, tr("Point - отчёт о падении"))
             .putExtra(android.content.Intent.EXTRA_TEXT, report)
-        startActivity(android.content.Intent.createChooser(send, "Отправить отчёт"))
+        startActivity(android.content.Intent.createChooser(send, tr("Отправить отчёт")))
         viewModel.dismissCrashReport()
     }
 

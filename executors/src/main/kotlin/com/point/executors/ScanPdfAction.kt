@@ -10,6 +10,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -19,7 +20,7 @@ class ScanPdfCapability @Inject constructor() : Capability {
     override val icon = "scan"
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Сканировать в PDF"
+    override fun label(state: ObjectState) = tr("Сканировать в PDF")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)
 
@@ -37,11 +38,11 @@ class ScanPdfRealizer @Inject constructor(
                 imagesToPdf(
                     store,
                     input,
-                    name = "скан.pdf",
+                    name = tr("скан.pdf"),
                     op = "scan-pdf",
                     straighten = ::scanPage,
                     wholeFrame = ::wholeFramePage,
                 )
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сканирования в PDF", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка сканирования в PDF"), recoverable = true) }
         }
 }

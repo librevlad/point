@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.MEMORY_TITLE
 
+import com.point.core.model.tr
 /** Раздел «Что Point помнит» на телефоне (#834). */
 /** Сколько объектов Point помнит, сколько это занимает и как забыть (#821). */
 @Composable
@@ -50,7 +51,7 @@ internal fun MemorySection(
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = { asking = false }) {
-                Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(tr("Отмена"), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = { asking = false; onForgetAll() }) {
                 Text(CLEAR_RECENT_CONFIRM, color = MaterialTheme.colorScheme.error)

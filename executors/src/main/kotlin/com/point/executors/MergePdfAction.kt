@@ -10,6 +10,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -19,7 +20,7 @@ class MergePdfCapability @Inject constructor() : Capability {
     override val icon = "pdf"
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Объединить в PDF"
+    override fun label(state: ObjectState) = tr("Объединить в PDF")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)
 
@@ -34,7 +35,7 @@ class MergePdfRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                imagesToPdf(store, input, name = "документ.pdf", op = "merge-pdf")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка объединения в PDF", recoverable = true) }
+                imagesToPdf(store, input, name = tr("документ.pdf"), op = "merge-pdf")
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка объединения в PDF"), recoverable = true) }
         }
 }

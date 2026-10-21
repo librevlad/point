@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
+import com.point.core.model.tr
 import com.point.core.ui.kindLabel
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
@@ -89,8 +90,8 @@ internal fun recentNote(kind: ObjectKind, source: com.point.desktop.ObjectSource
         .joinToString(" · ")
 
 internal fun RecentLine.name(): String = when (this) {
-    is RecentLine.Live -> item.obj.metadata["name"]?.takeIf { it.isNotBlank() } ?: "Объект"
-    is RecentLine.Kept -> entry.name.ifBlank { "Объект" }
+    is RecentLine.Live -> item.obj.metadata["name"]?.takeIf { it.isNotBlank() } ?: tr("Объект")
+    is RecentLine.Kept -> entry.name.ifBlank { tr("Объект") }
 }
 
 internal fun RecentLine.kind(): ObjectKind = when (this) {
@@ -144,8 +145,8 @@ internal fun NewObjectButton(ways: NewObjectWays, modifier: Modifier = Modifier)
     var open by remember { mutableStateOf(false) }
     val clip = remember(open) { if (open) ways.clipboardNote() else null }
     SplitButton(
-        title = "Новый объект",
-        note = "выбрать файл · Ctrl+O",
+        title = tr("Новый объект"),
+        note = tr("выбрать файл · Ctrl+O"),
         onMain = ways.pickFile,
         menuOpen = open,
         onMenu = { open = it },
@@ -156,9 +157,9 @@ internal fun NewObjectButton(ways: NewObjectWays, modifier: Modifier = Modifier)
 
 /** Меню «Нового объекта» — только то, чего не делает сама кнопка; [clip] — что лежит в буфере. */
 internal fun newObjectMenu(ways: NewObjectWays, clip: String?): List<MenuItem> = listOf(
-    MenuItem("Из буфера", GlassIcons.Clipboard, ways.takeClipboard, note = clip, keys = "Ctrl+V"),
-    MenuItem("Снимок экрана", GlassIcons.Screen, ways.grabScreen, keys = "Ctrl+Shift+S"),
-    MenuItem("Принять по ссылке", GlassIcons.Link, ways.receiveFile),
+    MenuItem(tr("Из буфера"), GlassIcons.Clipboard, ways.takeClipboard, note = clip, keys = "Ctrl+V"),
+    MenuItem(tr("Снимок экрана"), GlassIcons.Screen, ways.grabScreen, keys = "Ctrl+Shift+S"),
+    MenuItem(tr("Принять по ссылке"), GlassIcons.Link, ways.receiveFile),
 )
 
 /**
@@ -236,12 +237,12 @@ private fun ReceiveWaiting(state: DesktopState, ways: NewObjectWays) {
         modifier = Modifier.padding(top = 10.dp).fillMaxWidth().glassPanel().padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("Пусть отправят файл сюда", style = PointType.rowTitle)
+        Text(tr("Пусть отправят файл сюда"), style = PointType.rowTitle)
         Text(wait.link, style = PointType.mono.copy(color = PointColors.soft), maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(wait.failed ?: wait.status, style = PointType.note)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-            PillButton("Скопировать ссылку", { ways.copyReceiveLink(wait.link) }, icon = GlassIcons.Copy, small = true)
-            PillButton("Отменить", ways.cancelReceive, small = true)
+            PillButton(tr("Скопировать ссылку"), { ways.copyReceiveLink(wait.link) }, icon = GlassIcons.Copy, small = true)
+            PillButton(tr("Отменить"), ways.cancelReceive, small = true)
         }
     }
 }
@@ -291,7 +292,7 @@ internal fun RecentList(
                         }
                     },
                 ) {
-                    if (id != null && id in fresh) Text("новое", style = PointType.note.copy(color = PointColors.cyan))
+                    if (id != null && id in fresh) Text(tr("новое"), style = PointType.note.copy(color = PointColors.cyan))
                     Text(com.point.core.flow.rowTimeLabel(line.at, now, zone), style = PointType.mono)
                 }
             }
@@ -309,8 +310,8 @@ internal fun RecentList(
 
         when {
             // Как принести объект, сказано под «Новым объектом» прямо над списком.
-            lines.isEmpty() -> EmptyNote("Пока пусто")
-            found.isEmpty() -> EmptyNote("В «Недавнем» такого нет")
+            lines.isEmpty() -> EmptyNote(tr("Пока пусто"))
+            found.isEmpty() -> EmptyNote(tr("В «Недавнем» такого нет"))
         }
     }
 }
@@ -327,7 +328,7 @@ private fun EmptyNote(text: String) {
  */
 internal fun howToBring(linked: Boolean): String =
     if (linked) {
-        "Бросьте файл в окно, нажмите Ctrl+V или поделитесь с телефона."
+        tr("Бросьте файл в окно, нажмите Ctrl+V или поделитесь с телефона.")
     } else {
-        "Бросьте файл в окно или нажмите Ctrl+V."
+        tr("Бросьте файл в окно или нажмите Ctrl+V.")
     }

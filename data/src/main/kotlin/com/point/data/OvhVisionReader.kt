@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.ReaderPrivacy
 import com.point.core.flow.ReaderPromise
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Base64
@@ -19,7 +20,7 @@ class OvhVisionReader(
     override val reader = READER
 
     override val privacy = ReaderPrivacy(
-        where = "OVH, Франция (ЕС)",
+        where = tr("OVH, Франция (ЕС)"),
         promise = ReaderPromise.NO_TRAINING,
     )
 

@@ -12,6 +12,7 @@ import android.printservice.PrintService
 import android.printservice.PrinterDiscoverySession
 import androidx.core.content.FileProvider
 import com.point.ShareActivity
+import com.point.core.model.tr
 import com.point.source.Produced
 import java.io.File
 import java.io.FileInputStream
@@ -60,7 +61,7 @@ class PointPrintService : PrintService() {
         val produced = runCatching { save(printJob) }.getOrNull()
         if (produced == null) {
 
-            printJob.fail("Point не смог забрать документ")
+            printJob.fail(tr("Point не смог забрать документ"))
             return
         }
         printJob.complete()

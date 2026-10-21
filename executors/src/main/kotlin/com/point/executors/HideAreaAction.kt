@@ -20,6 +20,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class HideAreaCapability @Inject constructor() : Capability {
 
     override val meta = CapabilityMeta(priority = 13, latency = Latency.FAST)
 
-    override fun label(state: ObjectState) = "Замазать"
+    override fun label(state: ObjectState) = tr("Замазать")
 
     /** Форма объекта: замазывают снимок. */
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
@@ -101,9 +102,9 @@ class HideAreaRealizer @Inject constructor(
 
     private companion object {
 
-        const val NOTHING_SHOWN = "Не видно, что замазывать"
+        val NOTHING_SHOWN: String get() = tr("Не видно, что замазывать")
 
-        const val NOT_HIDDEN = "Не удалось замазать снимок"
+        val NOT_HIDDEN: String get() = tr("Не удалось замазать снимок")
     }
 }
 

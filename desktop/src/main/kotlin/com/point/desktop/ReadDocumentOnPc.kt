@@ -10,6 +10,7 @@ import com.point.core.flow.RealizerMeta
 import com.point.core.flow.TextRecognizer
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import java.io.File
 import java.nio.file.Files
 
@@ -22,7 +23,7 @@ import java.nio.file.Files
  * уйдут в сервис.
  */
 fun pcReadDocument(): ReadDocumentCapability = ReadDocumentCapability(
-    promise = "текст всех страниц · страницы уйдут в сервис",
+    promise = tr("текст всех страниц · страницы уйдут в сервис"),
     cost = Cost.PAID,
     network = true,
 )
@@ -44,7 +45,7 @@ class PcPdfRasterizer(private val dpi: Float = PAGE_DPI) : PdfRasterizer {
 
     override suspend fun rasterize(obj: PointObject): ScratchRef {
         val source = File(obj.uri.value).takeIf(File::isFile)
-            ?: error("Файла документа нет на диске")
+            ?: error(tr("Файла документа нет на диске"))
         val dir = Files.createTempDirectory("pages-").toFile().apply { deleteOnExit() }
         org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
             val renderer = org.apache.pdfbox.rendering.PDFRenderer(document)

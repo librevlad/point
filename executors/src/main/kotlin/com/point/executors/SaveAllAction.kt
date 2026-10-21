@@ -12,6 +12,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,7 +24,7 @@ class SaveAllCapability @Inject constructor() : Capability {
     override val icon = "save-all"
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Сохранить всё"
+    override fun label(state: ObjectState) = tr("Сохранить всё")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state
 
@@ -42,15 +43,15 @@ class SaveAllRealizer @Inject constructor(
                 var saved = 0
                 for ((index, file) in files.withIndex()) {
 
-                    reportStage("Сохраняю ${index + 1} из ${files.size}")
+                    reportStage(tr("Сохраняю {0} из {1}", index + 1, files.size))
                     runCatching { exporter.export(fileObject(file)) }.onSuccess { saved++ }
                 }
                 if (saved == 0) {
-                    ActionResult.Failure("Нечего сохранять", recoverable = true)
+                    ActionResult.Failure(tr("Нечего сохранять"), recoverable = true)
                 } else {
-                    ActionResult.Done("Сохранено файлов: $saved")
+                    ActionResult.Done(tr("Сохранено файлов: {0}", saved))
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сохранения", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка сохранения"), recoverable = true) }
         }
 
     private fun fileObject(file: File) = PointObject(

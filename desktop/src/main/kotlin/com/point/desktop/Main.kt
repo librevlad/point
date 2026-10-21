@@ -10,6 +10,7 @@ import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.point.core.model.tr
 import java.awt.FileDialog
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -97,7 +98,7 @@ fun main(args: Array<String>) {
     val openRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val peek = PeekState { System.currentTimeMillis() }
     val saveTarget = SaveTarget { file ->
-        val dialog = FileDialog(null as java.awt.Frame?, "Сохранить в…", FileDialog.SAVE)
+        val dialog = FileDialog(null as java.awt.Frame?, tr("Сохранить в…"), FileDialog.SAVE)
         dialog.file = file.name
         dialog.isVisible = true
         val dir = dialog.directory ?: return@SaveTarget null
@@ -112,7 +113,7 @@ fun main(args: Array<String>) {
 
         // Скачанное приходит в ленту объектом; пусто — честный отказ со следом (PC3/P9).
         if (files.isEmpty()) {
-            state.say("Видео не скачалось — подробности в ~/Point/downloads/yt-dlp.log")
+            state.say(tr("Видео не скачалось — подробности в ~/Point/downloads/yt-dlp.log"))
         } else {
             files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.LOCAL) }
         }
@@ -386,7 +387,7 @@ fun main(args: Array<String>) {
     // человек вошёл в аккаунт, включил принтер, вписал ключ — телефон видит это без
     // перезапуска компьютера, потому что объявление собирается на каждый запрос заново.
     fun pcUnavailableNow(): Map<String, String?> = mapOf(
-        "pc-download" to if (downloader.available()) null else "на компьютере нет yt-dlp",
+        "pc-download" to if (downloader.available()) null else tr("на компьютере нет yt-dlp"),
 
         "pc-print" to whyCannotPrint(),
         "pdf" to officeToPdf.whyUnavailable(),
@@ -501,13 +502,13 @@ fun main(args: Array<String>) {
         }
         Tray(
             icon = icon,
-            tooltip = if (freshIds.isEmpty()) "Point" else "Point — есть новое",
+            tooltip = if (freshIds.isEmpty()) "Point" else tr("Point — есть новое"),
             onAction = { popoverVisible.value = !popoverVisible.value },
             menu = {
-                Item("Открыть Point") { summon() }
-                Item("Панель Point") { popoverVisible.value = true }
+                Item(tr("Открыть Point")) { summon() }
+                Item(tr("Панель Point")) { popoverVisible.value = true }
 
-                Item("Выход") {
+                Item(tr("Выход")) {
                     relayPoller.stop()
                     handOffs.interrupt()
                     runCatching { instanceLock?.release() }
@@ -518,7 +519,7 @@ fun main(args: Array<String>) {
 
         // Одни на оба окна: файл с диска, брошенное, буфер, снимок, приём по ссылке.
         val pickFile: () -> Unit = {
-            val dialog = FileDialog(null as java.awt.Frame?, "Выбрать файл", FileDialog.LOAD)
+            val dialog = FileDialog(null as java.awt.Frame?, tr("Выбрать файл"), FileDialog.LOAD)
             dialog.isMultipleMode = true
             dialog.isVisible = true
             val files = dialog.files.orEmpty().map { it.absolutePath }
@@ -535,10 +536,10 @@ fun main(args: Array<String>) {
             val png = java.io.ByteArrayOutputStream()
             val written = runCatching { javax.imageio.ImageIO.write(picture, "png", png) }.getOrDefault(false)
             if (!written) {
-                state.say("Картинку не удалось сохранить — сохраните её на диск и бросьте файлом")
+                state.say(tr("Картинку не удалось сохранить — сохраните её на диск и бросьте файлом"))
             } else {
                 state.onReceived(
-                    inbox.receive("Картинка.png", "image/png", emptyMap(), png.toByteArray().inputStream()),
+                    inbox.receive(tr("Картинка.png"), "image/png", emptyMap(), png.toByteArray().inputStream()),
                     ObjectSource.DROPPED,
                 )
             }
@@ -679,7 +680,7 @@ fun main(args: Array<String>) {
             transparent = true,
             resizable = false,
             alwaysOnTop = false,
-            title = "Point — панель",
+            title = tr("Point — панель"),
             icon = androidx.compose.runtime.remember { pointGlyph() },
         ) {
             LaunchedEffect(popover) {
@@ -735,7 +736,7 @@ fun main(args: Array<String>) {
                 resizable = false,
                 alwaysOnTop = true,
                 focusable = false,
-                title = "Point — пришло",
+                title = tr("Point — пришло"),
             ) {
                 com.point.desktop.ui.PointDesktopTheme {
                     com.point.desktop.ui.PeekCard(
@@ -775,7 +776,7 @@ private fun speechKeyMissing(pointDir: java.io.File): String? =
     if (FilePcConfig(pointDir).load().speech.key.isNotBlank()) {
         null
     } else {
-        "на компьютере не задан ключ расшифровки"
+        tr("на компьютере не задан ключ расшифровки")
     }
 
 private fun whyCannotPrint(): String? {
@@ -783,8 +784,8 @@ private fun whyCannotPrint(): String? {
         java.awt.Desktop.isDesktopSupported() &&
             java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.PRINT)
     }.getOrDefault(false)
-    if (!systemPrints) return "этот компьютер не умеет печатать"
+    if (!systemPrints) return tr("этот компьютер не умеет печатать")
 
     val printer = runCatching { javax.print.PrintServiceLookup.lookupDefaultPrintService() }.getOrNull()
-    return if (printer == null) "на компьютере нет принтера" else null
+    return if (printer == null) tr("на компьютере нет принтера") else null
 }

@@ -16,6 +16,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -50,8 +51,8 @@ class PdfRealizer @Inject constructor(
         }
 
     private suspend fun imageToPdf(input: PointObject): ActionResult {
-        reportStage("Читаю изображение")
-        val bitmap = Bitmaps.decodeUpright(input.uri.value) ?: error("Не удалось прочитать изображение")
+        reportStage(tr("Читаю изображение"))
+        val bitmap = Bitmaps.decodeUpright(input.uri.value) ?: error(tr("Не удалось прочитать изображение"))
         val document = PdfDocument()
         // Одиночный снимок становится страницей по тем же правилам, что и набор (#1047).
         document.addPage(bitmap, 1)
@@ -65,14 +66,14 @@ class PdfRealizer @Inject constructor(
             textSize = if (mono) 10f else 12f
             if (mono) typeface = Typeface.MONOSPACE
         }
-        reportStage("Раскладываю по страницам")
+        reportStage(tr("Раскладываю по страницам"))
         val lines = wrap(text, paint, A4.width - 2 * MARGIN)
 
         val document = PdfDocument()
         var index = 0
         var pageNumber = 1
         do {
-            reportStage("Страница $pageNumber")
+            reportStage(tr("Страница {0}", pageNumber))
             val page = document.startPage(
                 PdfDocument.PageInfo.Builder(A4.width, A4.height, pageNumber++).create(),
             )
@@ -103,7 +104,7 @@ class PdfRealizer @Inject constructor(
      * у документа есть (#1257), а не второй раз делает его чужими руками.
      */
     private suspend fun pdfToText(input: PointObject): ActionResult {
-        reportStage("Извлекаю текст из PDF")
+        reportStage(tr("Извлекаю текст из PDF"))
         val text = pdfText.extractText(input)
         if (com.point.core.flow.pdfLayerUnusable(text)) {
             return ActionResult.Failure(com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER, recoverable = false)
@@ -153,8 +154,8 @@ class PdfRealizer @Inject constructor(
         const val MARGIN = 32f
         const val LINE_HEIGHT = 16f
 
-        const val NOT_THIS_OBJECT = "В PDF превращаются снимок, текст и документ — этот объект не из них"
+        val NOT_THIS_OBJECT: String get() = tr("В PDF превращаются снимок, текст и документ — этот объект не из них")
 
-        const val PDF_FAILED = "PDF не собрался — попробуйте ещё раз"
+        val PDF_FAILED: String get() = tr("PDF не собрался — попробуйте ещё раз")
     }
 }

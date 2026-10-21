@@ -18,6 +18,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -46,7 +47,7 @@ class ShootMoreCapability @Inject constructor() : Capability {
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
 
-    override fun label(state: ObjectState) = "Снять ещё страницу"
+    override fun label(state: ObjectState) = tr("Снять ещё страницу")
 
     /**
      * Снят лист — это снимок, на котором Point прочитал текст: нулевой сигнал (это картинка)
@@ -60,7 +61,7 @@ class ShootMoreCapability @Inject constructor() : Capability {
 
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)
 
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.COLLECTION, "набор страниц")
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.COLLECTION, tr("набор страниц"))
 
     companion object { val ID = CapabilityId("shoot-more") }
 }
@@ -69,7 +70,7 @@ class ShootMoreCapability @Inject constructor() : Capability {
 internal const val OP_SHOT_PAGES = "shoot-more"
 
 /** Имя набора не считает страницы: оно не меняется от каждого снимка и потому не спорит само с собой. */
-internal const val SHOT_PAGES_NAME = "Страницы"
+internal val SHOT_PAGES_NAME: String get() = tr("Страницы")
 
 internal fun isShotPages(graph: GraphState): Boolean =
     graph.state.kind == ObjectKind.COLLECTION && graph.fact("op") == OP_SHOT_PAGES
@@ -87,7 +88,7 @@ class ShootMoreRealizer @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Кладу страницу в набор")
+                reportStage(tr("Кладу страницу в набор"))
                 val dir = pagesDir(input)
                 val shot = File(store.ingest(amendment, "image/jpeg").uri.value)
                 val page = File(dir, pageName(pagesIn(dir) + 1, extensionForFile(shot.name, "image/jpeg")))
@@ -136,12 +137,12 @@ class ShootMoreRealizer @Inject constructor(
      * пишется с ведущим нулём: без него десятая страница встала бы между первой и второй.
      */
     private fun pageName(number: Int, extension: String): String =
-        "Страница ${number.toString().padStart(2, '0')}.${extension.ifBlank { "jpg" }}"
+        tr("Страница {0}.{1}", number.toString().padStart(2, '0'), extension.ifBlank { "jpg" })
 
     private companion object {
 
-        const val ASK = "Снимите следующую страницу"
+        val ASK: String get() = tr("Снимите следующую страницу")
 
-        const val FAILED = "Не удалось добавить страницу в набор"
+        val FAILED: String get() = tr("Не удалось добавить страницу в набор")
     }
 }

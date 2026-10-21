@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.Box as PageBox
 
+import com.point.core.model.tr
 @Composable
 fun FindScreen(
     image: ImageBitmap,
@@ -50,7 +51,7 @@ fun FindScreen(
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SectionLabel("Найти в документе")
+            SectionLabel(tr("Найти в документе"))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -63,10 +64,10 @@ fun FindScreen(
                     singleLine = true,
                     shape = GlassFieldShape,
                     colors = glassFieldColors(),
-                    label = { Text("Что найти") },
+                    label = { Text(tr("Что найти")) },
                 )
                 TextButton(onClick = onClose) {
-                    Text("Закрыть", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tr("Закрыть"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (status != null) {

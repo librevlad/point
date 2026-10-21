@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.ReaderPrivacy
 import com.point.core.flow.ReaderPromise
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import org.json.JSONObject
 import java.util.Base64
 import com.point.core.flow.HttpJson
@@ -19,7 +20,7 @@ class MistralOcrReader(
     override val reader = READER
 
     override val privacy = ReaderPrivacy(
-        where = "Mistral, Франция (ЕС)",
+        where = tr("Mistral, Франция (ЕС)"),
         promise = ReaderPromise.TRAINS,
     )
 
@@ -29,7 +30,7 @@ class MistralOcrReader(
 
     override suspend fun read(obj: PointObject): String {
         val key = apiKey()
-        require(key.isNotBlank()) { "Ключ не задан" }
+        require(key.isNotBlank()) { tr("Ключ не задан") }
         val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
         val body = JSONObject()
             .put("model", MODEL)

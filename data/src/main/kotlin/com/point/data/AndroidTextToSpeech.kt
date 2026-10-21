@@ -10,6 +10,7 @@ import com.point.core.flow.Wav
 import com.point.core.flow.noOfflineVoice
 import com.point.core.flow.noVoiceForLanguage
 import com.point.core.flow.speechParts
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.Locale
@@ -62,7 +63,7 @@ class AndroidTextToSpeech @Inject constructor(
 
             val limit = runCatching { SystemVoice.getMaxSpeechInputLength() }.getOrDefault(3_900)
             val parts = speechParts(text, limit)
-            if (parts.isEmpty()) return@withVoice Spoken.Refused("Читать нечего")
+            if (parts.isEmpty()) return@withVoice Spoken.Refused(tr("Читать нечего"))
 
             val pieces = File(into).parentFile ?: File(".")
             val sound = mutableListOf<ByteArray>()
@@ -155,7 +156,7 @@ class AndroidTextToSpeech @Inject constructor(
     }
 
     private companion object {
-        const val BROKE = "Голос устройства не ответил — прочитать целиком не вышло"
+        val BROKE: String get() = tr("Голос устройства не ответил — прочитать целиком не вышло")
 
         /** Сколько ждём один кусок. Синтез идёт быстрее речи, минуты хватает с запасом. */
         const val PATIENCE_MS = 60_000L

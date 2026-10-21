@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.point.core.flow.yieldLabel
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
+import com.point.core.model.tr
 import kotlinx.coroutines.delay
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -93,7 +94,7 @@ internal fun ObjectActions(
                 val hidden = section.items.size - shown.size
                 if (hidden > 0 || expanded) {
                     Text(
-                        text = if (expanded) "Свернуть" else "Показать ещё $hidden",
+                        text = if (expanded) tr("Свернуть") else tr("Показать ещё {0}", hidden),
                         style = PointText.note,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
@@ -162,7 +163,7 @@ private fun ValueHeader(head: ValueHead) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = if (copied) "Скопировано" else value,
+                    text = if (copied) tr("Скопировано") else value,
                     style = PointText.rowTitle.copy(fontSize = PointText.rowTitle.fontSize * 1.1f),
                     color = if (copied) PointPalette.violet else PointPalette.text,
                     maxLines = 2,
@@ -172,7 +173,7 @@ private fun ValueHeader(head: ValueHead) {
         }
         head.other?.let { other ->
             Text(
-                text = "или: $other",
+                text = tr("или: {0}", other),
                 style = PointText.note,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

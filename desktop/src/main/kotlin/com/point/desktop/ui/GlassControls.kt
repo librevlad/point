@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.point.core.model.tr
 import com.point.core.ui.GlassIcons
 import com.point.core.ui.lightSurface
 
@@ -96,7 +97,7 @@ fun SplitButton(
             ) {
                 Icon(
                     if (menuOpen) GlassIcons.ChevronUp else GlassIcons.ChevronDown,
-                    contentDescription = if (menuOpen) "Свернуть способы" else "Другие способы взять объект",
+                    contentDescription = if (menuOpen) tr("Свернуть способы") else tr("Другие способы взять объект"),
                     tint = PointColors.ink,
                     modifier = Modifier.size(14.dp),
                 )
@@ -237,7 +238,7 @@ fun SearchField(query: String, onQuery: (String) -> Unit, placeholder: String, m
         if (query.isNotEmpty()) {
             Icon(
                 GlassIcons.Close,
-                contentDescription = "Очистить поиск",
+                contentDescription = tr("Очистить поиск"),
                 tint = PointColors.muted,
                 modifier = Modifier.size(12.dp).handCursor().clickable { onQuery("") },
             )
@@ -324,7 +325,7 @@ fun GlassDialog(
     confirm: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    dismiss: String = "Не сейчас",
+    dismiss: String = tr("Не сейчас"),
 ) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,

@@ -55,6 +55,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.Point">
 
@@ -206,7 +207,7 @@
             android:name=".ClipboardTileService"
             android:exported="true"
             android:icon="@android:drawable/ic_popup_sync"
-            android:label="Общий буфер"
+            android:label="@string/clipboard_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
@@ -232,14 +233,14 @@
         <activity
             android:name=".source.ReceiveActivity"
             android:exported="false"
-            android:label="Принять файл" />
+            android:label="@string/receive_file" />
 
         <!-- Звукозапись (#246): свой экран записи вместо чужого диктофона — его на устройстве
              может не быть вовсе. Живёт только пока открыт: в фоне Point не пишет. -->
         <activity
             android:name=".source.RecordAudioActivity"
             android:exported="false"
-            android:label="Звукозапись" />
+            android:label="@string/voice_recorder" />
 
         <!-- Point как принтер (#251): печатать умеет почти любое приложение, поэтому это самый
              широкий вход. Службу человек включает руками в системных настройках печати. -->

@@ -23,6 +23,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +48,7 @@ class TakeFragmentCapability @Inject constructor() : Capability {
 
     override val meta = CapabilityMeta(priority = 12, latency = Latency.FAST)
 
-    override fun label(state: ObjectState) = "Взять фрагмент"
+    override fun label(state: ObjectState) = tr("Взять фрагмент")
 
     /** Форма объекта: вырезать можно из снимка. */
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
@@ -73,7 +74,7 @@ class TakeFragmentRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             val region = focusOf(input.metadata, input.id)?.region
-                ?: return@withContext ActionResult.Failure("Не видно, какую область брать", recoverable = false)
+                ?: return@withContext ActionResult.Failure(tr("Не видно, какую область брать"), recoverable = false)
 
             runCatching {
                 // Область режется из файла как есть, а камера могла записать его повёрнутым:
@@ -85,7 +86,7 @@ class TakeFragmentRealizer @Inject constructor(
                         uprightDegrees = angle.degreesOf(input.uri.value),
                         purpose = CropPurpose.GLANCE,
                     ),
-                ) ?: return@withContext ActionResult.Failure("Не удалось вырезать область", recoverable = true)
+                ) ?: return@withContext ActionResult.Failure(tr("Не удалось вырезать область"), recoverable = true)
 
                 val ref = store.newScratchFile(image.extension)
                 File(ref.value).writeBytes(image.bytes)
@@ -97,7 +98,7 @@ class TakeFragmentRealizer @Inject constructor(
                         origin(input, region),
                     ),
                 )
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось взять фрагмент", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось взять фрагмент"), recoverable = true) }
         }
 
     /**

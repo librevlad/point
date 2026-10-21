@@ -12,6 +12,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -24,7 +25,7 @@ class ReadQrCapability @Inject constructor() : Capability {
     override val meta = CapabilityMeta(priority = 22, answers = com.point.core.model.CapabilityId("qr-content"))
     /** Код называется тем, что он есть: «Считать QR» на QR, «Скопировать цифры кода» на штрихкоде. */
     override fun label(state: ObjectState) =
-        if (state.has(Feature.HAS_BARCODE) && !state.has(Feature.HAS_QR)) "Скопировать цифры кода" else "Считать QR"
+        if (state.has(Feature.HAS_BARCODE) && !state.has(Feature.HAS_QR)) tr("Скопировать цифры кода") else tr("Считать QR")
 
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_QR) || state.has(Feature.HAS_BARCODE)
     override fun produces(state: ObjectState) = ObjectState(com.point.core.model.ObjectKind.TEXT)
@@ -47,7 +48,7 @@ class ReadQrRealizer @Inject constructor(
                 if (text.isNullOrBlank()) {
                     // Не прочитан — так и сказано, без догадок (приёмка #445.3).
                     ActionResult.Failure(
-                        if (input.state.has(Feature.HAS_BARCODE)) "Код не прочитан" else "QR-код не распознан",
+                        if (input.state.has(Feature.HAS_BARCODE)) tr("Код не прочитан") else tr("QR-код не распознан"),
                         recoverable = true,
                     )
                 } else {
@@ -62,6 +63,6 @@ class ReadQrRealizer @Inject constructor(
                         ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать код", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось прочитать код"), recoverable = true) }
         }
 }

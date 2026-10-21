@@ -57,19 +57,20 @@ import com.point.core.flow.FocusPoint
 import com.point.core.flow.FocusStroke
 import com.point.core.flow.Box as PageBox
 
+import com.point.core.model.tr
 /** Чем человек показывает область. Кисть — по умолчанию, остальное для редких случаев. */
 enum class FocusTool { BRUSH, RECTANGLE, LASSO, ERASER }
 
 internal val FOCUS_TOOL_LABELS = mapOf(
-    FocusTool.BRUSH to "Кисть",
-    FocusTool.RECTANGLE to "Прямоугольник",
-    FocusTool.LASSO to "Лассо",
-    FocusTool.ERASER to "Ластик",
+    FocusTool.BRUSH to tr("Кисть"),
+    FocusTool.RECTANGLE to tr("Прямоугольник"),
+    FocusTool.LASSO to tr("Лассо"),
+    FocusTool.ERASER to tr("Ластик"),
 )
 
-internal const val FOCUS_TITLE = "Выделение"
+internal val FOCUS_TITLE: String get() = tr("Выделение")
 
-internal const val FOCUS_HINT = "Выделите область, в которой находится нужная информация"
+internal val FOCUS_HINT: String get() = tr("Выделите область, в которой находится нужная информация")
 
 /**
  * Focus — отдельный инструмент Point, а не форма перед распознаванием (ТЗ владельца 10.08.2026).
@@ -255,7 +256,7 @@ private fun FocusTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onCancel) {
-            Icon(Icons.Filled.Close, contentDescription = "Отмена", tint = Color.White)
+            Icon(Icons.Filled.Close, contentDescription = tr("Отмена"), tint = Color.White)
         }
         Text(
             text = FOCUS_TITLE,
@@ -267,14 +268,14 @@ private fun FocusTopBar(
         IconButton(onClick = onUndo, enabled = canUndo) {
             Icon(
                 Icons.Filled.Undo,
-                contentDescription = "Отменить",
+                contentDescription = tr("Отменить"),
                 tint = Color.White.copy(alpha = if (canUndo) 1f else 0.35f),
             )
         }
         IconButton(onClick = onRedo, enabled = canRedo) {
             Icon(
                 Icons.Filled.Redo,
-                contentDescription = "Вернуть",
+                contentDescription = tr("Вернуть"),
                 tint = Color.White.copy(alpha = if (canRedo) 1f else 0.35f),
             )
         }
@@ -286,7 +287,7 @@ private fun FocusTopBar(
         ) {
             Icon(
                 Icons.Filled.Check,
-                contentDescription = "Готово",
+                contentDescription = tr("Готово"),
                 tint = if (canFinish) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.5f),
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
             )
@@ -309,7 +310,7 @@ private fun FocusTools(tool: FocusTool, onTool: (FocusTool) -> Unit, onClear: ()
                 onClick = { onTool(each) },
             )
         }
-        ToolChip(label = "Очистить", selected = false, onClick = onClear)
+        ToolChip(label = tr("Очистить"), selected = false, onClick = onClear)
     }
 }
 
@@ -342,7 +343,7 @@ private fun BrushSlider(value: Float, onChange: (Float) -> Unit, modifier: Modif
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Кисть", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.6f))
+        Text(tr("Кисть"), style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.6f))
         Slider(
             value = value,
             onValueChange = onChange,

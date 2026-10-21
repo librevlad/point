@@ -89,6 +89,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.EaseInOutSine
+import com.point.core.model.tr
 import com.point.core.ui.theme.PointText
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -271,7 +272,7 @@ fun FirstScreen(
 
         issuedLinkOf(obj.metadata)?.let { link ->
             Spacer(Modifier.height(16.dp))
-            LinkCard(url = link, title = "Ссылка на файл", warning = issuedLinkWarning(obj.metadata))
+            LinkCard(url = link, title = tr("Ссылка на файл"), warning = issuedLinkWarning(obj.metadata))
         }
 
         if (valueSections.isNotEmpty()) {
@@ -352,7 +353,7 @@ private fun LatentHints(latent: List<LatentBubble>) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        SectionLabel("Почти доступно")
+        SectionLabel(tr("Почти доступно"))
         latent.forEach { hint ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -401,7 +402,7 @@ private fun MadeHere(made: List<PointObject>, onOpen: (PointObject) -> Unit) {
                         surface = false,
                         chevron = false,
                         trailing = {
-                            Text(text = "открыть ›", style = PointText.note.copy(color = PointPalette.link))
+                            Text(text = tr("открыть ›"), style = PointText.note.copy(color = PointPalette.link))
                         },
                     )
                 }
@@ -427,8 +428,8 @@ private fun MadeFromRow(source: PointObject, onOpen: () -> Unit) {
     )
 }
 
-const val MADE_HERE_LABEL = "Получилось"
-const val MADE_FROM_LABEL = "Сделано из"
+val MADE_HERE_LABEL: String get() = tr("Получилось")
+val MADE_FROM_LABEL: String get() = tr("Сделано из")
 
 @Composable
 private fun WorkingStage(stage: String?) {
@@ -484,7 +485,7 @@ private fun FoundObjects(
                             accent = kindTint(row.kind),
                             surface = false,
                             chevron = false,
-                            trailing = { Text(text = "раскрыть ›", style = PointText.note) },
+                            trailing = { Text(text = tr("раскрыть ›"), style = PointText.note) },
                         )
                     }
                     return@forEachIndexed
@@ -493,7 +494,7 @@ private fun FoundObjects(
                 if (row is FoundRow.Group) {
                     key("unfold:" + row.kind.name) {
                         Text(
-                            text = kindLabel(row.kind) + " · " + row.items.size + " — свернуть",
+                            text = kindLabel(row.kind) + " · " + row.items.size + tr(" — свернуть"),
                             style = PointText.note,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -549,7 +550,7 @@ private fun FoundRowView(
 
                     foundProvenance(obj),
 
-                    "возможно".takeIf { isDoubtful(obj.metadata) },
+                    tr("возможно").takeIf { isDoubtful(obj.metadata) },
                 ).joinToString(" · "),
                 style = PointText.note,
                 modifier = Modifier.padding(top = 2.dp),
@@ -566,7 +567,7 @@ private fun FoundRowView(
 
             otherReading(obj)?.let { other ->
                 Text(
-                    text = "или: $other",
+                    text = tr("или: {0}", other),
                     style = PointText.note,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -611,7 +612,7 @@ fun foundProvenance(obj: PointObject): String? =
  * «Нашёл · 2», видя три значения (#696). Нет числа — нет и вранья.
  */
 fun foundHeader(count: Int, partShownAbove: Boolean): String =
-    if (partShownAbove) "Нашёл" else "Нашёл · $count"
+    if (partShownAbove) tr("Нашёл") else tr("Нашёл · {0}", count)
 
 fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<PointObject> {
     val claimed = found.filter { it.state.kind == com.point.core.flow.KIND_PERSON }
@@ -688,9 +689,9 @@ internal fun FocusStrip(preview: ImageBitmap?, onClear: () -> Unit) {
     }
 }
 
-const val FOCUS_HERE = "Смотрю сюда"
+val FOCUS_HERE: String get() = tr("Смотрю сюда")
 
-const val FOCUS_DROP = "Смотреть на весь объект"
+val FOCUS_DROP: String get() = tr("Смотреть на весь объект")
 
 /**
  * Ответ на вопрос, заданный областью (#1000): посмотрели — и ничего.
@@ -698,7 +699,7 @@ const val FOCUS_DROP = "Смотреть на весь объект"
  * Не сбой, а знание: прошенное получает слово, в отличие от незапрошенного «не нашлось»,
  * которое экран по решению владельца не показывает (#1016).
  */
-const val FOCUS_NOTHING_FOUND = "В области ничего не нашлось"
+val FOCUS_NOTHING_FOUND: String get() = tr("В области ничего не нашлось")
 
 /**
  * Расхождение — это другое значение, а не та же запись другими знаками (#1011).
@@ -767,20 +768,20 @@ internal fun ownerOfFound(obj: PointObject, relations: List<Relation>, found: Li
 private fun whoseLabel(party: PointObject): String {
     val role = party.metadata.keys.firstNotNullOfOrNull { com.point.core.flow.roleOfKey(it) }?.relation
     return when (role) {
-        RelationType.SENDER -> "отправителя: "
-        RelationType.RECEIVER -> "получателя: "
-        RelationType.CARRIER -> "перевозчика: "
-        RelationType.ISSUED_BY -> "выдавшего документ: "
-        else -> "чей: "
+        RelationType.SENDER -> tr("отправителя: ")
+        RelationType.RECEIVER -> tr("получателя: ")
+        RelationType.CARRIER -> tr("перевозчика: ")
+        RelationType.ISSUED_BY -> tr("выдавшего документ: ")
+        else -> tr("чей: ")
     }
 }
 
 internal fun relationLabel(type: RelationType): String? = when (type) {
-    RelationType.SENDER -> "отправитель"
-    RelationType.RECEIVER -> "получатель"
-    RelationType.CARRIER -> "перевозчик"
-    RelationType.ISSUED_BY -> "выдал документ"
-    RelationType.SIGNED_BY -> "подписал"
+    RelationType.SENDER -> tr("отправитель")
+    RelationType.RECEIVER -> tr("получатель")
+    RelationType.CARRIER -> tr("перевозчик")
+    RelationType.ISSUED_BY -> tr("выдал документ")
+    RelationType.SIGNED_BY -> tr("подписал")
     else -> null
 }
 
@@ -796,10 +797,10 @@ internal fun factKeyFor(kind: ObjectKind): String? = when (kind) {
 const val COLLECTION_PAGE = 25
 
 fun collectionLabel(shown: Int, total: Int, atLeast: Boolean): String = when {
-    total <= shown && !atLeast -> "Содержимое · ${grouped(shown)}"
-    total <= shown -> "Содержимое · ${grouped(shown)}, и это не всё"
-    atLeast -> "Содержимое · ${grouped(shown)} из более чем ${grouped(total)}"
-    else -> "Содержимое · ${grouped(shown)} из ${grouped(total)}"
+    total <= shown && !atLeast -> tr("Содержимое · {0}", grouped(shown))
+    total <= shown -> tr("Содержимое · {0}, и это не всё", grouped(shown))
+    atLeast -> tr("Содержимое · {0} из более чем {1}", grouped(shown), grouped(total))
+    else -> tr("Содержимое · {0} из {1}", grouped(shown), grouped(total))
 }
 
 /**
@@ -810,9 +811,9 @@ fun collectionLabel(shown: Int, total: Int, atLeast: Boolean): String = when {
 fun reorderablePages(items: List<PointObject>): Boolean =
     items.count { it.state.kind in com.point.core.flow.PAGE_KINDS } >= 2
 
-const val PAGE_UP = "Страницу выше"
+val PAGE_UP: String get() = tr("Страницу выше")
 
-const val PAGE_DOWN = "Страницу ниже"
+val PAGE_DOWN: String get() = tr("Страницу ниже")
 
 @Composable
 private fun CollectionItems(
@@ -929,7 +930,7 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
     val shown = if (expanded) text else head
 
     val rendered = remember(shown, markdown) { if (markdown) markdownToAnnotated(shown) else AnnotatedString(shown) }
-    GroupHeader("Текст", top = 0.dp)
+    GroupHeader(tr("Текст"), top = 0.dp)
     Box(modifier = Modifier.fillMaxWidth().portalCard()) {
         SelectionContainer {
             Text(
@@ -958,7 +959,7 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
     }
 }
 
-internal const val FOCUS_ENTRY_LABEL = "Выделить область"
+internal val FOCUS_ENTRY_LABEL: String get() = tr("Выделить область")
 
 /** Значок в углу превью: одна иконка, без текста — не шумит, но говорит, что обводка есть. */
 @Composable
@@ -1187,8 +1188,8 @@ private fun AmendmentInput(
             keyboardActions = KeyboardActions(onDone = { submit() }),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassButton("Отмена", onClick = onCancel, modifier = Modifier.weight(1f))
-            LightButton("Готово", onClick = { onSubmit(text) }, modifier = Modifier.weight(1f))
+            GlassButton(tr("Отмена"), onClick = onCancel, modifier = Modifier.weight(1f))
+            LightButton(tr("Готово"), onClick = { onSubmit(text) }, modifier = Modifier.weight(1f))
         }
     }
 }

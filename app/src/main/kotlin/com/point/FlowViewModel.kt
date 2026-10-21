@@ -2,6 +2,7 @@ package com.point
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.point.core.model.tr
 import kotlinx.coroutines.ensureActive
 import com.point.core.flow.ACTION_CEILING_MS
 import com.point.core.flow.AppLauncher
@@ -393,7 +394,7 @@ class FlowViewModel @Inject constructor(
     fun onSharedText(text: String) {
         val path = runCatching { sharedTexts.create(text) }.getOrNull()
         if (path == null) {
-            _ui.update { it.copy(message = "Не удалось принять текст", messageOutcome = Outcome.FAILED) }
+            _ui.update { it.copy(message = tr("Не удалось принять текст"), messageOutcome = Outcome.FAILED) }
             return
         }
         onShared(
@@ -411,7 +412,7 @@ class FlowViewModel @Inject constructor(
             it.copy(
                 busy = null,
                 busyStage = null,
-                message = "Point не понял, что ему прислали — попробуйте поделиться файлом",
+                message = tr("Point не понял, что ему прислали — попробуйте поделиться файлом"),
                 messageOutcome = Outcome.FAILED,
             )
         }
@@ -437,11 +438,11 @@ class FlowViewModel @Inject constructor(
 
         // Имя — до копии, и передумать можно (#640): большой файл копируется секундами, и
         // всё это время человек видел голое «Открываю…» без единого способа выйти.
-        raiseBusy("Открываю…", cancelable = true)
+        raiseBusy(tr("Открываю…"), cancelable = true)
         trackWork {
             (name ?: runCatching { store.nameOf(sourceUri) }.getOrNull())
                 ?.takeIf { it.isNotBlank() }
-                ?.let { known -> _ui.update { it.copy(busy = "Открываю $known…") } }
+                ?.let { known -> _ui.update { it.copy(busy = tr("Открываю {0}…", known)) } }
             val obj = runCatching {
                 // Свой же файл (адрес нашего FileProvider) не стирается до того, как прочитан
                 // (#1419): очистка перед приёмом уносила источник, и «Не удалось открыть объект»
@@ -490,7 +491,7 @@ class FlowViewModel @Inject constructor(
             if (!owns(voice)) return@trackWork
             if (obj == null) {
 
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = tr("Не удалось открыть объект"), messageOutcome = Outcome.FAILED) }
                 return@trackWork
             }
             runCatching { history.record(obj) }
@@ -509,7 +510,7 @@ class FlowViewModel @Inject constructor(
                 val title = runCatching { registry.byId(cap).label(obj.state) }.getOrNull()
                 if (title == null) {
                     _ui.update {
-                        it.copy(message = "Компьютер попросил действие, которого в Point нет", messageOutcome = Outcome.FAILED)
+                        it.copy(message = tr("Компьютер попросил действие, которого в Point нет"), messageOutcome = Outcome.FAILED)
                     }
                     return@let
                 }
@@ -522,7 +523,7 @@ class FlowViewModel @Inject constructor(
         freshShareArrived = true
         val voice = claimVoice()
         val interrupted = makeWayForIncoming()
-        raiseBusy("Открываю…", cancelable = false)
+        raiseBusy(tr("Открываю…"), cancelable = false)
         trackWork {
             val obj = runCatching {
                 store.clear()
@@ -531,7 +532,7 @@ class FlowViewModel @Inject constructor(
             if (!owns(voice)) return@trackWork
             if (obj == null) {
 
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = tr("Не удалось открыть объект"), messageOutcome = Outcome.FAILED) }
                 return@trackWork
             }
 
@@ -581,12 +582,12 @@ class FlowViewModel @Inject constructor(
         val pc = pcFlow.current() ?: return
         val voice = claimVoice()
 
-        raiseBusy("Забираю с компьютера…", cancelable = true)
+        raiseBusy(tr("Забираю с компьютера…"), cancelable = true)
         trackWork {
 
             // Шаг назван тем, что происходит на самом деле (#1386): телефон не ищет компьютер
             // рядом — связи между ними нет, — а спрашивает сервер, что компьютер там оставил.
-            sayStage(voice, "Спрашиваю, что оставил компьютер")
+            sayStage(voice, tr("Спрашиваю, что оставил компьютер"))
 
             // Исходы без объекта уходят домой до забора вещей (#1073): скачивать с них нечего.
             val entries = takeOutcomesHome(pc, runCatching { pcFlow.transport.fetchOutbox(pc) }.getOrNull().orEmpty())
@@ -598,10 +599,10 @@ class FlowViewModel @Inject constructor(
                 return@trackWork
             }
             val pulled = entries.mapIndexed { i, entry ->
-                val name = entry.meta["name"] ?: "объект"
+                val name = entry.meta["name"] ?: tr("объект")
                 sayStage(
                     voice,
-                    if (entries.size > 1) "Забираю $name · ${i + 1} из ${entries.size}" else "Забираю $name",
+                    if (entries.size > 1) tr("Забираю {0} · {1} из {2}", name, i + 1, entries.size) else tr("Забираю {0}", name),
                 )
                 val path = pcFlow.pulledFiles.create("${entry.id}-$name")
                 val ok = runCatching { pcFlow.transport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
@@ -772,12 +773,12 @@ class FlowViewModel @Inject constructor(
         freshShareArrived = true
         val voice = claimVoice()
 
-        raiseBusy("Открываю…", cancelable = true)
+        raiseBusy(tr("Открываю…"), cancelable = true)
         trackWork {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
             if (!owns(voice)) return@trackWork
             if (obj == null) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = tr("Объект недоступен"), messageOutcome = Outcome.FAILED) }
                 return@trackWork
             }
             runCatching { store.clear() }
@@ -946,7 +947,7 @@ class FlowViewModel @Inject constructor(
                 }.getOrNull()
             }
             if (loaded == null) {
-                _ui.update { it.copy(message = "Не удалось открыть страницу для выделения", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(message = tr("Не удалось открыть страницу для выделения"), messageOutcome = Outcome.FAILED) }
                 return@launch
             }
             selectionLayer = loaded.first
@@ -1123,7 +1124,7 @@ class FlowViewModel @Inject constructor(
 
         val atomsRef = top.metadata[META_OCR_ATOMS_REF]
         if (atomsRef == null) {
-            _ui.update { it.copy(message = "Страница ещё не прочитана — искать не в чем", messageOutcome = Outcome.FAILED) }
+            _ui.update { it.copy(message = tr("Страница ещё не прочитана — искать не в чем"), messageOutcome = Outcome.FAILED) }
             return
         }
         viewModelScope.launch {
@@ -1136,7 +1137,7 @@ class FlowViewModel @Inject constructor(
                 }.getOrNull()
             }
             if (loaded == null) {
-                _ui.update { it.copy(message = "Не удалось открыть страницу для поиска", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(message = tr("Не удалось открыть страницу для поиска"), messageOutcome = Outcome.FAILED) }
                 return@launch
             }
             findLayer = loaded.first
@@ -1427,7 +1428,7 @@ class FlowViewModel @Inject constructor(
             labelOf = { id, state -> runCatching { registry.byId(id).label(state) }.getOrNull() },
             iconOf = { id -> runCatching { registry.byId(id).icon }.getOrDefault("ai") },
             runBubble = ::onBubble,
-            keepAnswer = { obj -> pushFrame(obj, viaTitle = "Ответ AI") },
+            keepAnswer = { obj -> pushFrame(obj, viaTitle = tr("Ответ AI")) },
             onSuccess = { runCatching { sensory.success() } },
             onFailure = { why ->
                 _ui.update { it.copy(message = why, messageOutcome = Outcome.FAILED) }
@@ -1552,7 +1553,7 @@ class FlowViewModel @Inject constructor(
 
                     // Экран ключей показывает исход своей строкой — карточка
                     // поверх неё была бы вторым ответом на тот же вопрос.
-                    message = if (it.keyScreen == null) "Ключ забыт" else it.message,
+                    message = if (it.keyScreen == null) tr("Ключ забыт") else it.message,
                     messageOutcome = if (it.keyScreen == null) Outcome.DONE else it.messageOutcome,
                 )
             }
@@ -1852,14 +1853,14 @@ class FlowViewModel @Inject constructor(
 
     private fun showAppPicker(obj: PointObject) {
         val voice = claimVoice()
-        raiseBusy("Ищу приложения…", cancelable = true)
+        raiseBusy(tr("Ищу приложения…"), cancelable = true)
         trackWork {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
 
             val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
             if (!owns(voice)) return@trackWork
             _ui.update {
-                if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта", messageOutcome = Outcome.FAILED)
+                if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = tr("Нет приложения для этого объекта"), messageOutcome = Outcome.FAILED)
                 else it.copy(busy = null, busyStage = null, appPicker = apps)
             }
         }
@@ -1897,7 +1898,7 @@ class FlowViewModel @Inject constructor(
                 _ui.update {
                     it.copy(
                         busy = null, busyStage = null, messageOutcome = Outcome.FAILED,
-                        message = "Не удалось подготовить объект для этого приложения",
+                        message = tr("Не удалось подготовить объект для этого приложения"),
                     )
                 }
                 return@trackWork
@@ -1906,8 +1907,8 @@ class FlowViewModel @Inject constructor(
 
                 // Выбранное приложение — тот же уход в чужой экран, что и календарь (#1131):
                 // подпись гаснет возвратом человека, а не висит над объектом.
-                .onSuccess { sayHandingOff("Открываю в ${target.label}") }
-                .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
+                .onSuccess { sayHandingOff(tr("Открываю в {0}", target.label)) }
+                .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: tr("Не удалось открыть"), messageOutcome = Outcome.FAILED) } }
         }
     }
 
@@ -1948,7 +1949,7 @@ class FlowViewModel @Inject constructor(
             val told = answerPc(pc, ask, home, capability, label, ActionResult.Failure(reason, recoverable = false))
             _ui.update {
                 it.copy(
-                    message = if (told) "«$label» для компьютера: $reason" else "«$label» — ответ не доехал до компьютера",
+                    message = if (told) tr("«{0}» для компьютера: {1}", label, reason) else tr("«{0}» — ответ не доехал до компьютера", label),
                     messageOutcome = Outcome.FAILED,
                 )
             }
@@ -1985,7 +1986,7 @@ class FlowViewModel @Inject constructor(
                         if (!heard) {
                             _ui.update {
                                 it.copy(
-                                    message = "«$label» — ответ не доехал до компьютера",
+                                    message = tr("«{0}» — ответ не доехал до компьютера", label),
                                     messageOutcome = Outcome.FAILED,
                                 )
                             }
@@ -1996,7 +1997,7 @@ class FlowViewModel @Inject constructor(
             if (!asked) return false
             _ui.update {
                 it.copy(
-                    message = if (told) "«$label» для компьютера — ответьте, отправлять ли наружу" else "«$label» — ответ не доехал до компьютера",
+                    message = if (told) tr("«{0}» для компьютера — ответьте, отправлять ли наружу", label) else tr("«{0}» — ответ не доехал до компьютера", label),
                     messageOutcome = if (told) Outcome.NONE else Outcome.FAILED,
                 )
             }
@@ -2014,7 +2015,7 @@ class FlowViewModel @Inject constructor(
      * работы и имя объекта обязаны стоять в самом вопросе.
      */
     private fun aboutForPc(label: String, ask: Map<String, String>): String =
-        "«$label» для компьютера" + (ask["name"]?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+        tr("«{0}» для компьютера", label) + (ask["name"]?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
 
     /** То же и для тапа: экран согласия убирает объект с глаз, и вопрос называет его сам (#1269). */
     private fun aboutOf(title: String, obj: PointObject): String =
@@ -2056,7 +2057,7 @@ class FlowViewModel @Inject constructor(
     ) {
         val mime = ask["mime"] ?: "application/octet-stream"
 
-        _ui.update { it.copy(message = "«$label» — делаю для компьютера", messageOutcome = Outcome.NONE) }
+        _ui.update { it.copy(message = tr("«{0}» — делаю для компьютера", label), messageOutcome = Outcome.NONE) }
 
         val outcome = runCatching {
             val obj = store.ingest("file://$path", mime).let { taken ->
@@ -2072,7 +2073,7 @@ class FlowViewModel @Inject constructor(
             val realizer = resolver.realizerFor(CapabilityId(capability), obj.state)
             realizer.perform(obj, null).knownBy(obj, realizer.meta.actor) to obj
         }.getOrElse { e ->
-            ActionResult.Failure(e.message ?: "не вышло", recoverable = true) to null
+            ActionResult.Failure(e.message ?: tr("не вышло"), recoverable = true) to null
         }
 
         val (result, worked) = outcome
@@ -2082,9 +2083,9 @@ class FlowViewModel @Inject constructor(
             .getOrNull()
             .delivered()
         val said = when {
-            !arrived -> "«$label» — результат не доехал до компьютера"
-            result is ActionResult.Failure -> "«$label» — не вышло, компьютер об этом знает"
-            else -> "«$label» — сделано для компьютера"
+            !arrived -> tr("«{0}» — результат не доехал до компьютера", label)
+            result is ActionResult.Failure -> tr("«{0}» — не вышло, компьютер об этом знает", label)
+            else -> tr("«{0}» — сделано для компьютера", label)
         }
         _ui.update {
             it.copy(
@@ -2161,7 +2162,7 @@ class FlowViewModel @Inject constructor(
                 // знать не должен — он про три терминальных исхода операции.
                 is ActionResult.NeedsInput -> mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to result.prompt)
                 is ActionResult.NeedsImage ->
-                    mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to "«$label» ждёт продолжения на телефоне")
+                    mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to tr("«{0}» ждёт продолжения на телефоне", label))
             }
 
         // Пустой шаг без нового объекта отправляет только знание: файла у него нет, и
@@ -2233,7 +2234,7 @@ class FlowViewModel @Inject constructor(
 
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
         claimVoice()
-        raiseBusy("Преобразую…", cancelable = true)
+        raiseBusy(tr("Преобразую…"), cancelable = true)
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId), obj.state).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let {
             runCatching { store.put(it.result, from = obj, by = CapabilityId(viaCapId)) }.getOrNull()
@@ -2249,8 +2250,8 @@ class FlowViewModel @Inject constructor(
 
     private fun kindShort(kind: ObjectKind): String = when (kind) {
         ObjectKind.PDF -> "PDF"
-        ObjectKind.IMAGE -> "картинка"
-        ObjectKind.TEXT -> "текст"
+        ObjectKind.IMAGE -> tr("картинка")
+        ObjectKind.TEXT -> tr("текст")
         else -> kind.name
     }
 
@@ -2265,7 +2266,7 @@ class FlowViewModel @Inject constructor(
                     keyVerdict = null, keyVerdictFor = null, keyChecking = null,
                     aiKeySet = settingsFlow.anyKeyOfMine(),
 
-                    message = if (it.keyScreen == null) "Ключ сохранён" else it.message,
+                    message = if (it.keyScreen == null) tr("Ключ сохранён") else it.message,
                     messageOutcome = if (it.keyScreen == null) Outcome.DONE else it.messageOutcome,
                 )
             }
@@ -2332,7 +2333,7 @@ class FlowViewModel @Inject constructor(
                 if (e is kotlinx.coroutines.TimeoutCancellationException) {
                     Result.success(
                         ActionResult.Failure(
-                            "«${bubble.title}» не уложилось в ${(actionCeilingMs ?: ACTION_CEILING_MS) / 60_000} минут — прервано",
+                            tr("«{0}» не уложилось в {1} минут — прервано", bubble.title, (actionCeilingMs ?: ACTION_CEILING_MS) / 60_000),
                             recoverable = true,
                         ),
                     )
@@ -2353,7 +2354,7 @@ class FlowViewModel @Inject constructor(
                 if (!owns(voice)) return@onFailure
                 runningStep = null
 
-                _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: tr("Не получилось"), messageOutcome = Outcome.FAILED) }
             }
     }
 
@@ -2440,7 +2441,7 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = null, busyStage = null, busyCancelable = false,
-                message = if (hasObject) "Отменено" else null, messageOutcome = Outcome.NONE,
+                message = if (hasObject) tr("Отменено") else null, messageOutcome = Outcome.NONE,
             )
         }
     }
@@ -2597,7 +2598,7 @@ class FlowViewModel @Inject constructor(
             ?.takeIf { (it.metadata[com.point.core.flow.META_ORIGIN_ID] ?: it.id) == home }
         if (homeOnScreen() == null || !resultsLanding.add(entry.id)) return false
         try {
-            val name = meta["name"]?.takeIf { it.isNotBlank() } ?: "объект"
+            val name = meta["name"]?.takeIf { it.isNotBlank() } ?: tr("объект")
             val path = pcFlow.pulledFiles.create("${entry.id}-$name")
             if (!runCatching { pcFlow.transport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)) return false
             val ingested = runCatching {
@@ -2631,7 +2632,7 @@ class FlowViewModel @Inject constructor(
 
             // Те же слова, что у срочного ответа: «В PDF — готово: slides.pdf».
             val about = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
-            val words = about?.let { "$it — готово: $name" } ?: "Готово: $name"
+            val words = about?.let { tr("{0} — готово: {1}", it, name) } ?: tr("Готово: {0}", name)
             _ui.update { it.copy(message = words, messageOutcome = Outcome.DONE) }
             return true
         } finally {
@@ -2941,7 +2942,7 @@ class FlowViewModel @Inject constructor(
     /** Сказать про оборванный шаг, когда новый объект уже открыт и экран освободился. */
     private fun tellInterrupted(step: String?) {
         val what = step ?: return
-        _ui.update { it.copy(message = "«$what» прервано — принят новый объект", messageOutcome = Outcome.NONE) }
+        _ui.update { it.copy(message = tr("«{0}» прервано — принят новый объект", what), messageOutcome = Outcome.NONE) }
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
@@ -3613,14 +3614,14 @@ class FlowViewModel @Inject constructor(
          * Снимок — читается; у остальных объектов фоном идёт разбор, не чтение.
          */
         internal fun waitingForReadingStage(kind: ObjectKind): String =
-            if (kind == ObjectKind.IMAGE) "Жду чтения снимка" else "Жду разбора объекта"
+            if (kind == ObjectKind.IMAGE) tr("Жду чтения снимка") else tr("Жду разбора объекта")
 
 
         val REFRESHABLE_META = com.point.core.flow.REFRESHABLE_KNOWLEDGE
 
         const val CLOUD_DECLINED =
-            "Ничего не отправлено — объект остался на телефоне, действие не выполнено. " +
-                "Без отправки оно не работает: нажмите ещё раз, если передумаете"
+            tr("Ничего не отправлено — объект остался на телефоне, действие не выполнено. " +
+                "Без отправки оно не работает: нажмите ещё раз, если передумаете")
     }
 
     private fun cancelEnrichment() {

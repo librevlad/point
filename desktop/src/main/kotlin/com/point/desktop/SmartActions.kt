@@ -18,6 +18,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -33,7 +34,7 @@ class PcEntitiesCapability : Capability {
     // (autoInvestigate уже запускает её сама при получении объекта) и лишним дублем «на ПК»
     // уезжала на телефон через advertisedActions() — разбор скрина владельца без live-теста.
     override val meta = CapabilityMeta(priority = 25, investigation = true)
-    override fun label(state: ObjectState) = "Найти в тексте"
+    override fun label(state: ObjectState) = tr("Найти в тексте")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 }
@@ -52,7 +53,7 @@ class PcEntitiesRealizer(
     // объект-отчёт (Конституция §4; аудит 2026-08-09, блок 1.1).
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val text = File(input.uri.value).takeIf(File::isFile)?.readText()
-            ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
+            ?: return ActionResult.Failure(tr("Файла объекта нет на диске"), recoverable = false)
         val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
 
         // Одна воронка на обе поверхности (#1139, #1144): та же, что у телефона, — кандидат,
@@ -79,7 +80,7 @@ class PcEntitiesRealizer(
 
             // «Не нашлось» — знание, а не сбой (Конституция §13).
             return ActionResult.Done(
-                "В тексте не нашлось ни контактов, ни дат, ни сумм",
+                tr("В тексте не нашлось ни контактов, ни дат, ни сумм"),
                 com.point.core.model.Findings(
                     metadata = mapOf(
                         com.point.core.flow.investigationKey(capabilityId) to
@@ -89,7 +90,7 @@ class PcEntitiesRealizer(
             )
         }
         ActionResult.Done(summaryLine(found, byRules), entityFindings(delta, byRules))
-    }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
+    }.getOrElse { ActionResult.Failure(tr("Разобрать текст не вышло — попробуйте ещё раз"), recoverable = true) }
 
     private fun entityFindings(
         delta: com.point.core.model.Findings,
@@ -111,9 +112,9 @@ class PcEntitiesRealizer(
     }
 
     private fun summaryLine(found: List<Entity>, byRules: Map<String, String>): String = when {
-        found.isEmpty() -> "Нашёл: " + com.point.core.flow.knowledgeRows(byRules)
+        found.isEmpty() -> tr("Нашёл: ") + com.point.core.flow.knowledgeRows(byRules)
             .joinToString(", ") { it.name.lowercase() }
-        else -> "Нашёл: " + entitySummary(found)
+        else -> tr("Нашёл: ") + entitySummary(found)
     }
 }
 
@@ -122,13 +123,13 @@ internal fun entitySummary(found: List<Entity>): String =
         .joinToString(", ") { (type, list) -> entityTitle(type).lowercase() + " — " + list.size }
 
 private fun entityTitle(type: EntityType): String = when (type) {
-    EntityType.PHONE -> "Телефоны"
-    EntityType.EMAIL -> "Почты"
-    EntityType.URL -> "Ссылки"
-    EntityType.ADDRESS -> "Адреса"
-    EntityType.DATE_TIME -> "Даты"
-    EntityType.PAYMENT_CARD -> "Карты"
-    EntityType.MONEY -> "Суммы"
+    EntityType.PHONE -> tr("Телефоны")
+    EntityType.EMAIL -> tr("Почты")
+    EntityType.URL -> tr("Ссылки")
+    EntityType.ADDRESS -> tr("Адреса")
+    EntityType.DATE_TIME -> tr("Даты")
+    EntityType.PAYMENT_CARD -> tr("Карты")
+    EntityType.MONEY -> tr("Суммы")
 }
 
 // «Понять»/«Перевести»/«Спросить AI» на компьютере убраны (#701, решение владельца
@@ -141,7 +142,7 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val text = File(input.uri.value).takeIf(File::isFile)?.readText()?.trim()
-            ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
+            ?: return ActionResult.Failure(tr("Файла объекта нет на диске"), recoverable = false)
         if (text.isEmpty()) return ActionResult.Failure(QR_NO_TEXT, recoverable = false)
         // Потолок и слова отказа — общие с телефоном (#1084): раньше компьютер держал свои сто
         // с небольшим байт и отвергал текст, который телефон кодировал.
@@ -168,7 +169,7 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
                 type = ObjectKind.IMAGE,
                 mime = "image/png",
                 uri = ScratchRef(file.absolutePath),
-                metadata = mapOf("name" to "QR-код"),
+                metadata = mapOf("name" to tr("QR-код")),
             ),
         )
     }.getOrElse {

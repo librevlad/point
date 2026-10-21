@@ -1,5 +1,7 @@
 package com.point.desktop.ui
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -99,14 +101,14 @@ internal fun newObjectWays(
     // лежит в нём картинкой.
     takeClipboard = {
         val brought = runCatching { com.point.desktop.readSystemClipboard() }.getOrNull()
-        if (com.point.desktop.worthTaking(brought)) onClipboardTaken(brought!!) else state.say("В буфере пусто")
+        if (com.point.desktop.worthTaking(brought)) onClipboardTaken(brought!!) else state.say(tr("В буфере пусто"))
     },
 
     // Снимок ждёт, пока окна Point уйдут с экрана: иначе на снимке окажется сам Point. Объектом
     // его делает сам [onGrabScreen] — снятое здесь, а не брошенное в окно.
     grabScreen = {
         scope.launch {
-            if (onGrabScreen?.invoke() == null) state.say("Снять экран не вышло")
+            if (onGrabScreen?.invoke() == null) state.say(tr("Снять экран не вышло"))
         }
     },
     receiveFile = onReceiveFile,
@@ -117,18 +119,13 @@ internal fun newObjectWays(
 
 /** Что лежит в буфере — словами, рядом с пунктом «Из буфера»: «текст, 2 строки», «картинка». */
 internal fun clipboardNote(payload: ClipboardPayload?): String = when {
-    payload == null || !com.point.desktop.worthTaking(payload) -> "пусто"
-    payload.isText -> payload.text().trim().lines().size.let { n -> "текст, $n " + lineWord(n) }
-    payload.isImage -> "картинка"
-    else -> payload.name.ifBlank { "файл" }
+    payload == null || !com.point.desktop.worthTaking(payload) -> tr("пусто")
+    payload.isText -> payload.text().trim().lines().size.let { n -> tr("текст, {0} ", n) + lineWord(n) }
+    payload.isImage -> tr("картинка")
+    else -> payload.name.ifBlank { tr("файл") }
 }
 
-private fun lineWord(n: Int): String = when {
-    n % 100 in 11..14 -> "строк"
-    n % 10 == 1 -> "строка"
-    n % 10 in 2..4 -> "строки"
-    else -> "строк"
-}
+private fun lineWord(n: Int): String = trPlural(n, "строка", "строки", "строк")
 
 /** Клавиши нового объекта: Ctrl+O — файл, Ctrl+V — буфер, Ctrl+Shift+S — снимок экрана. */
 internal fun newObjectKey(event: KeyEvent, ways: NewObjectWays): Boolean {

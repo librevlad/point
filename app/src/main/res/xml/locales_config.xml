@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Языки Point (#1473). По этому списку Android 13+ показывает выбор языка именно для Point
+  (Настройки → Приложения → Point → Язык): человек с русской системой может держать Point
+  по-украински и наоборот. Выбранный язык система отдаёт приложению как язык по умолчанию,
+  и Point читает его так же, как язык всей системы.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="uk" />
+    <locale android:name="ru" />
+</locale-config>

@@ -39,6 +39,7 @@ import com.point.core.flow.accountIn
 import com.point.core.flow.keyErrandService
 import com.point.core.flow.looksLikeApiKey
 import com.point.core.flow.providerOfKey
+import com.point.core.model.tr
 import com.point.core.ui.GlassGroup
 import com.point.core.ui.GroupHeader
 import com.point.core.ui.GroupSeam
@@ -164,7 +165,7 @@ internal fun KeySection(
     var howOpen by rememberSaveable { mutableStateOf(false) }
     TextButton(onClick = { howOpen = !howOpen }, contentPadding = PaddingValues(horizontal = 4.dp)) {
         Text(
-            if (howOpen) "Свернуть" else "Как это работает",
+            if (howOpen) tr("Свернуть") else tr("Как это работает"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.tertiary,
         )
@@ -186,7 +187,7 @@ internal fun KeySection(
         // Состояние, а не механика: «сам Point ничего не проверяет» уехало в «Как это
         // работает» — оно объясняет устройство, а здесь стоит то, что происходит (#902).
         subtitle = if (checkingAll) {
-            "Point спрашивает каждый сервис одним коротким словом. Ваш объект никуда не уходит."
+            tr("Point спрашивает каждый сервис одним коротким словом. Ваш объект никуда не уходит.")
         } else {
             screen.checkedLine
         },
@@ -198,7 +199,7 @@ internal fun KeySection(
         subtitleMaxLines = 2,
         trailing = {
             Text(
-                if (checkingAll) "Проверяю…" else "Проверить все",
+                if (checkingAll) tr("Проверяю…") else tr("Проверить все"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.tertiary,
             )
@@ -263,8 +264,8 @@ private fun TakeKey(
     GlassGroup {
         if (suggested != null) {
             PortalRow(
-                title = "Открыть сайт ${suggested.name}",
-                subtitle = listOfNotNull(offerSentence(suggested), "Скопируйте там ключ и вернитесь сюда.").joinToString(" "),
+                title = tr("Открыть сайт {0}", suggested.name),
+                subtitle = listOfNotNull(offerSentence(suggested), tr("Скопируйте там ключ и вернитесь сюда.")).joinToString(" "),
                 onClick = { onOpenUrl(suggested.keyUrl) },
                 icon = bubbleIcon("open"),
                 accent = bubbleColor("open"),
@@ -276,7 +277,7 @@ private fun TakeKey(
         }
         PortalRow(
             title = PASTE_ANY_KEY,
-            subtitle = "$PASTE_ANY_KEY_WHAT Ваш объект при этом никуда не уходит.",
+            subtitle = tr("{0} Ваш объект при этом никуда не уходит.", PASTE_ANY_KEY_WHAT),
             onClick = onPaste,
             icon = bubbleIcon("copy"),
             chevron = false,
@@ -316,9 +317,9 @@ private fun WhoseKey(onPick: (String) -> Unit, onDismiss: () -> Unit) {
 @Composable
 internal fun ReturnDoor(errand: KeyErrand, onLeave: () -> Unit) {
     PortalRow(
-        title = "Вернуться к «${errand.objectName}»",
-        subtitle = "«${errand.action}» ждёт там — уже без приписки про ключ. Нажать на него " +
-            "Point за вас не станет.",
+        title = tr("Вернуться к «{0}»", errand.objectName),
+        subtitle = tr("«{0}» ждёт там — уже без приписки про ключ. Нажать на него " +
+            "Point за вас не станет.", errand.action),
         onClick = onLeave,
         primary = true,
         chevron = false,

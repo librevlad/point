@@ -5,15 +5,16 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.point.core.flow.stampedObjectName
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 
 class VoiceSource @Inject constructor() : ObjectSource {
 
     override val id = "voice"
-    override val label = "Записать голос"
+    override val label = tr("Записать голос")
 
-    override val what = "Point расшифрует запись словами"
+    override val what = tr("Point расшифрует запись словами")
     override val icon = "transcribe"
 
     override fun isAvailable(context: Context) = true
@@ -44,6 +45,6 @@ fun recordedToProduced(
     return Produced(
         uri = toUri(path),
         mime = mime?.takeIf { it.isNotBlank() } ?: RecordAudioActivity.MIME,
-        name = stampedObjectName("Запись", recordedAt(path)),
+        name = stampedObjectName(tr("Запись"), recordedAt(path)),
     )
 }

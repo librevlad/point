@@ -56,6 +56,7 @@ import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import com.point.core.ui.Portal
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalDoor
@@ -82,33 +83,33 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
 internal const val WHAT_POINT_IS: String =
-    "Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
-        "сделать"
+    tr("Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
+        "сделать")
 
 internal const val HOW_TO_SHARE: String =
-    "Или нажмите «Поделиться» в любом приложении и выберите Point"
+    tr("Или нажмите «Поделиться» в любом приложении и выберите Point")
 
 internal const val EXAMPLE_DOOR_WHAT: String =
-    "Снимок визитки лежит в самом Point. Откроется как обычный объект — без ключа, без сети и без " +
-        "разрешений."
+    tr("Снимок визитки лежит в самом Point. Откроется как обычный объект — без ключа, без сети и без " +
+        "разрешений.")
 
-internal const val REMOVE_ENTRY: String = "Убрать"
+internal val REMOVE_ENTRY: String get() = tr("Убрать")
 
-internal const val ENTRY_MENU: String = "Что можно с записью"
+internal val ENTRY_MENU: String get() = tr("Что можно с записью")
 
-internal const val CLEAR_RECENT: String = "Очистить недавнее"
+internal val CLEAR_RECENT: String get() = tr("Очистить недавнее")
 
-internal const val CLEAR_RECENT_ASK: String = "Убрать всё недавнее?"
+internal val CLEAR_RECENT_ASK: String get() = tr("Убрать всё недавнее?")
 
 internal const val CLEAR_RECENT_WHAT: String =
-    "Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать через её меню."
+    tr("Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать через её меню.")
 
-internal const val CLEAR_RECENT_CONFIRM: String = "Убрать всё"
+internal val CLEAR_RECENT_CONFIRM: String get() = tr("Убрать всё")
 
-internal const val CANCEL: String = "Отмена"
+internal val CANCEL: String get() = tr("Отмена")
 
 /** Дверь входа спрашивает человека, а не перечисляет наши источники (макет владельца 10.08.2026). */
-internal const val WHAT_YOU_HAVE: String = "Что у вас есть?"
+internal val WHAT_YOU_HAVE: String get() = tr("Что у вас есть?")
 
 @Composable
 fun HomeScreen(
@@ -274,7 +275,7 @@ private fun NewObjectDoor(
     wide: Boolean = false,
 ) {
     PortalRow(
-        title = "Новый объект",
+        title = tr("Новый объект"),
 
         // Дверь спрашивает человека, а не перечисляет наши источники: «Буфер обмена ·
         // Звукозапись · Камера · Место · Принять файл» — это наш список, а не его вопрос
@@ -291,7 +292,7 @@ private fun NewObjectDoor(
 @Composable
 private fun ExampleDoor(onClick: () -> Unit, modifier: Modifier = Modifier) {
     PortalRow(
-        title = "Посмотреть на примере",
+        title = tr("Посмотреть на примере"),
         subtitle = EXAMPLE_DOOR_WHAT,
         onClick = onClick,
 
@@ -305,7 +306,7 @@ private fun ExampleDoor(onClick: () -> Unit, modifier: Modifier = Modifier) {
 private fun ConnectAiRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
     PortalRow(
 
-        title = "Подключить AI",
+        title = tr("Подключить AI"),
         subtitle = com.point.core.flow.AI_KEY_WHY_SHORT,
         onClick = onConnect,
         icon = com.point.core.ui.bubbleIcon("ai"),
@@ -327,8 +328,8 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PortalRow(
-            title = "Компьютер · $count",
-            subtitle = "Забрать и открыть здесь",
+            title = tr("Компьютер · {0}", count),
+            subtitle = tr("Забрать и открыть здесь"),
             onClick = onPull,
             icon = bubbleIcon("pc"),
             accent = bubbleColor("pc"),
@@ -338,7 +339,7 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
                 IconButton(onClick = onHide) {
                     Icon(
                         imageVector = Icons.Filled.Close,
-                        contentDescription = "Скрыть",
+                        contentDescription = tr("Скрыть"),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -363,12 +364,12 @@ private fun CrashBanner(onSend: () -> Unit, onDismiss: () -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Point падал в прошлый раз",
+                    tr("Point падал в прошлый раз"),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Text(
-                    "Нажмите, чтобы отправить отчёт разработчику.",
+                    tr("Нажмите, чтобы отправить отчёт разработчику."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
@@ -376,7 +377,7 @@ private fun CrashBanner(onSend: () -> Unit, onDismiss: () -> Unit) {
             IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = "Скрыть",
+                    contentDescription = tr("Скрыть"),
                     tint = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }

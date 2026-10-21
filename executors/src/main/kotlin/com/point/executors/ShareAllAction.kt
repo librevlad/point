@@ -10,6 +10,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,7 +23,7 @@ class ShareAllCapability @Inject constructor() : Capability {
 
     // Шаг кончается системным диалогом «Поделиться»: дальше выбирает человек (#1131).
     override val meta = CapabilityMeta(handsOff = true)
-    override fun label(state: ObjectState) = "Поделиться всем"
+    override fun label(state: ObjectState) = tr("Поделиться всем")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state
 
@@ -42,12 +43,12 @@ class ShareAllRealizer @Inject constructor(
                     .map { fileObject(it) }
                     .toList()
                 if (objs.isEmpty()) {
-                    ActionResult.Failure("Нечего отправить", recoverable = true)
+                    ActionResult.Failure(tr("Нечего отправить"), recoverable = true)
                 } else {
                     sharer.shareAll(objs)
-                    ActionResult.Done("Отправка файлов: ${objs.size}")
+                    ActionResult.Done(tr("Отправка файлов: {0}", objs.size))
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось поделиться", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось поделиться"), recoverable = true) }
         }
 
     private fun fileObject(file: File) = PointObject(

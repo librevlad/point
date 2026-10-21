@@ -19,6 +19,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +46,7 @@ class SpeakCapability @Inject constructor() : Capability {
         network = false,
     )
 
-    override fun label(state: ObjectState) = "Озвучить"
+    override fun label(state: ObjectState) = tr("Озвучить")
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.AUDIO)
@@ -72,7 +73,7 @@ class SpeakRealizer @Inject constructor(
 
             val text = runCatching { File(input.uri.value).readText() }.getOrNull().orEmpty().trim()
             if (text.isEmpty()) {
-                return@withContext ActionResult.Failure("Читать нечего — в объекте нет текста", recoverable = false)
+                return@withContext ActionResult.Failure(tr("Читать нечего — в объекте нет текста"), recoverable = false)
             }
             if (voice.voices().isEmpty()) {
                 return@withContext ActionResult.Failure(NO_VOICE_TEXT, recoverable = true)
@@ -86,7 +87,7 @@ class SpeakRealizer @Inject constructor(
                 .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
             val onDeviceOnly = !com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)
             val said = voice.speak(text, languageOfText(text), ref.value, onDeviceOnly) { done, all ->
-                if (all > 1) reportStage("$READING — $done из $all")
+                if (all > 1) reportStage(tr("{0} — {1} из {2}", READING, done, all))
             }
 
             when (said) {
@@ -105,10 +106,10 @@ class SpeakRealizer @Inject constructor(
     /** Запись называется по исходному тексту: в списке объектов их будет два рядом. */
     private fun nameFor(input: PointObject): String {
         val was = input.metadata["name"].orEmpty().substringBeforeLast('.').trim()
-        return (was.takeIf { it.isNotBlank() } ?: "Текст") + " — вслух.wav"
+        return (was.takeIf { it.isNotBlank() } ?: tr("Текст")) + tr(" — вслух.wav")
     }
 
     private companion object {
-        const val READING = "Читаю вслух"
+        val READING: String get() = tr("Читаю вслух")
     }
 }

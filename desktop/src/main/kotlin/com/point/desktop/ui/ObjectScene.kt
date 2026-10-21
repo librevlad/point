@@ -33,6 +33,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.point.core.model.ObjectKind
+import com.point.core.model.tr
 import com.point.desktop.InboxItem
 import com.point.core.ui.GlassIcons
 import com.point.core.ui.bubbleIcon
@@ -101,7 +102,7 @@ internal fun Preview(item: InboxItem, marks: List<String> = emptyList(), onCopyT
             )
 
             // В буфер уходит весь прочитанный текст, а не показанная голова: копия не обрывается молча.
-            onCopyText?.let { copy -> PillButton("Скопировать", { copy(ref) }, icon = GlassIcons.Copy, small = true) }
+            onCopyText?.let { copy -> PillButton(tr("Скопировать"), { copy(ref) }, icon = GlassIcons.Copy, small = true) }
         }
         TextBody(read, marks)
     }
@@ -109,7 +110,7 @@ internal fun Preview(item: InboxItem, marks: List<String> = emptyList(), onCopyT
 
 /** Подпись над текстом называет то, что под ним: у записи это расшифровка, у остального — текст. */
 internal fun textTitle(kind: ObjectKind): String =
-    if (kind == ObjectKind.AUDIO) "Расшифровка" else com.point.core.ui.kindLabel(ObjectKind.TEXT)
+    if (kind == ObjectKind.AUDIO) tr("Расшифровка") else com.point.core.ui.kindLabel(ObjectKind.TEXT)
 
 /**
  * Текст объекта на компьютере: свёрнут до нескольких строк и раскрывается по просьбе (#1086).
@@ -214,7 +215,7 @@ internal fun Knowledge(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (facts.isNotEmpty()) {
-            Text("НАЙДЕНО · ${facts.size}", style = PointType.label.copy(color = PointColors.muted), modifier = Modifier.padding(bottom = 6.dp))
+            Text(tr("НАЙДЕНО · {0}", facts.size), style = PointType.label.copy(color = PointColors.muted), modifier = Modifier.padding(bottom = 6.dp))
         }
         facts.forEach { fact -> FactRow(fact, onCopyFact) }
         questions.forEach { q ->
@@ -244,7 +245,7 @@ private fun FactRow(fact: com.point.core.flow.KnowledgeRow, onCopy: (String) -> 
                     withStyle(SpanStyle(color = PointColors.muted)) { append(fact.name) }
                     append("  ")
                     withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(fact.value) }
-                    if (fact.confirmed) withStyle(SpanStyle(color = PointColors.muted)) { append(" · подтверждено вами") }
+                    if (fact.confirmed) withStyle(SpanStyle(color = PointColors.muted)) { append(tr(" · подтверждено вами")) }
                 },
                 style = PointType.small.copy(fontSize = 12.5.sp, color = PointColors.text),
                 maxLines = 2,
@@ -255,10 +256,10 @@ private fun FactRow(fact: com.point.core.flow.KnowledgeRow, onCopy: (String) -> 
             fact.said?.let { Text(it, style = PointType.note, maxLines = 2, overflow = TextOverflow.Ellipsis) }
 
             // Спор виден (P8); «ещё» — другие значения того же вида, не спор.
-            if (fact.disputed.isNotEmpty()) Text("или: " + fact.disputed.joinToString(", "), style = PointType.note)
-            if (fact.more.isNotEmpty()) Text("ещё: " + fact.more.joinToString(", "), style = PointType.note)
+            if (fact.disputed.isNotEmpty()) Text(tr("или: ") + fact.disputed.joinToString(", "), style = PointType.note)
+            if (fact.more.isNotEmpty()) Text(tr("ещё: ") + fact.more.joinToString(", "), style = PointType.note)
         }
-        PillButton("Скопировать", { onCopy(fact.value) }, small = true)
+        PillButton(tr("Скопировать"), { onCopy(fact.value) }, small = true)
     }
 }
 
@@ -313,7 +314,7 @@ internal fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        PillButton("Отменить", onCancel, small = true)
+        PillButton(tr("Отменить"), onCancel, small = true)
     }
 }
 

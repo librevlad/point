@@ -58,6 +58,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -79,7 +80,7 @@ class OcrInvestigation @Inject constructor() : Capability {
         mayYieldKinds = setOf(KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ADDRESS, KIND_DATE, KIND_IDENTIFIER),
     )
 
-    override fun label(state: ObjectState) = "Распознаю текст…"
+    override fun label(state: ObjectState) = tr("Распознаю текст…")
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
 

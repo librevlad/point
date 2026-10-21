@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Подписи, которые читает сама система, а не Point: имя в шторке, в списке приложений, в
+  заголовке задачи (#1473). Здесь — английский: им система отвечает, когда язык устройства не
+  украинский и не русский. Свои переводы лежат в values-uk и values-ru; остальные тексты Point —
+  в каталоге core/model …/point/i18n/texts.tsv.
+-->
 <resources>
     <string name="app_name">Point</string>
+    <string name="clipboard_tile">Shared clipboard</string>
+    <string name="receive_file">Receive a file</string>
+    <string name="voice_recorder">Voice recorder</string>
 </resources>

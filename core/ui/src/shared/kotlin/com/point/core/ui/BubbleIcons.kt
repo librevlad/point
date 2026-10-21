@@ -65,6 +65,7 @@ import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
 import com.point.core.model.ObjectKind
 
+import com.point.core.model.tr
 /**
  * Знак действия — одна таблица на телефон и ПК (#849), контуром (макет 19.10.2026).
  *
@@ -219,26 +220,26 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
 }
 
 fun kindLabel(kind: ObjectKind): String = when (kind) {
-    ObjectKind.IMAGE -> "Изображение"
-    ObjectKind.TEXT -> "Текст"
+    ObjectKind.IMAGE -> tr("Изображение")
+    ObjectKind.TEXT -> tr("Текст")
     ObjectKind.PDF -> "PDF"
-    ObjectKind.ZIP -> "Архив"
-    ObjectKind.OFFICE -> "Документ"
-    ObjectKind.URL -> "Ссылка"
-    ObjectKind.AUDIO -> "Запись"
-    ObjectKind.COLLECTION -> "Коллекция"
-    KIND_IDENTIFIER -> "Номер"
-    KIND_ADDRESS -> "Адрес"
-    KIND_DATE -> "Дата"
-    KIND_PHONE -> "Телефон"
-    KIND_EMAIL -> "Почта"
-    KIND_URL -> "Ссылка"
-    KIND_ORGANIZATION -> "Организация"
-    KIND_PERSON -> "Человек"
+    ObjectKind.ZIP -> tr("Архив")
+    ObjectKind.OFFICE -> tr("Документ")
+    ObjectKind.URL -> tr("Ссылка")
+    ObjectKind.AUDIO -> tr("Запись")
+    ObjectKind.COLLECTION -> tr("Коллекция")
+    KIND_IDENTIFIER -> tr("Номер")
+    KIND_ADDRESS -> tr("Адрес")
+    KIND_DATE -> tr("Дата")
+    KIND_PHONE -> tr("Телефон")
+    KIND_EMAIL -> tr("Почта")
+    KIND_URL -> tr("Ссылка")
+    KIND_ORGANIZATION -> tr("Организация")
+    KIND_PERSON -> tr("Человек")
 
     // Найденное значение носит имя своего вида (#1121): «140 · Объект» не говорил
     // человеку ничего, тогда как соседние находки назывались «Адрес» и «Дата».
-    KIND_AMOUNT -> "Сумма"
-    KIND_PLACE -> "Место"
-    else -> "Объект"
+    KIND_AMOUNT -> tr("Сумма")
+    KIND_PLACE -> tr("Место")
+    else -> tr("Объект")
 }

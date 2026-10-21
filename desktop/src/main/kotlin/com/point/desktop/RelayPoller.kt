@@ -10,6 +10,7 @@ import com.point.core.flow.RelayRpc
 import com.point.core.flow.decodePcFrame
 import com.point.core.flow.encodePcFrame
 
+import com.point.core.model.tr
 class RelayPoller(
     private val serverUrl: String,
 
@@ -211,7 +212,7 @@ class RelayPoller(
 }
 
 /** Телефону — что не вышло и что делать (#1409). */
-internal const val GAVE_UP_PHONE = "компьютер не смог принять объект — отправьте его ещё раз"
+internal val GAVE_UP_PHONE: String get() = tr("компьютер не смог принять объект — отправьте его ещё раз")
 
 /**
  * Человеку у компьютера — о письме, которое так и не удалось принять (#1409): что за объект,
@@ -222,10 +223,10 @@ internal fun lostLetterWords(
     postedAtMs: Long?,
     zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
 ): String {
-    val what = name?.let { "«$it»" } ?: "Объект"
+    val what = name?.let { "«$it»" } ?: tr("Объект")
     val time = postedAtMs?.let {
         java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm").format(java.time.Instant.ofEpochMilli(it).atZone(zone))
     }
-    val sent = time?.let { " от $it" }.orEmpty()
-    return "$what с телефона$sent не принят — отправьте его с телефона ещё раз"
+    val sent = time?.let { tr(" от {0}", it) }.orEmpty()
+    return tr("{0} с телефона{1} не принят — отправьте его с телефона ещё раз", what, sent)
 }

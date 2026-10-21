@@ -15,6 +15,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -24,12 +25,12 @@ class ScanCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "scan"
     override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Скан"
+    override fun label(state: ObjectState) = tr("Скан")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
 
     override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.IMAGE, "чёрно-белую страницу")
+        ActionYield.New(ObjectKind.IMAGE, tr("чёрно-белую страницу"))
 
     companion object { val ID = CapabilityId("scan") }
 }
@@ -44,19 +45,19 @@ class ScanRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Читаю снимок")
+                reportStage(tr("Читаю снимок"))
                 val src = Bitmaps.decodeUpright(input.uri.value)
-                    ?: error("Не удалось прочитать изображение")
+                    ?: error(tr("Не удалось прочитать изображение"))
                 val width = src.width
                 val height = src.height
                 val pixels = IntArray(width * height)
                 src.getPixels(pixels, 0, width, 0, 0, width, height)
 
-                reportStage("Свожу к чёрно-белому")
+                reportStage(tr("Свожу к чёрно-белому"))
                 val scanned = ScanFilter.apply(pixels)
                 val output = Bitmap.createBitmap(scanned, width, height, Bitmap.Config.ARGB_8888)
 
-                reportStage("Сохраняю")
+                reportStage(tr("Сохраняю"))
                 val ref = store.newScratchFile("png")
                 File(ref.value).outputStream().use { output.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 src.recycle()
@@ -65,6 +66,6 @@ class ScanRealizer @Inject constructor(
                 ActionResult.Success(
                     ResultObject(ObjectKind.IMAGE, "image/png", ref, mapOf("op" to "scan")),
                 )
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сканирования", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка сканирования"), recoverable = true) }
         }
 }

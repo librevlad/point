@@ -39,6 +39,7 @@ import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.point.R
 import com.point.ShareActivity
+import com.point.core.model.tr
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
 import com.point.core.ui.ScreenHeader
@@ -77,7 +78,7 @@ class SourcePickerActivity : ComponentActivity() {
                 PermissionOutcome.GRANTED -> launchSource(source)
 
                 PermissionOutcome.DENIED -> {
-                    Toast.makeText(this, "Без этого доступа не получится", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, tr("Без этого доступа не получится"), Toast.LENGTH_SHORT).show()
                     finish()
                 }
 
@@ -232,11 +233,11 @@ class SourcePickerActivity : ComponentActivity() {
         private const val STATE_BLOCKED = "com.point.source.BLOCKED_LABEL"
 
         internal const val LOST_TO_MEMORY =
-            "Point выгрузили из памяти, пока работало другое приложение, — сделанное там не дошло. " +
-                "Попробуйте ещё раз."
+            tr("Point выгрузили из памяти, пока работало другое приложение, — сделанное там не дошло. " +
+                "Попробуйте ещё раз.")
 
         internal const val SETTINGS_CLOSED =
-            "Настройки не открылись — включите доступ вручную: Приложения → Point → Разрешения"
+            tr("Настройки не открылись — включите доступ вручную: Приложения → Point → Разрешения")
     }
 }
 
@@ -274,7 +275,7 @@ internal fun SourcePickerScreen(
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             if (blocked == null) {
-                ScreenHeader(title = "Что превратить в объект?", modifier = Modifier.padding(bottom = 9.dp))
+                ScreenHeader(title = tr("Что превратить в объект?"), modifier = Modifier.padding(bottom = 9.dp))
 
                 // Источники — одной панелью стекла, как действия над вещью (макет 19.10.2026).
                 com.point.core.ui.GlassGroup {
@@ -296,8 +297,8 @@ internal fun SourcePickerScreen(
                 }
                 if (tileOffer) {
                     PortalRow(
-                        title = "Поставить плитку в шторку",
-                        subtitle = "Тот же выбор, но не открывая Point",
+                        title = tr("Поставить плитку в шторку"),
+                        subtitle = tr("Тот же выбор, но не открывая Point"),
                         onClick = onAddTile,
                         icon = Icons.AutoMirrored.Outlined.AddToHomeScreen,
                         accent = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -307,13 +308,13 @@ internal fun SourcePickerScreen(
             } else {
 
                 ScreenHeader(
-                    title = "Доступ выключен насовсем",
-                    subtitle = "«$blocked» без него не начнёт. Система больше не спросит — " +
-                        "включить можно только в настройках Point.",
+                    title = tr("Доступ выключен насовсем"),
+                    subtitle = tr("«{0}» без него не начнёт. Система больше не спросит — " +
+                        "включить можно только в настройках Point.", blocked),
                     modifier = Modifier.padding(bottom = 9.dp),
                 )
                 PortalRow(
-                    title = "Открыть настройки Point",
+                    title = tr("Открыть настройки Point"),
                     onClick = onOpenSettings,
                     icon = bubbleIcon("open"),
                     accent = bubbleColor("open"),
@@ -321,7 +322,7 @@ internal fun SourcePickerScreen(
                 )
 
                 TextButton(onClick = onDismissBlocked, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text("Не сейчас", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tr("Не сейчас"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

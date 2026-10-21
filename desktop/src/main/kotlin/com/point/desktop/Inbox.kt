@@ -8,6 +8,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import java.io.File
 import java.io.InputStream
 import java.util.UUID
@@ -34,7 +35,7 @@ private fun extensionFor(mime: String): String = com.point.core.flow.extensionFo
 
 fun uniqueChildName(existing: Set<String>, desired: String): String {
     val flat = desired.replace('/', '_').replace('\\', '_').trim()
-    val base = if (flat.isBlank()) "объект" else flat
+    val base = if (flat.isBlank()) tr("объект") else flat
     if (base !in existing) return base
     val stem = base.substringBeforeLast('.', base)
     val ext = base.substringAfterLast('.', "")
@@ -62,7 +63,7 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
 
     fun addText(text: String): InboxItem {
         dir.mkdirs()
-        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), "Заметка.txt")
+        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), tr("Заметка.txt"))
         val target = File(dir, safe)
         target.writeText(text)
         return wrap(target, "text/plain", mapOf("name" to safe))
@@ -81,7 +82,7 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
     fun addFiles(paths: List<String>): InboxItem {
         require(paths.size > 1) { "набор — это больше одного файла" }
         dir.mkdirs()
-        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), "Набор.list")
+        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), tr("Набор.list"))
         val manifest = File(dir, safe)
         manifest.writeText(paths.joinToString(separator = System.lineSeparator()))
         return InboxItem(
@@ -91,7 +92,7 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
                 uri = com.point.core.model.ScratchRef(manifest.absolutePath),
                 state = com.point.core.model.ObjectState(com.point.core.model.ObjectKind.COLLECTION),
                 metadata = mapOf(
-                    "name" to "Набор · " + paths.size,
+                    "name" to tr("Набор · ") + paths.size,
                     "collection.size" to paths.size.toString(),
                 ),
             ),

@@ -11,6 +11,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -21,7 +22,7 @@ class OpenCapability @Inject constructor() : Capability {
 
     // Файл открывает чужое приложение — шаг Point кончается его экраном (#1131).
     override val meta = CapabilityMeta(priority = 65, localOnly = true, handsOff = true)
-    override fun label(state: ObjectState) = "Открыть"
+    override fun label(state: ObjectState) = tr("Открыть")
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL
     override fun produces(state: ObjectState) = state
@@ -40,7 +41,7 @@ class OpenRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 viewer.view(input)
-                ActionResult.Done("Открываю…")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
+                ActionResult.Done(tr("Открываю…"))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть"), recoverable = true) }
         }
 }

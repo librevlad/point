@@ -29,6 +29,7 @@ import com.point.core.flow.DeviceKind
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.deviceKindLabel
 import com.point.core.flow.lastSeenLabel
+import com.point.core.model.tr
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.PortalColumnWidth
@@ -97,12 +98,12 @@ fun MyDevicesScreen(
                 ) {
                     ThinkingDot()
                     Spacer(Modifier.width(9.dp))
-                    Text("Спрашиваю сервер о ваших устройствах…", style = PointText.note)
+                    Text(tr("Спрашиваю сервер о ваших устройствах…"), style = PointText.note)
                 }
             }
 
             if (state.devices.isNotEmpty()) {
-                GroupHeader("Круг · ${state.devices.size}")
+                GroupHeader(tr("Круг · {0}", state.devices.size))
                 GlassGroup {
                     state.devices.forEachIndexed { index, device ->
                         if (index > 0) GroupSeam(start = 12.dp + 40.dp + 14.dp)
@@ -137,17 +138,17 @@ fun MyDevicesScreen(
             // круг и правда из одного этого устройства: при молчании сервера сюда приходит
             // запомненный круг, и незнание больше не выдаётся за одиночество (#1076).
             if (!state.loading && others.isEmpty()) {
-                SectionLabel("Пока вы один", modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 6.dp))
+                SectionLabel(tr("Пока вы один"), modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 6.dp))
                 Text(
-                    "Запустите «Point для ПК» и войдите в тот же аккаунт — компьютер появится здесь " +
-                        "сам, связывать его ничем не нужно.",
+                    tr("Запустите «Point для ПК» и войдите в тот же аккаунт — компьютер появится здесь " +
+                        "сам, связывать его ничем не нужно."),
                     style = PointText.note,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
 
             Spacer(Modifier.height(22.dp))
-            GlassButton("Выйти", onClick = onSignOut, enabled = !state.busy)
+            GlassButton(tr("Выйти"), onClick = onSignOut, enabled = !state.busy)
 
             Spacer(Modifier.height(14.dp))
             Column(
@@ -167,7 +168,7 @@ fun MyDevicesScreen(
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         TextButton(onClick = { confirmingDelete = false }) {
-                            Text("Не удалять", style = PointText.note)
+                            Text(tr("Не удалять"), style = PointText.note)
                         }
                         TextButton(onClick = onDeleteAccount, enabled = !state.busy) {
                             Text(DELETE_ACCOUNT_CONFIRM, style = PointText.note.copy(color = PointPalette.warmText))
@@ -205,17 +206,17 @@ private fun DeviceRow(device: CircleDevice, line: String, busy: Boolean, onRevok
             Text(device.name, style = PointText.rowTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(line, style = PointText.note, modifier = Modifier.padding(top = 2.dp))
         }
-        SmallPill("Отключить", onClick = onRevoke, warm = true, enabled = !busy)
+        SmallPill(tr("Отключить"), onClick = onRevoke, warm = true, enabled = !busy)
     }
 }
 
-internal const val DELETE_ACCOUNT = "Удалить аккаунт"
+internal val DELETE_ACCOUNT: String get() = tr("Удалить аккаунт")
 
 internal const val DELETE_ACCOUNT_WHAT =
-    "Исчезнут: аккаунт Point, все ваши устройства в круге и всё, что лежит на сервере " +
-        "недоставленным. Объекты на самих устройствах останутся. Отменить будет нельзя."
+    tr("Исчезнут: аккаунт Point, все ваши устройства в круге и всё, что лежит на сервере " +
+        "недоставленным. Объекты на самих устройствах останутся. Отменить будет нельзя.")
 
-internal const val DELETE_ACCOUNT_CONFIRM = "Удалить навсегда"
+internal val DELETE_ACCOUNT_CONFIRM: String get() = tr("Удалить навсегда")
 
 private const val NOW = 1_800_000_000_000L
 
@@ -309,5 +310,5 @@ private fun PreviewFailedRemembered() = PointTheme(darkTheme = true) {
 }
 
 /** Разрешение спрашивается словами человека: что он получит, а не как это устроено. */
-private const val KNOCK_TITLE = "Сообщать о просьбах компьютера"
-private const val KNOCK_WHAT = "Сейчас просьба ждёт, пока вы откроете Point сами"
+private val KNOCK_TITLE: String get() = tr("Сообщать о просьбах компьютера")
+private val KNOCK_WHAT: String get() = tr("Сейчас просьба ждёт, пока вы откроете Point сами")

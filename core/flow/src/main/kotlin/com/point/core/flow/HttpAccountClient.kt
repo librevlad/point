@@ -172,6 +172,7 @@ class HttpAccountClient(
             c.connectTimeout = connectTimeoutMs
             c.readTimeout = readTimeoutMs
             c.setRequestProperty("Accept", "application/json")
+            c.speakPointLanguage()
             token?.let { c.setRequestProperty("Authorization", "Bearer $it") }
             if (body != null) {
                 c.doOutput = true

@@ -39,6 +39,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.ClipboardPayload
+import com.point.core.model.tr
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
 import com.point.desktop.PcConfig
@@ -359,22 +360,22 @@ private fun WindowHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (onBack != null) RoundButton(GlassIcons.ChevronLeft, "Назад", onBack) else PointGlyph()
+                if (onBack != null) RoundButton(GlassIcons.ChevronLeft, tr("Назад"), onBack) else PointGlyph()
                 Text("Point", style = PointType.header)
                 PhoneLink(state, account, Modifier.padding(start = 4.dp).weight(1f, fill = false), onClick = onDevices)
             }
-            if (search) SearchField(query, onQuery, "Найти в недавнем", Modifier.width(320.dp))
+            if (search) SearchField(query, onQuery, tr("Найти в недавнем"), Modifier.width(320.dp))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
                 settings?.invoke()
-                chrome.onMinimize?.let { RoundButton(GlassIcons.Minimize, "Свернуть", it) }
+                chrome.onMinimize?.let { RoundButton(GlassIcons.Minimize, tr("Свернуть"), it) }
                 chrome.onToggleMaximize?.let {
                     RoundButton(
                         if (chrome.maximized) GlassIcons.Restore else GlassIcons.Maximize,
-                        if (chrome.maximized) "Восстановить" else "Развернуть",
+                        if (chrome.maximized) tr("Восстановить") else tr("Развернуть"),
                         it,
                     )
                 }
-                RoundButton(GlassIcons.Close, "Закрыть", onHide, warm = true)
+                RoundButton(GlassIcons.Close, tr("Закрыть"), onHide, warm = true)
             }
         }
     }
@@ -435,12 +436,12 @@ internal fun PhoneLink(
  */
 internal fun linkLine(signedIn: Boolean, others: List<com.point.core.flow.CircleDevice>, link: com.point.core.flow.LinkState): String = when {
     !signedIn -> DEVICES_NOT_LINKED
-    others.size == 1 -> others.single().name.ifBlank { "устройство" } + " · " + com.point.core.flow.linkLabel(link)
-    else -> "устройства · " + com.point.core.flow.linkLabel(link)
+    others.size == 1 -> others.single().name.ifBlank { tr("устройство") } + " · " + com.point.core.flow.linkLabel(link)
+    else -> tr("устройства · ") + com.point.core.flow.linkLabel(link)
 }
 
 /** Строка связи без входа: подключать устройства — дело входа, а не ожидания. */
-internal const val DEVICES_NOT_LINKED = "устройства не подключены"
+internal val DEVICES_NOT_LINKED: String get() = tr("устройства не подключены")
 
 /** Сообщение окна: капсула внизу, гаснет сама по сроку или по щелчку. */
 @Composable
@@ -478,7 +479,7 @@ internal fun WindowDialogs(state: DesktopState) {
         GlassDialog(
             title = ask.title,
             text = ask.what,
-            confirm = "Подождать телефон",
+            confirm = tr("Подождать телефон"),
             onConfirm = { state.approvePhone() },
             onDismiss = { state.declinePhone() },
         )

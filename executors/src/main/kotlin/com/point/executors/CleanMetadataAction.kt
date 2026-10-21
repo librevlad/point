@@ -17,6 +17,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -39,14 +40,14 @@ class CleanMetadataCapability @Inject constructor() : Capability {
 
     override val meta = CapabilityMeta(priority = 46, latency = Latency.FAST)
 
-    override fun label(state: ObjectState) = "Очистить метаданные"
+    override fun label(state: ObjectState) = tr("Очистить метаданные")
 
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.IMAGE && (state.has(Feature.HAS_SHOT_AT) || state.has(Feature.HAS_GEO))
 
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
 
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.IMAGE, "тот же снимок без служебных записей")
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.IMAGE, tr("тот же снимок без служебных записей"))
 
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
 
@@ -62,7 +63,7 @@ class CleanMetadataRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Читаю снимок")
+                reportStage(tr("Читаю снимок"))
                 val source = BitmapFactory.decodeFile(input.uri.value)
                     ?: return@withContext ActionResult.Failure(
                         // Байты не разобрались в снимок — сигнал назван, а не передан
@@ -76,7 +77,7 @@ class CleanMetadataRealizer @Inject constructor(
 
                 // Пиксели переписываются заново — вместе со снимком не переезжает ни одна
                 // служебная запись. Картинка та же: очищены записи, а не содержимое.
-                reportStage("Убираю служебные записи")
+                reportStage(tr("Убираю служебные записи"))
                 val ref = store.newScratchFile("jpg")
                 File(ref.value).outputStream().use { source.compress(Bitmap.CompressFormat.JPEG, QUALITY, it) }
                 source.recycle()
@@ -90,13 +91,13 @@ class CleanMetadataRealizer @Inject constructor(
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Очистить не вышло", recoverable = true)
+                ActionResult.Failure(it.message ?: tr("Очистить не вышло"), recoverable = true)
             }
         }
 
     private fun cleanName(name: String?): String {
-        val base = name?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Снимок"
-        return "$base · без метаданных.jpg"
+        val base = name?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: tr("Снимок")
+        return tr("{0} · без метаданных.jpg", base)
     }
 
     private companion object { const val QUALITY = 95 }

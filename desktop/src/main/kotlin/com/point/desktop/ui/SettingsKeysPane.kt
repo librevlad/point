@@ -42,6 +42,7 @@ import com.point.core.flow.looksLikeApiKey
 import com.point.core.flow.providerOfKey
 import com.point.core.flow.urlWithAccount
 import com.point.core.flow.withoutKey
+import com.point.core.model.tr
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
 
@@ -50,11 +51,11 @@ private fun speechSaysWhere(keys: com.point.core.flow.UserAiKeys): String {
     val mine = com.point.core.flow.speechKeyFromChain(keys)
     val who = com.point.core.flow.speechProviderNames()
     return if (mine == null) {
-        "Расшифровка записи работает на ключе $who — впишите его выше, в очереди."
+        tr("Расшифровка записи работает на ключе {0} — впишите его выше, в очереди.", who)
     } else {
-        "Расшифровка записи работает на вашем ключе " +
+        tr("Расшифровка записи работает на вашем ключе ") +
             (com.point.core.flow.AI_PROVIDERS.firstOrNull { it.id == mine.providerId }?.name ?: who) +
-            " — том же, что в очереди выше."
+            tr(" — том же, что в очереди выше.")
     }
 }
 
@@ -175,7 +176,7 @@ fun SettingsKeys(
         Text(com.point.core.flow.AI_CHAIN_WHAT, style = PointType.small)
         var howOpen by remember { mutableStateOf(false) }
         Text(
-            if (howOpen) "Свернуть" else "Как это работает",
+            if (howOpen) tr("Свернуть") else tr("Как это работает"),
             style = PointType.small.copy(color = PointColors.link),
             modifier = Modifier.clip(RoundedCornerShape(8.dp))
                 .clickable { howOpen = !howOpen }
@@ -183,8 +184,8 @@ fun SettingsKeys(
         )
         if (howOpen) {
             Text(
-                com.point.core.flow.AI_CHAIN_MORE + " Ключи общие с телефоном: вписанный " +
-                    "здесь появится там, и наоборот.",
+                com.point.core.flow.AI_CHAIN_MORE + tr(" Ключи общие с телефоном: вписанный " +
+                    "здесь появится там, и наоборот."),
                 style = PointType.small.copy(color = PointColors.muted),
             )
         }
@@ -222,7 +223,7 @@ fun SettingsKeys(
                 Text(com.point.core.flow.aiKeysCount(keys), style = PointType.body)
                 Text(
                     if (checking == CHECK_ALL) {
-                        "Point спрашивает каждый сервис одним коротким словом."
+                        tr("Point спрашивает каждый сервис одним коротким словом.")
                     } else {
                         com.point.core.flow.aiChainLine(lines, facts, now)
                     },
@@ -230,7 +231,7 @@ fun SettingsKeys(
                 )
             }
             if (keys.mine.isNotEmpty()) {
-                Action(if (checking == CHECK_ALL) "Проверяю…" else "Проверить все") { checkAll() }
+                Action(if (checking == CHECK_ALL) tr("Проверяю…") else tr("Проверить все")) { checkAll() }
             }
         }
 
@@ -278,17 +279,17 @@ fun SettingsKeys(
         // нет вовсе — расшифровка берёт ключ Groq из этой же очереди, — а тут человека
         // просили вписать второй раз то, что он уже вписал выше, и не говорили откуда взять.
         Spacer(Modifier.height(6.dp))
-        Text("ДЛЯ ЗАПИСЕЙ И СНИМКОВ", style = PointType.label)
+        Text(tr("ДЛЯ ЗАПИСЕЙ И СНИМКОВ"), style = PointType.label)
         Text(
             speechSaysWhere(keys),
             style = PointType.small.copy(color = PointColors.muted),
         )
         Text(
-            "Снимки читает OCR.space. Он работает и без вашего ключа — на общем; свой снимает " +
-                "его дневной предел.",
+            tr("Снимки читает OCR.space. Он работает и без вашего ключа — на общем; свой снимает " +
+                "его дневной предел."),
             style = PointType.small.copy(color = PointColors.muted),
         )
-        Field(ocrKey, { ocrKey = it; store() }, "Ваш ключ OCR.space — необязателен", secret = true, revealable = true)
+        Field(ocrKey, { ocrKey = it; store() }, tr("Ваш ключ OCR.space — необязателен"), secret = true, revealable = true)
     }
 }
 
@@ -359,9 +360,9 @@ private fun ServiceKey(
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         provider?.freeNote?.let { Text(it, style = PointType.small.copy(color = PointColors.cyan)) }
-        provider?.let { Action("Открыть сайт ${it.name}") { onOpenUrl(it.keyUrl) } }
+        provider?.let { Action(tr("Открыть сайт {0}", it.name)) { onOpenUrl(it.keyUrl) } }
 
-        Field(draft, { draft = it }, "Ключ ${line.name}", secret = true, revealable = true)
+        Field(draft, { draft = it }, tr("Ключ {0}", line.name), secret = true, revealable = true)
         if (account != null) {
             Field(number, { number = it.trim() }, account.label)
             Text(account.where, style = PointType.small.copy(color = PointColors.muted))
@@ -373,14 +374,14 @@ private fun ServiceKey(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton(if (checking) "Проверяю…" else "Проверить и включить", { onCheck(entered()) }, enabled = canCheck)
+            PillButton(if (checking) tr("Проверяю…") else tr("Проверить и включить"), { onCheck(entered()) }, enabled = canCheck)
             if (draft.isNotBlank() && verdict !is KeyVerdict.Works && draft.trim() != saved?.apiKey) {
-                Action("Сохранить без проверки") { onSave(entered()) }
+                Action(tr("Сохранить без проверки")) { onSave(entered()) }
             }
             // Дверь «убрать» видна там, где есть что убирать: прежде на её месте была
             // пустота, и вписанный ключ убрать было нечем (#1080).
             if (saved != null || draft.isNotBlank()) {
-                Action("Забыть ключ") { draft = ""; onForget() }
+                Action(tr("Забыть ключ")) { draft = ""; onForget() }
             }
         }
         verdict?.let { Verdict(it) }
