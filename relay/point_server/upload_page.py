@@ -13,6 +13,11 @@
 """
 from __future__ import annotations
 
+import json
+import re
+
+from .i18n import t
+
 UPLOAD_HEAD = """
 <style>
 .portal{position:relative;width:190px;height:190px;margin:4px auto 18px;display:grid;
@@ -66,7 +71,11 @@ border-radius:14px;border:1px solid #FFFFFF1F;background:#FFFFFF0E;color:#EDE7EA
 
 
 def upload_body() -> str:
-    return (
+    """Страница на языке запроса: тексты разметки и скрипта переводятся по одному (#1473)."""
+    return localize_markup(_BODY) + "<script>%s</script>" % localize_script(UPLOAD_SCRIPT)
+
+
+_BODY = (
         "<h1>Отправить в Point</h1>"
         "<p>Придёт человеку, который дал вам эту ссылку.</p>"
         '<div class="tabs" id="tabs">'
@@ -98,7 +107,34 @@ def upload_body() -> str:
         "</form>"
         '<small id="note">Файл уходит сразу после нажатия — до 50 МБ. '
         "Пока идёт отправка, не закрывайте страницу.</small>"
-        "<script>%s</script>" % UPLOAD_SCRIPT
+)
+
+_CYR = "[А-Яа-яЁёІіЇїЄєҐґ]"
+
+
+def localize_markup(markup: str) -> str:
+    """Каждый текстовый узел и подсказка поля с кириллицей — через каталог `t`."""
+    def node(m: re.Match) -> str:
+        raw = m.group(1)
+        core = raw.strip()
+        lead = raw[: len(raw) - len(raw.lstrip())]
+        tail = raw[len(raw.rstrip()):]
+        return ">" + lead + t(core) + tail + "<"
+
+    out = re.sub(r">([^<>]*%s[^<>]*)<" % _CYR, node, markup)
+    return re.sub(
+        r'placeholder="([^"]*%s[^"]*)"' % _CYR,
+        lambda m: 'placeholder="%s"' % t(m.group(1)).replace('"', "&quot;"),
+        out,
+    )
+
+
+def localize_script(script: str) -> str:
+    """Строки скрипта в одинарных кавычках с кириллицей — через каталог `t`, JSON-строкой."""
+    return re.sub(
+        r"'([^'\\\n]*%s[^'\\\n]*)'" % _CYR,
+        lambda m: json.dumps(t(m.group(1)), ensure_ascii=False).replace("</", "<\\/"),
+        script,
     )
 
 

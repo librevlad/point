@@ -137,5 +137,7 @@ def point(tmp_path, google: FakeGoogle, clock: Clock) -> Harness:
         sweep_every=0,
     )
     application = app_mod.create_app(settings=settings, google=google, now=clock)
-    with TestClient(application) as client:
+    # Тесты сервера читают русские фразы, поэтому стенд — русский браузер. Как сервер выбирает
+    # язык и что отвечает англичанину и украинцу, проверяет `test_i18n.py` (#1473).
+    with TestClient(application, headers={"Accept-Language": "ru"}) as client:
         yield Harness(client, google, clock, db_path)

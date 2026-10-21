@@ -12,6 +12,9 @@
 from __future__ import annotations
 
 import html
+import json
+
+from .i18n import current, plural, t
 
 PAGE_STYLE = """
 /* Стекло Point, то же, что у телефона и окна ПК (макет «Point · концепт в стиле Gestalt»,
@@ -87,27 +90,23 @@ def link_lifetime(left_seconds: float | None = None) -> str:
     Остаток неизвестен — говорится прежнее общее правило: врать про часы нельзя.
     """
     if left_seconds is None:
-        return LIVES_A_DAY
+        return t(LIVES_A_DAY)
     left = max(0, int(left_seconds))
     if left < 60:
-        return "<small>Ссылка вот-вот перестанет работать — заберите присланное сейчас.</small>"
+        return t("<small>Ссылка вот-вот перестанет работать — заберите присланное сейчас.</small>")
     if left < 3600:
-        return "<small>Ссылка работает ещё %d мин, потом присланное стирается само.</small>" % (
+        return t("<small>Ссылка работает ещё %d мин, потом присланное стирается само.</small>") % (
             left // 60
         )
     hours = left // 3600
-    return "<small>Ссылка работает ещё %d %s, потом присланное стирается само.</small>" % (
+    return t("<small>Ссылка работает ещё %d %s, потом присланное стирается само.</small>") % (
         hours,
         _hours_word(hours),
     )
 
 
 def _hours_word(hours: int) -> str:
-    if hours % 10 == 1 and hours % 100 != 11:
-        return "час"
-    if hours % 10 in (2, 3, 4) and hours % 100 not in (12, 13, 14):
-        return "часа"
-    return "часов"
+    return plural(hours, "час", "часа", "часов")
 
 
 #: Знак Point — тот же портал, что у иконки приложения и в шапке окна ПК (`PointMark.kt`):
@@ -127,35 +126,42 @@ MARK = (
 #: без единого признака того, что это за сервис и можно ли ему верить. Имя и одна строка о том,
 #: чем сервис занят, стоят на каждой странице; рядом — дверь к обещанию о данных, чтобы
 #: недоверчивому было куда пойти проверить, а не только гадать.
-BRAND = (
-    '<p class="brand">' + MARK + '<b>Point</b><a href="/privacy">О ваших данных</a>'
-    '<span>передача между устройствами</span></p>'
-)
+def brand() -> str:
+    return (
+        '<p class="brand">' + MARK + '<b>Point</b><a href="/privacy">' + t("О ваших данных") + "</a>"
+        "<span>" + t("передача между устройствами") + "</span></p>"
+    )
 
 
 def page(title: str, body: str, head: str = "") -> str:
     return (
-        '<!doctype html><html lang="ru" class="no-js"><head><meta charset="utf-8">'
+        '<!doctype html><html lang="%s" class="no-js"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         "%s<title>%s</title><style>%s</style></head><body><main>%s%s</main></body></html>"
-        % (head, html.escape(title), PAGE_STYLE, BRAND, body)
+        % (current(), head, html.escape(title), PAGE_STYLE, brand(), body)
     )
 
 
 def login_page(login_id: str, code: str) -> str:
     """Код на странице и код на устройстве обязаны совпасть — иначе человек подтвердит чужой вход."""
     return page(
-        "Вход в Point",
-        "<h1>Вход в Point</h1>"
-        "<p>Проверьте, что этот же код показан на устройстве, которое просит вход. "
-        "Не совпал — закройте страницу.</p>"
+        t("Вход в Point"),
+        "<h1>%s</h1><p>%s</p>"
         '<span class="code">%s</span>'
         '<form method="post" action="/login">'
         '<input type="hidden" name="d" value="%s">'
-        '<button type="submit">Войти через Google</button></form>'
-        "<small>Point получит от Google только имя и почту. Что вы пересылаете между своими "
-        "устройствами, сервер прочитать не может.</small>"
-        % (html.escape(code), html.escape(login_id)),
+        '<button type="submit">%s</button></form>'
+        "<small>%s</small>"
+        % (
+            t("Вход в Point"),
+            t("Проверьте, что этот же код показан на устройстве, которое просит вход. "
+              "Не совпал — закройте страницу."),
+            html.escape(code),
+            html.escape(login_id),
+            t("Войти через Google"),
+            t("Point получит от Google только имя и почту. Что вы пересылаете между своими "
+              "устройствами, сервер прочитать не может."),
+        ),
     )
 
 
@@ -167,10 +173,10 @@ def done_page(code: str) -> str:
     устройство вошло, по-прежнему можно, — но экран говорит прямо, что дело сделано.
     """
     return page(
-        "Готово",
-        "<h1>Устройство вошло</h1>"
-        "<p>Можно закрыть эту страницу и вернуться в Point.</p>"
-        "<small>Вошло устройство с кодом %s.</small>" % html.escape(code),
+        t("Готово"),
+        "<h1>" + t("Устройство вошло") + "</h1>"
+        "<p>" + t("Можно закрыть эту страницу и вернуться в Point.") + "</p>"
+        "<small>" + t("Вошло устройство с кодом %s.") % html.escape(code) + "</small>",
     )
 
 
@@ -185,10 +191,10 @@ def return_page(app_url: str) -> str:
     """
     safe = html.escape(app_url, quote=True)
     return page(
-        "Вход подтверждён",
-        "<h1>Вход подтверждён</h1>"
-        "<p>Возвращаемся в Point. Если ничего не произошло — нажмите кнопку.</p>"
-        '<a class="go" href="%s">Вернуться в Point</a>' % safe,
+        t("Вход подтверждён"),
+        "<h1>" + t("Вход подтверждён") + "</h1>"
+        "<p>" + t("Возвращаемся в Point. Если ничего не произошло — нажмите кнопку.") + "</p>"
+        '<a class="go" href="%s">' % safe + t("Вернуться в Point") + "</a>",
         head='<meta http-equiv="refresh" content="0;url=%s">' % safe,
     )
 
@@ -199,16 +205,17 @@ def return_page(app_url: str) -> str:
 #: видит ли сервер его файлы, а магазин требует полного текста. Раньше ответ на первый вопрос
 #: тонул в ответе на второй. Короткий список стоит сверху и ничего не заменяет: подробности
 #: остаются под ним слово в слово, иначе страница перестала бы годиться магазину.
-SHORT_ANSWER = '<div class="brief">' + "".join(
-    "<p>· %s</p>" % html.escape(v)
-    for v in (
+SHORT_ANSWER = (
         "Содержимое ваших объектов сервер не читает и не хранит.",
         "Между вашими устройствами передаётся только то, что вы отправили сами.",
         "Присланное по ссылке живёт сутки и стирается само.",
         "От Google Point получает имя и почту — больше ничего.",
         "Удаление аккаунта стирает всё сразу и навсегда, без корзины на тридцать дней.",
-    )
-) + "</div>"
+)
+
+
+def short_answer() -> str:
+    return '<div class="brief">' + "".join("<p>· %s</p>" % html.escape(t(v)) for v in SHORT_ANSWER) + "</div>"
 
 
 #: Что Point знает о человеке — один список на две страницы и на анкету магазина.
@@ -254,58 +261,58 @@ def privacy_page() -> str:
     она отвечает на три вопроса человека: что о нём знают, что с этим делают и как это стереть.
     """
     keep = "".join(
-        "<p><b>%s.</b> %s</p>" % (html.escape(t), html.escape(v)) for t, v in WHAT_WE_KEEP
+        "<p><b>%s.</b> %s</p>" % (html.escape(t(k)), html.escape(t(v))) for k, v in WHAT_WE_KEEP
     )
-    dont = "".join("<p>%s</p>" % html.escape(v) for v in WHAT_WE_DO_NOT)
+    dont = "".join("<p>%s</p>" % html.escape(t(v)) for v in WHAT_WE_DO_NOT)
     return page(
-        "Point — о ваших данных",
-        "<h1>О ваших данных</h1>"
-        "<p>Point работает с объектом на самом устройстве. На сервер попадает только то, что "
-        "нужно, чтобы узнать вас и передать объект между вашими устройствами.</p>"
-        + SHORT_ANSWER +
-        "<h1>Что хранится</h1>" + keep +
-        "<h1>Чего Point не делает</h1>" + dont +
-        "<h1>Чужие сервисы</h1>"
-        "<p>Некоторые действия выполняются не на устройстве, а чужим сервисом — например чтение "
-        "текста со сложной фотографии. Такое действие всегда начинается вашим нажатием, и до "
-        "нажатия наружу не уходит ничего. Что именно уходит и куда, Point говорит на том же "
-        "экране, где спрашивает.</p>"
-        "<h1>Как удалить</h1>"
-        "<p>В приложении: «Мои устройства» → «Удалить аккаунт». Учётная запись, круг устройств и "
-        "всё, что лежит на сервере недоставленным, исчезают сразу и навсегда. Объекты на самих "
-        "устройствах остаются вашими — сервер к ним отношения не имеет.</p>"
-        '<p>Подробнее — на странице <a class="go" href="/delete-account">Удаление аккаунта</a>.</p>'
-        "<small>Вопросы — librevlad@gmail.com</small>",
+        t("Point — о ваших данных"),
+        "<h1>" + t("О ваших данных") + "</h1>"
+        "<p>" + t("Point работает с объектом на самом устройстве. На сервер попадает только то, что "
+                  "нужно, чтобы узнать вас и передать объект между вашими устройствами.") + "</p>"
+        + short_answer() +
+        "<h1>" + t("Что хранится") + "</h1>" + keep +
+        "<h1>" + t("Чего Point не делает") + "</h1>" + dont +
+        "<h1>" + t("Чужие сервисы") + "</h1>"
+        "<p>" + t("Некоторые действия выполняются не на устройстве, а чужим сервисом — например чтение "
+                  "текста со сложной фотографии. Такое действие всегда начинается вашим нажатием, и до "
+                  "нажатия наружу не уходит ничего. Что именно уходит и куда, Point говорит на том же "
+                  "экране, где спрашивает.") + "</p>"
+        "<h1>" + t("Как удалить") + "</h1>"
+        "<p>" + t("В приложении: «Мои устройства» → «Удалить аккаунт». Учётная запись, круг устройств и "
+                  "всё, что лежит на сервере недоставленным, исчезают сразу и навсегда. Объекты на самих "
+                  "устройствах остаются вашими — сервер к ним отношения не имеет.") + "</p>"
+        "<p>" + t('Подробнее — на странице <a class="go" href="/delete-account">Удаление аккаунта</a>.') + "</p>"
+        "<small>" + t("Вопросы — librevlad@gmail.com") + "</small>",
     )
 
 
 def deletion_page() -> str:
     """Как стереть себя. Магазин требует эту страницу отдельно от политики и без установки."""
     return page(
-        "Point — удаление аккаунта",
-        "<h1>Удаление аккаунта</h1>"
-        "<p>В приложении Point: <b>Мои устройства → Удалить аккаунт → Удалить навсегда</b>.</p>"
-        "<h1>Что исчезает сразу</h1>"
-        "<p>Учётная запись Point и связь с вашим аккаунтом Google. Все ваши устройства в круге. "
-        "Всё, что лежало на сервере недоставленным между устройствами. Все ссылки на приём "
-        "файлов.</p>"
-        "<h1>Что остаётся</h1>"
-        "<p>Объекты на самих устройствах: фотографии, документы, тексты. Сервер их не хранил и "
-        "удалить их за вас не может — они ваши и лежат у вас.</p>"
-        "<p>Отменить удаление нельзя, восстановить — тоже. Ничего не хранится «на всякий случай» "
-        "и не ждёт тридцать дней в корзине.</p>"
-        "<h1>Нет доступа к приложению?</h1>"
-        "<p>Напишите на librevlad@gmail.com с той почты, которой входили. Аккаунт будет удалён "
-        "тем же способом, вручную.</p>",
+        t("Point — удаление аккаунта"),
+        "<h1>" + t("Удаление аккаунта") + "</h1>"
+        "<p>" + t("В приложении Point: <b>Мои устройства → Удалить аккаунт → Удалить навсегда</b>.") + "</p>"
+        "<h1>" + t("Что исчезает сразу") + "</h1>"
+        "<p>" + t("Учётная запись Point и связь с вашим аккаунтом Google. Все ваши устройства в круге. "
+                  "Всё, что лежало на сервере недоставленным между устройствами. Все ссылки на приём "
+                  "файлов.") + "</p>"
+        "<h1>" + t("Что остаётся") + "</h1>"
+        "<p>" + t("Объекты на самих устройствах: фотографии, документы, тексты. Сервер их не хранил и "
+                  "удалить их за вас не может — они ваши и лежат у вас.") + "</p>"
+        "<p>" + t("Отменить удаление нельзя, восстановить — тоже. Ничего не хранится «на всякий случай» "
+                  "и не ждёт тридцать дней в корзине.") + "</p>"
+        "<h1>" + t("Нет доступа к приложению?") + "</h1>"
+        "<p>" + t("Напишите на librevlad@gmail.com с той почты, которой входили. Аккаунт будет удалён "
+                  "тем же способом, вручную.") + "</p>",
     )
 
 
 def sent_page() -> str:
     """Страницу приёма видит чужой человек — ему не рассказывают ни про вход, ни про коды."""
     return page(
-        "Файл отправлен",
-        "<h1>Файл отправлен</h1>"
-        "<p>Он уже у того, кто дал вам ссылку. Можно закрывать страницу.</p>",
+        t("Файл отправлен"),
+        "<h1>" + t("Файл отправлен") + "</h1>"
+        "<p>" + t("Он уже у того, кто дал вам ссылку. Можно закрывать страницу.") + "</p>",
     )
 
 
@@ -317,17 +324,17 @@ def nothing_to_send_page() -> str:
     выбирал файл, а ему отвечали про размер.
     """
     return page(
-        "Пока нечего отправлять",
-        "<h1>Пока нечего отправлять</h1>"
-        "<p>Выберите файл или напишите текст — и нажмите «Отправить».</p>",
+        t("Пока нечего отправлять"),
+        "<h1>" + t("Пока нечего отправлять") + "</h1>"
+        "<p>" + t("Выберите файл или напишите текст — и нажмите «Отправить».") + "</p>",
     )
 
 
 def link_gone_page() -> str:
     return page(
-        "Ссылка больше не работает",
-        "<h1>Ссылка больше не работает</h1>"
-        "<p>Ссылки на приём файла живут сутки. Попросите новую у того, кто её дал.</p>",
+        t("Ссылка больше не работает"),
+        "<h1>" + t("Ссылка больше не работает") + "</h1>"
+        "<p>" + t("Ссылки на приём файла живут сутки. Попросите новую у того, кто её дал.") + "</p>",
     )
 
 
@@ -339,22 +346,30 @@ def drop_text_page(name: str, text: str, download_url: str, left: float | None =
     присланное можно было только открыв его чем-то ещё. Point держал текст в руках и отдавал
     в худшей форме. Файл никуда не делся — он рядом, для тех, кому нужен именно файл.
     """
+    title = name or t("Текст")
     return page(
-        name or "Текст",
-        "<h1>Вам прислали текст</h1>"
+        title,
+        "<h1>%s</h1>"
         '<p class="what">%s</p>'
         '<textarea id="t" readonly rows="16">%s</textarea>'
-        '<p><button id="c" type="button">Скопировать</button> '
-        '<a href="%s" download>Скачать файлом</a></p>'
-        % (html.escape(name or "Текст"), html.escape(text), html.escape(download_url))
+        '<p><button id="c" type="button">%s</button> '
+        '<a href="%s" download>%s</a></p>'
+        % (
+            t("Вам прислали текст"),
+            html.escape(title),
+            html.escape(text),
+            t("Скопировать"),
+            html.escape(download_url),
+            t("Скачать файлом"),
+        )
         + link_lifetime(left),
         head="<script>"
         "document.addEventListener('DOMContentLoaded',function(){"
-        "var b=document.getElementById('c'),t=document.getElementById('t');"
+        "var b=document.getElementById('c'),t=document.getElementById('t'),done=%s;"
         "b.addEventListener('click',function(){"
-        "t.select();navigator.clipboard.writeText(t.value).then(function(){b.textContent='Скопировано'},"
-        "function(){document.execCommand('copy');b.textContent='Скопировано'})})})"
-        "</script>",
+        "t.select();navigator.clipboard.writeText(t.value).then(function(){b.textContent=done},"
+        "function(){document.execCommand('copy');b.textContent=done})})})"
+        "</script>" % json.dumps(t("Скопировано")),
     )
 
 
@@ -370,12 +385,13 @@ def drop_contact_page(name: str, fields: list[tuple[str, str]], download_url: st
         "<p><b>%s</b><br>%s</p>" % (html.escape(label), html.escape(value))
         for label, value in fields
     )
+    title = name or t("Контакт")
     return page(
-        name or "Контакт",
-        "<h1>Вам прислали контакт</h1>"
+        title,
+        "<h1>%s</h1>"
         '<p class="what">%s</p>%s'
-        '<p><a href="%s" download>Добавить в контакты</a></p>'
-        % (html.escape(name or "Контакт"), rows, html.escape(download_url))
+        '<p><a href="%s" download>%s</a></p>'
+        % (t("Вам прислали контакт"), html.escape(title), rows, html.escape(download_url), t("Добавить в контакты"))
         + link_lifetime(left),
     )
 
@@ -387,18 +403,22 @@ def drop_place_page(name: str, coordinates: str, download_url: str, left: float 
     Куда именно идти — вопрос человека и его телефона, поэтому здесь ссылка `geo:`, которую
     подхватит установленная карта, а не чужой сервис, выбранный за него.
     """
+    title = name or t("Место")
     return page(
-        name or "Место",
-        "<h1>Вам прислали место</h1>"
+        title,
+        "<h1>%s</h1>"
         '<p class="what">%s</p>'
-        '<p><a href="geo:%s">Открыть в картах</a></p>'
+        '<p><a href="geo:%s">%s</a></p>'
         "<p>%s</p>"
-        '<p><a href="%s" download>Скачать файлом</a></p>'
+        '<p><a href="%s" download>%s</a></p>'
         % (
-            html.escape(name or "Место"),
+            t("Вам прислали место"),
+            html.escape(title),
             html.escape(coordinates),
+            t("Открыть в картах"),
             html.escape(coordinates),
             html.escape(download_url),
+            t("Скачать файлом"),
         )
         + link_lifetime(left),
     )
@@ -412,19 +432,22 @@ def drop_image_page(name: str, download_url: str, size: str, left: float | None 
     ничего не знал. Показать снимок можно прямо здесь; скачивание остаётся вторым шагом
     для тех, кому нужен именно файл.
     """
+    title = name or t("Снимок")
     return page(
-        name or "Снимок",
-        "<h1>Вам прислали снимок</h1>"
+        title,
+        "<h1>%s</h1>"
         '<img class="shot" src="%s" alt="%s">'
         "<p class=\"what\">%s%s</p>"
-        '<a class="go" href="%s" download>Скачать</a>'
+        '<a class="go" href="%s" download>%s</a>'
         "%s"
         % (
+            t("Вам прислали снимок"),
             html.escape(download_url),
-            html.escape(name or "Снимок"),
-            html.escape(name or "Снимок"),
+            html.escape(title),
+            html.escape(title),
             (" · " + html.escape(size)) if size else "",
             html.escape(download_url),
+            t("Скачать"),
             link_lifetime(left),
         ),
     )
@@ -437,18 +460,21 @@ def drop_audio_page(name: str, download_url: str, mime: str, size: str, left: fl
     Голосовое — самое частое, чем делятся ссылкой, и самое бесполезное вложением: чтобы
     услышать десять секунд, человек скачивал файл и искал, чем его открыть.
     """
+    title = name or t("Запись")
     return page(
-        name or "Запись",
-        "<h1>Вам прислали запись</h1>"
+        title,
+        "<h1>%s</h1>"
         '<audio class="player" controls preload="metadata" src="%s"></audio>'
         "<p class=\"what\">%s%s</p>"
-        '<a class="go" href="%s" download>Скачать</a>'
+        '<a class="go" href="%s" download>%s</a>'
         "%s"
         % (
+            t("Вам прислали запись"),
             html.escape(download_url),
-            html.escape(name or "Запись"),
+            html.escape(title),
             (" · " + html.escape(size)) if size else "",
             html.escape(download_url),
+            t("Скачать"),
             link_lifetime(left),
         ),
     )
@@ -465,50 +491,54 @@ def drop_file_page(name: str, download_url: str, what: str, size: str, left: flo
     большая кнопка первой тянула палец раньше, чем человек успевал прочитать предупреждение:
     сначала что прислали и до когда, потом «не ждали — не скачивайте», и только потом «Скачать».
     """
+    title = name or t("Файл")
     return page(
-        name or "Файл",
-        "<h1>Вам прислали файл</h1>"
+        title,
+        "<h1>%s</h1>"
         "<p class=\"what\">%s</p>"
         "<p>%s%s</p>"
         "%s"
-        '<small class="warn">Если вы не ждали эту ссылку — не скачивайте файл.</small>'
-        '<a class="go" href="%s" download>Скачать</a>'
+        '<small class="warn">%s</small>'
+        '<a class="go" href="%s" download>%s</a>'
         % (
-            html.escape(name or "Файл"),
+            t("Вам прислали файл"),
+            html.escape(title),
             html.escape(what),
             (" · " + html.escape(size)) if size else "",
             link_lifetime(left),
+            t("Если вы не ждали эту ссылку — не скачивайте файл."),
             html.escape(download_url),
+            t("Скачать"),
         ),
     )
 
 
 def drop_gone_page() -> str:
     return page(
-        "Файла больше нет",
-        "<h1>Файла больше нет</h1>"
-        "<p>Присланное живёт сутки. Попросите новую ссылку у того, кто её дал.</p>",
+        t("Файла больше нет"),
+        "<h1>" + t("Файла больше нет") + "</h1>"
+        "<p>" + t("Присланное живёт сутки. Попросите новую ссылку у того, кто её дал.") + "</p>",
     )
 
 
 def too_big_page(reason: str) -> str:
     return page(
-        "Не поместилось",
-        "<h1>Не поместилось</h1><p>%s</p>" % html.escape(reason),
+        t("Не поместилось"),
+        "<h1>" + t("Не поместилось") + "</h1><p>%s</p>" % html.escape(reason),
     )
 
 
 def gone_page() -> str:
     return page(
-        "Ссылка входа больше не работает",
-        "<h1>Ссылка больше не работает</h1>"
-        "<p>Вход живёт пять минут и открывается один раз. Начните вход на устройстве заново.</p>",
+        t("Ссылка входа больше не работает"),
+        "<h1>" + t("Ссылка больше не работает") + "</h1>"
+        "<p>" + t("Вход живёт пять минут и открывается один раз. Начните вход на устройстве заново.") + "</p>",
     )
 
 
 def failed_page(reason: str) -> str:
     return page(
-        "Войти не получилось",
-        "<h1>Войти не получилось</h1><p>%s</p>"
-        "<small>Попробуйте начать вход на устройстве заново.</small>" % html.escape(reason),
+        t("Войти не получилось"),
+        "<h1>" + t("Войти не получилось") + "</h1><p>%s</p>" % html.escape(reason)
+        + "<small>" + t("Попробуйте начать вход на устройстве заново.") + "</small>",
     )
