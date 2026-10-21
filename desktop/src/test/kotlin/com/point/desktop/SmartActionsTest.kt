@@ -463,6 +463,9 @@ class SmartActionsTest {
 
         // Что снимок знает о себе, и снимок без этого (#547, #1379).
         "exif", "clean-metadata",
+
+        // Действия над местом, обведённым мышью (#1379).
+        "take-fragment", "hide-area",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

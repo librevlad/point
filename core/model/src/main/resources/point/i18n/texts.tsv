@@ -65,6 +65,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Ваши ключи	Ваші ключі	Your keys
 Ваши ключи сохраняют свои места в общей очереди.	Ваші ключі зберігають свої місця в спільній черзі.	Your keys keep their places in the shared queue.
 Ваши устройства увидят друг друга	Ваші пристрої побачать одне одного	Your devices will see each other
+Взять фрагмент	Взяти фрагмент	Take a fragment
 Войдите в аккаунт — ссылка выдаётся через сервер Point	Увійдіть в акаунт — посилання видається через сервер Point	Sign in to your account. Links are given out through the Point server
 Войдите в один аккаунт на телефоне и на компьютере — и объект сможет переехать с одного на другой. Для работы на одном устройстве вход не нужен.	Увійдіть в один акаунт на телефоні й на комп’ютері — і об’єкт зможе переїхати з одного на інший. Для роботи на одному пристрої вхід не потрібен.	Sign in to the same account on your phone and computer, and things can move from one to the other. You don't need to sign in to use one device.
 Войдите снова, чтобы вернуть его в круг.	Увійдіть знову, щоб повернути його в коло.	Sign in again to bring it back into the circle.
@@ -99,6 +100,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Забыть не вышло — попробуйте ещё раз	Забути не вийшло — спробуйте ще раз	Couldn't forget. Try again
 Загружаю файл	Завантажую файл	Uploading the file
 Задайте ключ в настройках	Задайте ключ у налаштуваннях	Add a key in settings
+Замазать	Замазати	Blur out
 Запись не дошла — расшифровывать нечего	Запис не дійшов — розшифровувати нічого	The recording didn't arrive, so there's nothing to transcribe
 Запись слишком большая ({0} МБ) — Whisper принимает до 25 МБ	Запис завеликий ({0} МБ) — Whisper приймає до 25 МБ	The recording is too big ({0} MB). Whisper takes up to 25 MB
 Здесь нечего исправлять	Тут нічого виправляти	There's nothing to correct here
@@ -166,6 +168,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Настройки	Налаштування	Settings
 Нашлось {0} {1}	Знайшлося {0} {1}	Found {0} {1}
 Нашёл, как лежит страница — перечитываю	Знайшов, як лежить сторінка — перечитую	Found how the page lies. Reading again
+Не видно, какую область брать	Не видно, яку область брати	No area is shown to take
+Не видно, что замазывать	Не видно, що замазувати	Nothing is marked to blur out
 Не вставлять	Не вставляти	Don't paste
 Не вышло показать, где эти слова на странице	Не вийшло показати, де ці слова на сторінці	Couldn't show where these words are on the page
 Не вышло — пробую другим путём	Не вийшло — пробую іншим шляхом	Didn't work. Trying another way
@@ -174,8 +178,11 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Не смог прочитать этот снимок — ответ пришёл нечитаемым ({0}). Лучше переснять при ровном свете и поближе.	Не зміг прочитати цей знімок — відповідь прийшла нечитабельною ({0}). Краще перезняти при рівному світлі й ближче.	Couldn't read this picture: the answer came back unreadable ({0}). Try retaking it closer and in even light.
 Не спрашивать разрешения на облако и всегда брать самый сильный путь, даже если он снаружи. Объект уходит на чужой сервер без вопроса.	Не питати дозволу на хмару й завжди брати найсильніший шлях, навіть якщо він назовні. Об’єкт іде на сторонній сервер без питання.	Don't ask before using the cloud and always take the strongest path, even if it's outside. Items go to another company's server without asking.
 Не удалось {0} — 	Не вдалося {0} — 	Couldn't {0}: 
+Не удалось взять фрагмент	Не вдалося взяти фрагмент	Couldn't take the fragment
+Не удалось вырезать область	Не вдалося вирізати область	Couldn't cut out the area
 Не удалось забрать 	Не вдалося забрати 	Couldn't pick up 
 Не удалось забрать объект — проверьте интернет и попробуйте ещё раз	Не вдалося забрати об’єкт — перевірте інтернет і спробуйте ще раз	Couldn't pick up the item. Check your internet and try again
+Не удалось замазать снимок	Не вдалося замазати знімок	Couldn't blur out the picture
 Не удалось написать отклик	Не вдалося написати відгук	Couldn't write the application
 Не удалось оформить документ	Не вдалося оформити документ	Couldn't format the document
 Не удалось понять документ	Не вдалося зрозуміти документ	Couldn't understand the document

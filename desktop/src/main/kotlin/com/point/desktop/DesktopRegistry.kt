@@ -31,7 +31,8 @@ class DesktopRegistry(
         val applicable = capabilities
 
             .filterNot { it.meta.investigation }
-            .filter { it.accepts(state) }
+            // Граф, а не голое состояние: действию над показанным местом нужен Focus (#1379).
+            .filter { it.accepts(graph) }
             .filter { runnable(it.id, state) }
 
         // Негодному объекту читать себя не предлагается — то же правило, что на телефоне

@@ -34,10 +34,8 @@ import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveRealizer
 import com.point.executors.BlurBgCapability
-import com.point.executors.HideAreaCapability
-import com.point.executors.HideAreaRealizer
-import com.point.executors.TakeFragmentCapability
-import com.point.executors.TakeFragmentRealizer
+import com.point.executors.HideAreaCapabilityOnPhone
+import com.point.executors.TakeFragmentCapabilityOnPhone
 import com.point.executors.BlurBgRealizer
 import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
@@ -201,9 +199,10 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapability): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun takeFragmentCap(c: TakeFragmentCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun takeFragmentCap(c: TakeFragmentCapabilityOnPhone): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun hideAreaCap(c: HideAreaCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun hideAreaCap(c: HideAreaCapabilityOnPhone): Capability
+
     @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapabilityOnPhone): Capability
@@ -264,9 +263,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
 
-    @Binds @IntoSet abstract fun takeFragmentR(r: TakeFragmentRealizer): Realizer
 
-    @Binds @IntoSet abstract fun hideAreaR(r: HideAreaRealizer): Realizer
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
 
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizerOnPhone): Realizer
@@ -369,6 +366,19 @@ abstract class CapabilityModule {
 
         // @Provides, а не @Binds: у реализатора, который трогает графику Android, @Binds
         // роняет разрешение типов во всём модуле KSP — тот же урок, что с OpenCV.
+        // Правило вырезки и замазывания живёт в `:core:flow` (#1379): у компьютера те же
+        // исполнители со своими органами.
+        @Provides @IntoSet
+        fun takeFragmentR(
+            cropper: com.point.core.flow.EvidenceCropper,
+            store: ObjectStore,
+            angle: com.point.core.flow.UprightAngle,
+        ): Realizer = com.point.core.flow.TakeFragmentRealizer(cropper, store, angle)
+
+        @Provides @IntoSet
+        fun hideAreaR(redactor: com.point.core.flow.ImageRedactor, store: ObjectStore): Realizer =
+            com.point.core.flow.HideAreaRealizer(redactor, store)
+
         @Provides @IntoSet
         fun cleanMetadataR(store: ObjectStore): Realizer = com.point.executors.CleanMetadataRealizer(store)
 
