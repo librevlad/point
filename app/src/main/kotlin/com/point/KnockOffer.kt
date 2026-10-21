@@ -23,7 +23,7 @@ import com.point.core.ui.GlassButton
 import com.point.core.ui.GlassGroup
 import com.point.core.ui.LightButton
 import com.point.core.ui.PointPalette
-import com.point.core.ui.PointText
+import com.point.core.ui.theme.PointText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
