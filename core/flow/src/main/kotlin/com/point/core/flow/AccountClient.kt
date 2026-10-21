@@ -96,5 +96,8 @@ class InMemoryPendingLogins : PendingLoginStore {
 object PointServer {
     const val DEFAULT_URL = "https://point.leerio.app"
 
+    /** Тот же адрес, что назван политикой в Play Console (#1487): своя сборка не уводит на другой. */
+    const val PRIVACY_URL = "$DEFAULT_URL/privacy"
+
     fun base(url: String?): String = (url?.trim()?.takeIf { it.isNotBlank() } ?: DEFAULT_URL).trimEnd('/')
 }

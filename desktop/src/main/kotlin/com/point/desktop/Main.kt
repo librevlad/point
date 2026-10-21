@@ -667,6 +667,7 @@ fun main(args: Array<String>) {
                     // запуске, а кнопка делает то, что на ней написано.
                     onSweepNow = { state.forgetEverything { inbox.wipe() } },
                     onGrabScreen = grabScreen,
+                    onOpenUrl = { url -> runCatching { browse.open(url) } },
                     onHide = { windowVisible.value = false },
                 )
             }

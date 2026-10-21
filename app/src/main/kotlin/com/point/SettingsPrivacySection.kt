@@ -8,6 +8,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.PRIVACY_POLICY_TITLE
+import com.point.core.flow.PRIVACY_POLICY_WHAT
 import com.point.core.flow.PRIVACY_SECTION_TITLE
 import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PRIVACY_SETTING_TITLE
@@ -27,6 +29,7 @@ internal fun PrivacySection(
     onToggleYolo: (Boolean) -> Unit,
     privacyLevel: PrivacyLevel,
     onPickPrivacyLevel: (PrivacyLevel) -> Unit,
+    onOpenPolicy: () -> Unit,
     onBack: () -> Unit,
 ) {
     SectionTopBar(title = PRIVACY_SECTION_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
@@ -71,4 +74,13 @@ internal fun PrivacySection(
             appearIndex = index,
         )
     }
+
+    Spacer(Modifier.height(6.dp))
+    PortalRow(
+        title = PRIVACY_POLICY_TITLE,
+        subtitle = PRIVACY_POLICY_WHAT,
+        onClick = onOpenPolicy,
+        subtitleMaxLines = 3,
+        appearIndex = PrivacyLevel.entries.size,
+    )
 }

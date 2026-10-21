@@ -1,12 +1,14 @@
 package com.point.desktop
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runComposeUiTest
 import com.point.core.flow.PrivacyLevel
 import com.point.desktop.ui.PointDesktopTheme
@@ -164,6 +166,7 @@ class SettingsAreAListTest {
                     level = PrivacyLevel.DEFAULT,
                     onRevoke = { revoked = true },
                     onPickLevel = {},
+                    onOpenPolicy = {},
                 )
             }
         }
@@ -178,11 +181,33 @@ class SettingsAreAListTest {
     fun `пока облако не разрешено — забирать нечего`() = runComposeUiTest {
         setContent {
             PointDesktopTheme {
-                SettingsPrivacy(allowed = false, level = PrivacyLevel.DEFAULT, onRevoke = {}, onPickLevel = {})
+                SettingsPrivacy(allowed = false, level = PrivacyLevel.DEFAULT, onRevoke = {}, onPickLevel = {}, onOpenPolicy = {})
             }
         }
 
         onNodeWithText(REVOKE).assertDoesNotExist()
+    }
+
+    /** Play требует, чтобы политика открывалась из самого приложения, — здесь её и ищут (#1487). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `политика конфиденциальности открывается из раздела приватности`() = runComposeUiTest {
+        var opened = false
+        setContent {
+            PointDesktopTheme {
+                SettingsPrivacy(
+                    allowed = false,
+                    level = PrivacyLevel.DEFAULT,
+                    onRevoke = {},
+                    onPickLevel = {},
+                    onOpenPolicy = { opened = true },
+                )
+            }
+        }
+
+        onNodeWithText(com.point.core.flow.PRIVACY_POLICY_TITLE).performSemanticsAction(SemanticsActions.OnClick)
+
+        assertTrue("строка политики нажата, а браузер не позван", opened)
     }
 
     /** Что написано в корне настроек — все надписи собранного экрана, как их читает человек. */

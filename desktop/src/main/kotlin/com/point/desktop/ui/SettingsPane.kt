@@ -46,6 +46,9 @@ internal fun SettingsPane(
     onRightClick: suspend (Boolean) -> Boolean?,
     rightClickHolds: suspend (Boolean) -> Boolean?,
     onSweepNow: () -> Int,
+
+    /** Браузер компьютера: сайт сервиса ключа и политика конфиденциальности (#1487). */
+    onOpenUrl: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) = Column(modifier) {
@@ -96,7 +99,7 @@ internal fun SettingsPane(
                 }
             }
 
-            SettingsPage.KEYS -> SettingsKeys(config = config, onSave = onSave)
+            SettingsPage.KEYS -> SettingsKeys(config = config, onSave = onSave, onOpenUrl = onOpenUrl)
 
             SettingsPage.PRIVACY -> SettingsPrivacy(
                 allowed = cloudAllowed,
@@ -108,6 +111,7 @@ internal fun SettingsPane(
                     }
                 },
                 onPickLevel = { onSave(config.copy(privacy = it)) },
+                onOpenPolicy = { onOpenUrl(com.point.core.flow.PointServer.PRIVACY_URL) },
             )
 
             SettingsPage.DATA -> SettingsData(swept = swept) { swept = onSweepNow() }

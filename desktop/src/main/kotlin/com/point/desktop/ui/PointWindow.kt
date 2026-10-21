@@ -99,6 +99,9 @@ fun PointWindow(
      */
     rightClickHolds: suspend (Boolean) -> Boolean? = { true },
     onSweepNow: () -> Int = { 0 },
+
+    /** Открыть адрес в браузере компьютера — из настроек: сайт сервиса, политика (#1487). */
+    onOpenUrl: (String) -> Unit = {},
     onHide: () -> Unit = {},
 ) {
     val items by state.items.collectAsState()
@@ -249,6 +252,7 @@ fun PointWindow(
                         onRightClick = onRightClick,
                         rightClickHolds = rightClickHolds,
                         onSweepNow = onSweepNow,
+                        onOpenUrl = onOpenUrl,
                         onBack = { showSettings = false },
                     )
                 }
