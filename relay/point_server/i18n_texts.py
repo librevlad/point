@@ -84,25 +84,37 @@ TEXTS: dict[str, tuple[str, str]] = {
         "sign-in with Google is not set up on the server",
     ),
     # --- о данных и удаление ------------------------------------------------------------
-    "Point — о ваших данных": ("Point — про ваші дані", "Point — about your data"),
+    "Point — политика конфиденциальности": (
+        "Point — політика конфіденційності",
+        "Point — privacy policy",
+    ),
+    "Политика конфиденциальности": ("Політика конфіденційності", "Privacy policy"),
     "Point работает с объектом на самом устройстве. На сервер попадает только то, что "
-    "нужно, чтобы узнать вас и передать объект между вашими устройствами.": (
+    "нужно, чтобы узнать вас, передать объект между вашими устройствами или отдать его "
+    "другому человеку по вашей ссылке. Эти правила — для приложений Point на телефоне "
+    "и компьютере и для их сервера point.leerio.app.": (
         "Point працює з об’єктом на самому пристрої. На сервер потрапляє лише те, що "
-        "потрібно, щоб упізнати вас і передати об’єкт між вашими пристроями.",
+        "потрібно, щоб упізнати вас, передати об’єкт між вашими пристроями або віддати його "
+        "іншій людині за вашим посиланням. Ці правила — для застосунків Point на телефоні "
+        "й комп’ютері та для їхнього сервера point.leerio.app.",
         "Point works with your things on the device itself. The server only gets what it needs "
-        "to recognise you and pass things between your devices.",
+        "to recognise you, pass things between your devices, or hand something to another "
+        "person through your link. These rules cover the Point apps on your phone and computer "
+        "and their server, point.leerio.app.",
     ),
-    "Содержимое ваших объектов сервер не читает и не хранит.": (
-        "Вміст ваших об’єктів сервер не читає і не зберігає.",
-        "The server neither reads nor keeps what's inside your files.",
+    "Между вашими устройствами передаётся только то, что вы отправили сами, и в "
+    "зашифрованном виде: сервер не может это прочитать.": (
+        "Між вашими пристроями передається лише те, що ви надіслали самі, і в "
+        "зашифрованому вигляді: сервер не може це прочитати.",
+        "Only what you send yourself travels between your devices, and it travels encrypted: "
+        "the server cannot read it.",
     ),
-    "Между вашими устройствами передаётся только то, что вы отправили сами.": (
-        "Між вашими пристроями передається лише те, що ви надіслали самі.",
-        "Only what you send yourself travels between your devices.",
-    ),
-    "Присланное по ссылке живёт сутки и стирается само.": (
-        "Надіслане за посиланням живе добу й стирається саме.",
-        "Whatever is sent by link lasts a day and then erases itself.",
+    "То, что идёт по ссылке к другому человеку или от него, сервер видит, иначе ссылку не "
+    "открыть в обычном браузере. Не позже чем через сутки это стирается само.": (
+        "Те, що йде за посиланням до іншої людини або від неї, сервер бачить, інакше посилання "
+        "не відкрити у звичайному браузері. Не пізніше ніж за добу це стирається саме.",
+        "Whatever travels by link to or from another person is visible to the server, or the "
+        "link couldn't open in an ordinary browser. It erases itself within a day.",
     ),
     "От Google Point получает имя и почту — больше ничего.": (
         "Від Google Point отримує ім’я та пошту — більше нічого.",
@@ -125,12 +137,15 @@ TEXTS: dict[str, tuple[str, str]] = {
         "only this device's pass comes back to you.",
     ),
     "Ваши устройства": ("Ваші пристрої", "Your devices"),
-    "Название устройства, его вид (телефон или компьютер), открытая половина его ключа и "
-    "время последнего обращения — чтобы вы видели свой круг и могли отключить лишнее.": (
-        "Назва пристрою, його вид (телефон чи комп’ютер), відкрита половина його ключа й "
-        "час останнього звернення — щоб ви бачили своє коло й могли відключити зайве.",
-        "The device's name, its kind (phone or computer), the public half of its key and when it "
-        "last checked in, so you can see your circle and switch off what you don't need.",
+    "Название устройства, его вид (телефон или компьютер), открытая половина его ключа, "
+    "адрес, по которому компьютер может разбудить телефон, и время последнего обращения — "
+    "чтобы вы видели свой круг и могли отключить лишнее.": (
+        "Назва пристрою, його вид (телефон чи комп’ютер), відкрита половина його ключа, "
+        "адреса, за якою комп’ютер може розбудити телефон, і час останнього звернення — "
+        "щоб ви бачили своє коло й могли відключити зайве.",
+        "The device's name, its kind (phone or computer), the public half of its key, the "
+        "address your computer uses to wake your phone, and when it last checked in, so you "
+        "can see your circle and switch off what you don't need.",
     ),
     "То, что вы пересылаете между своими устройствами": (
         "Те, що ви пересилаєте між своїми пристроями",
@@ -143,10 +158,31 @@ TEXTS: dict[str, tuple[str, str]] = {
         "It waits on the server until your other device picks it up and is erased right after. "
         "The contents are encrypted with your devices' keys, so the server cannot read them.",
     ),
+    "Что вы отдали другому человеку по ссылке": (
+        "Що ви віддали іншій людині за посиланням",
+        "What you hand to another person by link",
+    ),
+    "Лежит на сервере сутки и стирается само. Сервер это видит, иначе получатель не открыл бы "
+    "ссылку в обычном браузере. Поэтому Point спрашивает каждый раз, прежде чем выложить "
+    "объект по ссылке, а удаление аккаунта сразу гасит все такие ссылки.": (
+        "Лежить на сервері добу й стирається саме. Сервер це бачить, інакше одержувач не "
+        "відкрив би посилання у звичайному браузері. Тому Point щоразу питає, перш ніж "
+        "викласти об’єкт за посиланням, а видалення акаунта одразу гасить усі такі посилання.",
+        "It stays on the server for a day and then erases itself. The server can see it, or the "
+        "recipient couldn't open the link in an ordinary browser. That's why Point asks every "
+        "time before putting something behind a link, and deleting your account switches all "
+        "such links off at once.",
+    ),
     "Ссылки на приём файла": ("Посилання для приймання файлу", "Links for receiving a file"),
-    "Живут сутки, потом удаляются вместе с файлом.": (
-        "Живуть добу, потім видаляються разом із файлом.",
-        "They last a day and are then deleted along with the file.",
+    "Ссылка живёт сутки. Файл, который по ней прислали, лежит на сервере, пока ваше "
+    "устройство его не заберёт, и не дольше суток. Сервер его видит: отправитель загружает "
+    "файл обычным браузером.": (
+        "Посилання живе добу. Файл, який за ним надіслали, лежить на сервері, доки ваш "
+        "пристрій його не забере, і не довше доби. Сервер його бачить: відправник завантажує "
+        "файл звичайним браузером.",
+        "The link lasts a day. A file sent through it waits on the server until your device "
+        "picks it up, and never longer than a day. The server can see it: the sender uploads "
+        "it with an ordinary browser.",
     ),
     "Чего Point не делает": ("Чого Point не робить", "What Point doesn't do"),
     "Не показывает рекламу и не передаёт ничего рекламным сетям.": (
@@ -157,9 +193,12 @@ TEXTS: dict[str, tuple[str, str]] = {
         "Не збирає статистику вашої поведінки й не стежить за тим, що ви відкриваєте.",
         "It collects no statistics on how you behave and doesn't watch what you open.",
     ),
-    "Не продаёт и не передаёт ваши данные третьим лицам.": (
-        "Не продає й не передає ваші дані третім особам.",
-        "It doesn't sell or hand your data to third parties.",
+    "Не продаёт ваши данные. Чужому сервису они уходят только с вашего согласия — такие "
+    "сервисы названы ниже.": (
+        "Не продає ваші дані. Сторонньому сервісу вони йдуть лише з вашої згоди — такі "
+        "сервіси названо нижче.",
+        "It doesn't sell your data. Your data goes to another service only with your consent; "
+        "those services are named below.",
     ),
     "Не читает объекты, которые вы разбираете на самом устройстве, — они не покидают телефон.": (
         "Не читає об’єкти, які ви розбираєте на самому пристрої, — вони не залишають телефон.",
@@ -177,17 +216,80 @@ TEXTS: dict[str, tuple[str, str]] = {
         "difficult photo. Such a step always starts with your tap, and nothing leaves before it. "
         "Point says what goes out and where on the same screen where it asks.",
     ),
+    "Исключение одно — режим YOLO. Если вы сами включили его в настройках, Point "
+    "больше не спрашивает и отправляет объект чужому сервису сразу.": (
+        "Виняток один — режим YOLO. Якщо ви самі ввімкнули його в налаштуваннях, Point "
+        "більше не питає й надсилає об’єкт сторонньому сервісу одразу.",
+        "There is one exception: YOLO mode. If you turn it on yourself in settings, Point "
+        "stops asking and sends things to another service straight away.",
+    ),
+    "Вход": ("Вхід", "Sign-in"),
+    "Google. Point получает от него только имя и почту.": (
+        "Google. Point отримує від нього лише ім’я та пошту.",
+        "Google. Point gets only your name and email from it.",
+    ),
+    "Пробуждение телефона": ("Пробудження телефона", "Waking your phone"),
+    "Google Firebase. Когда компьютер просит телефон о чём-то, через Google идёт только "
+    "сигнал «зайди», без содержимого.": (
+        "Google Firebase. Коли комп’ютер просить телефон про щось, через Google іде лише "
+        "сигнал «зайди», без вмісту.",
+        "Google Firebase. When your computer asks your phone for something, only a “come and "
+        "look” signal goes through Google, with nothing inside.",
+    ),
+    "Чтение текста со сложной фотографии": (
+        "Читання тексту зі складної фотографії",
+        "Reading text from a difficult photo",
+    ),
+    "OCR.space (Германия) или OVHcloud (Франция).": (
+        "OCR.space (Німеччина) або OVHcloud (Франція).",
+        "OCR.space (Germany) or OVHcloud (France).",
+    ),
+    "Действия с AI": ("Дії з AI", "AI steps"),
+    "Сервис, ключ которого вы добавили сами: например Google Gemini, Anthropic Claude, OpenAI "
+    "или Groq. Куда именно уйдёт объект, Point называет до отправки, а что сервис делает с "
+    "полученным, решают его собственные правила.": (
+        "Сервіс, ключ якого ви додали самі: наприклад, Google Gemini, Anthropic Claude, OpenAI "
+        "або Groq. Куди саме піде об’єкт, Point називає до надсилання, а що сервіс робить з "
+        "отриманим, вирішують його власні правила.",
+        "The service whose key you added yourself, for example Google Gemini, Anthropic Claude, "
+        "OpenAI or Groq. Point names where a thing goes before sending it, and what the service "
+        "does with it is up to that service's own rules.",
+    ),
+    "Что Point берёт на телефоне": ("Що Point бере на телефоні", "What Point uses on your phone"),
+    "Местоположение": ("Місцезнаходження", "Location"),
+    "Только когда вы сами создаёте объект «Место». В фоне Point его не узнаёт.": (
+        "Лише коли ви самі створюєте об’єкт «Місце». У фоні Point його не дізнається.",
+        "Only when you create a “Place” yourself. Point never checks it in the background.",
+    ),
+    "Микрофон": ("Мікрофон", "Microphone"),
+    "Только пока вы записываете голос в Point.": (
+        "Лише поки ви записуєте голос у Point.",
+        "Only while you record your voice in Point.",
+    ),
+    "Буфер обмена": ("Буфер обміну", "Clipboard"),
+    "Только когда вы сами отдаёте его Point: плиткой в шторке или кнопкой вставки.": (
+        "Лише коли ви самі віддаєте його Point: плиткою в шторці або кнопкою вставлення.",
+        "Only when you hand it to Point yourself: with the quick settings tile or a paste button.",
+    ),
+    "Файлы и текст": ("Файли й текст", "Files and text"),
+    "Только те, которыми вы поделились с Point или которые открыли в нём.": (
+        "Лише ті, якими ви поділилися з Point або які відкрили в ньому.",
+        "Only the ones you shared with Point or opened in it.",
+    ),
+    "Всё это остаётся на устройстве, пока вы сами не отправите объект дальше.": (
+        "Усе це лишається на пристрої, доки ви самі не надішлете об’єкт далі.",
+        "All of this stays on the device until you send the thing on yourself.",
+    ),
     "Как удалить": ("Як видалити", "How to delete"),
-    "В приложении: «Мои устройства» → «Удалить аккаунт». Учётная запись, круг устройств и "
-    "всё, что лежит на сервере недоставленным, исчезают сразу и навсегда. Объекты на самих "
-    "устройствах остаются вашими — сервер к ним отношения не имеет.": (
-        "У застосунку: «Мої пристрої» → «Видалити акаунт». Обліковий запис, коло пристроїв і "
-        "все, що лежить на сервері недоставленим, зникають одразу й назавжди. Об’єкти на "
-        "самих пристроях лишаються вашими — сервер до них не має стосунку.",
-        "In the app: “My devices” → “Delete account”. The account, the "
-        "circle of devices and everything waiting undelivered on the server disappear at once "
-        "and for good. Things on the devices themselves stay yours; the server has nothing to "
-        "do with them.",
+    "В приложении: «Мои устройства» → «Удалить аккаунт». Учётная запись, круг устройств, "
+    "ваши ссылки и всё, что лежит на сервере недоставленным, исчезают сразу и навсегда. "
+    "Объекты на самих устройствах остаются вашими — сервер к ним отношения не имеет.": (
+        "У застосунку: «Мої пристрої» → «Видалити акаунт». Обліковий запис, коло пристроїв, "
+        "ваші посилання і все, що лежить на сервері недоставленим, зникають одразу й назавжди. "
+        "Об’єкти на самих пристроях лишаються вашими — сервер до них не має стосунку.",
+        "In the app: “My devices” → “Delete account”. The account, the circle of devices, your "
+        "links and everything waiting undelivered on the server disappear at once and for good. "
+        "Things on the devices themselves stay yours; the server has nothing to do with them.",
     ),
     'Подробнее — на странице <a class="go" href="/delete-account">Удаление аккаунта</a>.': (
         'Докладніше — на сторінці <a class="go" href="/delete-account">Видалення акаунта</a>.',
@@ -202,14 +304,14 @@ TEXTS: dict[str, tuple[str, str]] = {
     ),
     "Что исчезает сразу": ("Що зникає одразу", "What disappears at once"),
     "Учётная запись Point и связь с вашим аккаунтом Google. Все ваши устройства в круге. "
-    "Всё, что лежало на сервере недоставленным между устройствами. Все ссылки на приём "
-    "файлов.": (
+    "Всё, что лежало на сервере недоставленным между устройствами. Все ссылки, по которым "
+    "вы отдали объект другим людям, и все ссылки на приём файлов.": (
         "Обліковий запис Point і зв’язок із вашим акаунтом Google. Усі ваші пристрої в колі. "
-        "Усе, що лежало на сервері недоставленим між пристроями. Усі посилання для приймання "
-        "файлів.",
+        "Усе, що лежало на сервері недоставленим між пристроями. Усі посилання, за якими ви "
+        "віддали об’єкт іншим людям, і всі посилання для приймання файлів.",
         "Your Point account and its link to your Google account. All your devices in the circle. "
-        "Everything left undelivered on the server between devices. All links for receiving "
-        "files.",
+        "Everything left undelivered on the server between devices. All links through which you "
+        "handed something to other people, and all links for receiving files.",
     ),
     "Что остаётся": ("Що лишається", "What stays"),
     "Объекты на самих устройствах: фотографии, документы, тексты. Сервер их не хранил и "

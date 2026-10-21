@@ -48,7 +48,7 @@ def _keys() -> set[str]:
                     keys.add(_literal(arg.left).partition(": ")[0])
     keys.add(pages.LIVES_A_DAY)
     keys.update(pages.SHORT_ANSWER)
-    for title, text in pages.WHAT_WE_KEEP:
+    for title, text in pages.WHAT_WE_KEEP + pages.ON_THE_PHONE + pages.OUTSIDE_SERVICES:
         keys.update((title, text))
     keys.update(pages.WHAT_WE_DO_NOT)
 
