@@ -88,4 +88,51 @@ class OutboxTest {
         assertTrue(result is com.point.core.model.ActionResult.Done)
         assertEquals(listOf("чек.jpg"), box.entries().map { it.meta["name"] })
     }
+
+    /**
+     * Набор — папка, и `copyTo` клал её пустой (#1414): телефону на забор отдать было нечего,
+     * и пустышка останавливала весь забор очереди. Набор едет архивом в порядке страниц.
+     */
+    @Test
+    fun `набор встаёт в очередь архивом со всеми страницами по порядку`() {
+        val box = outbox()
+        val pages = File(tmp.root, "pages-1168").apply { mkdirs() }
+        listOf("b.png", "a.png", "c.png").forEach { File(pages, it).writeText("страница $it") }
+        val set = PointObject(
+            "set", "inode/directory", ScratchRef(pages.absolutePath), ObjectState(ObjectKind.COLLECTION),
+            metadata = mapOf(
+                com.point.core.flow.META_COLLECTION_ORDER to com.point.core.flow.collectionOrderValue(listOf("c.png", "a.png")),
+                "op" to "pages",
+            ),
+        )
+
+        val id = box.add(set)
+
+        val entry = box.entries().single()
+        assertEquals("pages-1168.zip", entry.meta["name"])
+        assertEquals("application/zip", entry.meta["mime"])
+        assertEquals("знание набора едет вместе с ним", "pages", entry.meta["op"])
+        val file = box.file(id)
+        assertTrue("телефону на забор отдать нечего", file != null)
+        val pagesIn = java.util.zip.ZipFile(file!!).use { zip ->
+            zip.entries().toList().map { it.name to zip.getInputStream(it).readBytes().toString(Charsets.UTF_8) }
+        }
+        assertEquals(
+            "порядок набора потерян",
+            listOf("c.png" to "страница c.png", "a.png" to "страница a.png", "b.png" to "страница b.png"),
+            pagesIn,
+        )
+    }
+
+    /** Пустой набор не притворяется вещью: отказ, и в очереди не остаётся пустышки (#1414). */
+    @Test
+    fun `пустой набор не встаёт в очередь и не оставляет пустышки`() {
+        val box = outbox()
+        val empty = File(tmp.root, "пусто").apply { mkdirs() }
+        val set = PointObject("set", "inode/directory", ScratchRef(empty.absolutePath), ObjectState(ObjectKind.COLLECTION))
+
+        assertTrue(runCatching { box.add(set) }.isFailure)
+        assertTrue(box.entries().isEmpty())
+        assertTrue("пустышка осталась в папке очереди", File(tmp.root, "outbox").listFiles().orEmpty().isEmpty())
+    }
 }

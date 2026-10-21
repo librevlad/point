@@ -1,6 +1,7 @@
 package com.point.desktop
 
 import com.point.core.flow.PcOutboxEntry
+import com.point.core.flow.collectionOrder
 import com.point.core.flow.decodePcMeta
 import com.point.core.flow.encodePcMeta
 import com.point.core.model.PointObject
@@ -18,15 +19,30 @@ class Outbox(
     private val onGone: (id: Int, taken: Boolean) -> Unit = { _, _ -> },
 ) {
 
+    /**
+     * Вещь встаёт в очередь своими байтами — и набор тоже (#1414).
+     *
+     * Набор (страницы PDF, слайды) — папка, а `copyTo` для папки кладёт пустую папку без
+     * содержимого: компьютер говорил «получился новый объект», телефон ждал вечно, а забор с
+     * главного экрана упирался в пустышку и не доходил до соседних записей. Теперь набор
+     * едет одним архивом, страницы в нём лежат в порядке набора, — тем, что телефон умеет
+     * принять и открыть.
+     */
     @Synchronized
     fun add(obj: PointObject): Int {
         dir.mkdirs()
         val id = nextId()
-        File(obj.uri.value).copyTo(File(dir, "$id.bin"), overwrite = false)
-        val meta = packedForTravel(obj.metadata) + mapOf(
-            "name" to (obj.metadata["name"] ?: File(obj.uri.value).name),
-            "mime" to obj.mime,
-        )
+        val source = File(obj.uri.value)
+        val name = obj.metadata["name"] ?: source.name
+        val meta = if (source.isDirectory) {
+            val bin = File(dir, "$id.bin")
+            runCatching { bin.outputStream().use { out -> zipSet(source, collectionOrder(obj.metadata), out) } }
+                .onFailure { bin.delete(); throw it }
+            packedForTravel(obj.metadata) + mapOf("name" to setArchiveName(name), "mime" to SET_ARCHIVE_MIME)
+        } else {
+            source.copyTo(File(dir, "$id.bin"), overwrite = false)
+            packedForTravel(obj.metadata) + mapOf("name" to name, "mime" to obj.mime)
+        }
         File(dir, "$id.meta").writeText(encodePcMeta(meta))
         return id
     }
@@ -116,5 +132,34 @@ class Outbox(
         file.name.endsWith(".meta") -> file.name.removeSuffix(".meta").toIntOrNull()
         file.name.endsWith(".bin") -> file.name.removeSuffix(".bin").toIntOrNull()
         else -> null
+    }
+}
+
+/** Набор едет телефону архивом (#1414): так его байты целиком помещаются в одно письмо. */
+internal const val SET_ARCHIVE_MIME = "application/zip"
+
+/** Набор не собрался в архив — телефону это отказ, а не обещание. */
+internal const val SET_NOT_PACKED = "Набор не собрался для телефона — попробуйте ещё раз"
+
+internal fun setArchiveName(name: String): String =
+    if (name.endsWith(".zip", ignoreCase = true)) name else "$name.zip"
+
+/**
+ * Набор — одним архивом, страницы в порядке набора (#1414).
+ *
+ * Порядок — тот же, что видит человек (`inCollectionOrder`): известные порядку — как он
+ * велит, остальные — за ними по имени. Пустой набор архивом не притворяется: отдать телефону
+ * нечего, и это отказ, а не пустой файл.
+ */
+internal fun zipSet(dir: File, order: List<String>, out: java.io.OutputStream) {
+    val files = dir.walkTopDown().filter(File::isFile).toList()
+    require(files.isNotEmpty()) { "набор пуст" }
+    val pages = com.point.core.flow.inCollectionOrder(files, order) { it.relativeTo(dir).invariantSeparatorsPath }
+    java.util.zip.ZipOutputStream(out).use { zip ->
+        pages.forEach { file ->
+            zip.putNextEntry(java.util.zip.ZipEntry(file.relativeTo(dir).invariantSeparatorsPath))
+            file.inputStream().use { it.copyTo(zip) }
+            zip.closeEntry()
+        }
     }
 }

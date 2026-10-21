@@ -55,6 +55,9 @@ class SlowPcActionTest {
          * ему нужно, и не гадает, успеет ли машина за отведённые миллисекунды.
          */
         private val holds: kotlinx.coroutines.CompletableDeferred<Unit>? = null,
+
+        /** Работа рождает набор — папку страниц, как «Страницы» и «Слайды» (#1414). */
+        private val makesSet: Boolean = false,
     ) : Realizer {
         override val capabilityId = CapabilityId(id)
 
@@ -71,6 +74,20 @@ class SlowPcActionTest {
             finished = true
             if (fail) return ActionResult.Failure("сервис не ответил", recoverable = true)
             saysDone?.let { return it }
+            if (makesSet) {
+                val pages = File(dir, "pages").apply { mkdirs() }
+                listOf("p10.png", "p2.png", "p1.png").forEach { File(pages, it).writeText(it) }
+                return ActionResult.Success(
+                    ResultObject(
+                        ObjectKind.COLLECTION, "inode/directory", ScratchRef(pages.absolutePath),
+                        mapOf(
+                            "name" to "pages-1168",
+                            com.point.core.flow.META_COLLECTION_ORDER to
+                                com.point.core.flow.collectionOrderValue(listOf("p1.png", "p2.png", "p10.png")),
+                        ),
+                    ),
+                )
+            }
             val out = File(dir, "result.txt").apply { writeText("готово") }
             return ActionResult.Success(
                 ResultObject(
@@ -91,12 +108,18 @@ class SlowPcActionTest {
         assertTrue("не дождались условия за ${timeoutMs}мс", what())
     }
 
+    private val knocks = java.util.concurrent.atomic.AtomicInteger()
+
     private fun harness(realizer: Slow, outbox: Outbox): Pair<DesktopState, InboxItem> {
         val state = DesktopState(
             DesktopRegistry(setOf(Says(realizer.capabilityId.value))),
             Pick(mapOf(realizer.capabilityId.value to realizer)),
             clipboard = { },
             outbox = outbox,
+            knockPhone = {
+                knocks.incrementAndGet()
+                emptyMap()
+            },
         )
         val source = temp.newFile("исходный.jpg").apply { writeText("байты") }
         val item = InboxItem(
@@ -149,6 +172,56 @@ class SlowPcActionTest {
         val entry = outbox.entries().single()
         assertEquals("Текст со снимка", entry.meta["name"])
         assertEquals("знание едет вместе с результатом", "+380671234567", entry.meta["entity.phone"])
+    }
+
+    /**
+     * Готовый файл просьбы не привязывался к ней (#1416, живая охота 03.09): телефон десять
+     * раз видел его в очереди, а объект говорил «пока не ответил». Вещь несёт дом и название
+     * просьбы так же, как исход словами, — и компьютер стучит телефону, что готово.
+     */
+    @Test
+    fun `долгий результат несёт дом своей просьбы, и компьютер стучит телефону`() {
+        val outbox = Outbox(temp.newFolder("out-home"))
+        val until = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val slow = Slow("pdf", temp.newFolder("r6"), delayMs = 0, holds = until)
+        val (state, item) = harness(slow, outbox)
+        val fromPhone = item.copy(obj = item.obj.copy(metadata = mapOf(com.point.core.flow.META_ORIGIN_ID to "phone-obj")))
+        state.budgetTimer = { }
+
+        state.runRemoteActionNow("pdf", fromPhone, 5_000)
+        until.complete(Unit)
+
+        waitUntil { slow.finished && outbox.entries().isNotEmpty() }
+        val entry = outbox.entries().single()
+        val e = com.point.core.flow.PcExecFields
+        assertEquals("вещь не знает, к чьей просьбе она", "phone-obj", entry.meta[e.HOME])
+        assertEquals(phoneFacingLabel("pdf", "pdf"), entry.meta[e.LABEL])
+        assertTrue("телефон не узнает в ней ответ своей просьбы", com.point.core.flow.answersRequest(entry.meta))
+        assertEquals("готовое и есть файл", "готово", outbox.file(entry.id)!!.readText())
+        waitUntil { knocks.get() == 1 }
+    }
+
+    /**
+     * Набор страниц доезжает целиком (#1414): прежде очередь клала пустую папку, и телефон
+     * ждал вечно, а забор с главного экрана упирался в неё.
+     */
+    @Test
+    fun `долгий набор уезжает архивом в порядке страниц, а не пустой папкой`() {
+        val outbox = Outbox(temp.newFolder("out-set"))
+        val until = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val slow = Slow("pdf-pages", temp.newFolder("r7"), delayMs = 0, holds = until, makesSet = true)
+        val (state, item) = harness(slow, outbox)
+        state.budgetTimer = { }
+
+        state.runRemoteActionNow("pdf-pages", item, 5_000)
+        until.complete(Unit)
+
+        waitUntil { slow.finished && outbox.entries().isNotEmpty() }
+        val entry = outbox.entries().single()
+        assertEquals("pages-1168.zip", entry.meta["name"])
+        assertEquals("application/zip", entry.meta["mime"])
+        val names = java.util.zip.ZipFile(outbox.file(entry.id)!!).use { zip -> zip.entries().toList().map { it.name } }
+        assertEquals(listOf("p1.png", "p2.png", "p10.png"), names)
     }
 
     /**

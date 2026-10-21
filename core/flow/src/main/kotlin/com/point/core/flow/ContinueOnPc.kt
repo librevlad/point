@@ -262,6 +262,16 @@ fun withLineage(obj: com.point.core.model.PointObject, meta: Map<String, String>
     )
 }
 
+/**
+ * Готовая вещь просьбы, которую попросившее устройство отдало соседу (#1416).
+ *
+ * Вещь несёт дом своей просьбы, но не саму просьбу: просьбой (`REQUEST`) сосед зовёт
+ * исполнить, а вещь с одним домом — уже ответ, и место ей у объекта, где просьбу нажали.
+ */
+fun answersRequest(meta: Map<String, String>): Boolean =
+    !meta[PcExecFields.HOME].isNullOrBlank() && meta[PcExecFields.REQUEST].isNullOrBlank() &&
+        !PcResultFields.outcomeOnly(meta)
+
 /** Что из письма — служебное и знанием об объекте не является. */
 val PC_EXEC_META: Set<String> = setOf(
     PcExecFields.ACTION, PcExecFields.LABEL, PcExecFields.REQUEST, PcExecFields.HOME,

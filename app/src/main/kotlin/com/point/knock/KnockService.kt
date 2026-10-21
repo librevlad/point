@@ -71,6 +71,10 @@ class KnockService : FirebaseMessagingService() {
                 trace.note("стук услышан, зову: " + meaning.action + " · " + meaning.name)
                 Knock.tell(this, phoneRequestNotice(action = meaning.action, name = meaning.name))
             }
+            is KnockMeaning.Ready -> {
+                trace.note("стук услышан, зову за готовым: " + meaning.label + " · " + meaning.name)
+                Knock.tell(this, readyOnPcNotice(label = meaning.label, name = meaning.name), Knock.TAP_READY)
+            }
         }
     }
 

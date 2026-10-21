@@ -30,7 +30,7 @@ class RelayRequests(
 
     private fun replyFor(result: com.point.core.model.ActionResult?): Reply {
         val born = (result as? com.point.core.model.ActionResult.Success)?.result
-        val file = born?.let { java.io.File(it.uri.value).takeIf(java.io.File::isFile) }
+        val file = born?.let { java.io.File(it.uri.value).takeIf(java.io.File::exists) }
         if (born == null || file == null) {
             // Знание из Done едет телефону теми же understood-полями, что и объект-результат:
             // перенос не теряет понятое (PC2; аудит 2026-08-09).
@@ -44,13 +44,30 @@ class RelayRequests(
         val understood = packedForTravel(born.metadata)
             .filterKeys { it != "name" }
             .mapKeys { (k, _) -> com.point.core.flow.PcResultFields.UNDERSTOOD + k }
+        val name = born.metadata["name"] ?: file.name
+
+        // Набор едет архивом и срочным ответом (#1414): папка файлом не читается, и прежде
+        // телефону уходило голое «готово» без единой страницы.
+        // Не собрался — телефону отказ словами, а не «готово» без вещи.
+        val (sentName, mime, body) = if (file.isDirectory) {
+            val packed = java.io.ByteArrayOutputStream()
+            runCatching { zipSet(file, com.point.core.flow.collectionOrder(born.metadata), packed) }
+                .onFailure {
+                    return Reply(
+                        body = encodePcReceiveReply(PcActionOutcome.Failed(SET_NOT_PACKED)).toByteArray(Charsets.UTF_8),
+                    )
+                }
+            Triple(setArchiveName(name), SET_ARCHIVE_MIME, packed.toByteArray())
+        } else {
+            Triple(name, born.mime, file.readBytes())
+        }
         return Reply(
             meta = understood + mapOf(
-                com.point.core.flow.PcResultFields.NAME to (born.metadata["name"] ?: file.name),
-                com.point.core.flow.PcResultFields.MIME to born.mime,
+                com.point.core.flow.PcResultFields.NAME to sentName,
+                com.point.core.flow.PcResultFields.MIME to mime,
                 com.point.core.flow.PcResultFields.OUTCOME to com.point.core.flow.PcResultFields.DONE,
             ),
-            body = file.readBytes(),
+            body = body,
         )
     }
 
