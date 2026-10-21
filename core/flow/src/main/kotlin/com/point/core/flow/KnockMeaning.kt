@@ -17,6 +17,14 @@ sealed interface KnockMeaning {
     /** Позвать человека к работе, которая его ждёт. */
     data class Call(val action: String, val name: String) : KnockMeaning
 
+    /**
+     * Сказать, что готова работа, о которой просил сам телефон (#1416).
+     *
+     * Это не просьба компьютера: «Компьютер просит: сделать кое-что» над готовым файлом
+     * звало бы человека к работе, которой нет. [label] — как просьба называлась у человека.
+     */
+    data class Ready(val label: String, val name: String) : KnockMeaning
+
     /** Ничего не делать — и сказать словами, почему. */
     data class Silent(val why: String) : KnockMeaning
 }
@@ -39,6 +47,10 @@ fun knockMeaning(
         when {
             first == null && waiting.isEmpty() -> KnockMeaning.Silent("очередь компьютера пуста")
             first == null -> KnockMeaning.Silent("в очереди только исходы без объекта: ${waiting.size}")
+            answersRequest(first.meta) -> KnockMeaning.Ready(
+                label = first.meta[PcExecFields.LABEL].orEmpty(),
+                name = first.meta["name"].orEmpty(),
+            )
             else -> KnockMeaning.Call(
                 action = first.meta[KNOCK_ACTION_LABEL].orEmpty().ifBlank { somethingToDo },
                 name = first.meta["name"].orEmpty(),

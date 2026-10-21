@@ -66,4 +66,37 @@ class KnockMeaningTest {
 
         assertEquals(KnockMeaning.Call("сделать кое-что", "x.pdf"), meaning)
     }
+
+    /**
+     * Готовое по просьбе самого телефона — не просьба компьютера (#1416): «Компьютер просит:
+     * сделать кое-что» над готовым файлом звало бы человека к работе, которой нет.
+     */
+    @Test
+    fun `готовый результат просьбы телефона зовёт за готовым, а не к работе`() {
+        val meaning = knockMeaning(
+            KNOCK_ABOUT_OUTBOX,
+            linked = true,
+            waiting = listOf(
+                entry(4, PcExecFields.HOME to "phone-obj", PcExecFields.LABEL to "В PDF", "name" to "slides.pdf"),
+            ),
+        )
+
+        assertEquals(KnockMeaning.Ready("В PDF", "slides.pdf"), meaning)
+    }
+
+    @Test
+    fun `просьба компьютера с домом объекта остаётся просьбой`() {
+        val meaning = knockMeaning(
+            KNOCK_ABOUT_OUTBOX,
+            linked = true,
+            waiting = listOf(
+                entry(
+                    5, PcExecFields.HOME to "pc-obj", PcExecFields.REQUEST to "r-1",
+                    KNOCK_ACTION_LABEL to "Распознать", "name" to "фото.jpg",
+                ),
+            ),
+        )
+
+        assertEquals(KnockMeaning.Call("Распознать", "фото.jpg"), meaning)
+    }
 }

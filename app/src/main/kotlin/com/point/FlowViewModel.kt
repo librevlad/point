@@ -2532,7 +2532,81 @@ class FlowViewModel @Inject constructor(
             runCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
                 .recoverCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
         }
-        return things
+
+        // Готовая вещь просьбы возвращается к своей просьбе тем же уговором (#1416): чужая
+        // объекту на экране ждёт в очереди и остаётся в списке «с компьютера».
+        val landed = things.filter { entry ->
+            com.point.core.flow.answersRequest(entry.meta) && landNeighbourResult(pc, entry)
+        }
+        landed.forEach { entry ->
+            runCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
+                .recoverCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
+        }
+        return things - landed.toSet()
+    }
+
+    /** Записи, которые сейчас скачиваются домой: сторож и вход в объект не тянут одну дважды. */
+    private val resultsLanding = mutableSetOf<Int>()
+
+    /**
+     * Готовая вещь просьбы соседу вернулась домой (#1416) — тем же путём, что и срочный ответ
+     * той же просьбы: новый объект рядом с исходником, как найденное, и слово «готово» с
+     * именем файла. Прежде дом получали только слова: объект говорил «пока не ответил», а
+     * его файл лежал в общем списке «с компьютера».
+     *
+     * `false` — объекта просьбы перед человеком нет (или файл не скачался), и вещь ждёт в
+     * очереди: доедет входом в объект или обычным забором.
+     */
+    private suspend fun landNeighbourResult(
+        pc: com.point.core.flow.LinkedPc,
+        entry: com.point.core.flow.PcOutboxEntry,
+    ): Boolean {
+        val meta = entry.meta
+        val home = meta[com.point.core.flow.PcExecFields.HOME]
+        fun homeOnScreen(): PointObject? = stack.lastOrNull()?.obj
+            ?.takeIf { (it.metadata[com.point.core.flow.META_ORIGIN_ID] ?: it.id) == home }
+        if (homeOnScreen() == null || !resultsLanding.add(entry.id)) return false
+        try {
+            val name = meta["name"]?.takeIf { it.isNotBlank() } ?: "объект"
+            val path = pcFlow.pulledFiles.create("${entry.id}-$name")
+            if (!runCatching { pcFlow.transport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)) return false
+            val ingested = runCatching {
+                store.ingest("file://$path", meta["mime"] ?: "application/octet-stream")
+            }.getOrNull() ?: return false
+
+            // Пока файл ехал, человек мог уйти к другому объекту: тогда вещь ждёт своего.
+            val top = homeOnScreen() ?: return false
+            val (arrived, knowledge) = withTravelledText(ingested, meta - PC_SERVICE_META)
+            val produced = com.point.core.flow.withLineage(arrived, knowledge).copy(
+
+                // Имя вещи — то же, каким её назвал бы срочный ответ той же просьбы: одна
+                // и та же вещь, приехавшая дважды, остаётся одной находкой.
+                id = top.id + ":pc:" + (meta[com.point.core.flow.PcExecFields.CREATOR] ?: "result") + ":" +
+                    name.filter(Char::isLetterOrDigit).lowercase(),
+                metadata = com.point.core.flow.mergeKnowledge(
+                    arrived.metadata,
+                    knowledge - com.point.core.flow.PC_EXEC_META,
+                    region = phoneRegion.code(),
+                ) + ("name" to name),
+            )
+            landFindings(
+                com.point.core.model.Findings(
+                    objects = listOf(produced),
+                    relations = listOf(
+                        com.point.core.model.Relation(produced.id, com.point.core.model.RelationType.FOUND_IN, top.id),
+                    ),
+                ),
+            )
+            neighbourWord = null
+
+            // Те же слова, что у срочного ответа: «В PDF — готово: slides.pdf».
+            val about = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
+            val words = about?.let { "$it — готово: $name" } ?: "Готово: $name"
+            _ui.update { it.copy(message = words, messageOutcome = Outcome.DONE) }
+            return true
+        } finally {
+            resultsLanding.remove(entry.id)
+        }
     }
 
     /**

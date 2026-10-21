@@ -30,7 +30,7 @@ object Knock {
     /** Метка «открыто со стука»: по ней главный экран сразу забирает ждущую работу (#1091). */
     const val FROM_KNOCK = "from-knock"
 
-    fun tell(context: Context, text: String) {
+    fun tell(context: Context, text: String, hint: String = TAP) {
         channel(context)
         val open = Intent(context, HomeActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -47,7 +47,7 @@ object Knock {
         val note = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_tile_point)
             .setContentTitle(text)
-            .setContentText(TAP)
+            .setContentText(hint)
             .setContentIntent(tap)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -71,6 +71,9 @@ object Knock {
     private const val CHANNEL_NAME = "Просьбы компьютера"
     private const val CHANNEL_WHAT = "Компьютер просит телефон что-то сделать с объектом"
     private const val TAP = "Нажмите, чтобы забрать объект и сделать"
+
+    /** Готовое забирают, а не делают (#1416). */
+    const val TAP_READY = "Нажмите, чтобы забрать готовое"
 }
 
 /**
@@ -80,3 +83,8 @@ object Knock {
  */
 fun phoneRequestNotice(action: String, name: String): String =
     "Компьютер просит: $action" + name.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+
+/** Готово то, о чём просил телефон (#1416): человека зовут за результатом, а не к работе. */
+fun readyOnPcNotice(label: String, name: String): String =
+    "Готово на компьютере" + label.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty() +
+        name.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()

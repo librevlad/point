@@ -66,6 +66,38 @@ class RelayRequestsTest {
         )
     }
 
+    /**
+     * Набор срочным ответом (#1414): папка файлом не читается, и телефону уходило голое
+     * «готово» без единой страницы. Теперь набор едет архивом в порядке страниц.
+     */
+    @Test
+    fun `набор в срочном ответе едет архивом, а не голым «готово»`() {
+        val pages = tmp.newFolder("pages-7").apply {
+            listOf("p2.png", "p1.png").forEach { File(this, it).writeText(it) }
+        }
+        result = com.point.core.model.ActionResult.Success(
+            com.point.core.model.ResultObject(
+                com.point.core.model.ObjectKind.COLLECTION, "inode/directory",
+                com.point.core.model.ScratchRef(pages.absolutePath),
+                mapOf("name" to "pages-7"),
+            ),
+        )
+
+        val reply = requests().answer(
+            RelayRpc.OBJECT,
+            mapOf("name" to "a.pdf", "mime" to "application/pdf", "action" to "pdf-pages", "entity.money" to "693,40"),
+            "pdf".toByteArray(Charsets.UTF_8),
+        )!!
+
+        val f = com.point.core.flow.PcResultFields
+        assertEquals("pages-7.zip", reply.meta[f.NAME])
+        assertEquals("application/zip", reply.meta[f.MIME])
+        val names = java.util.zip.ZipInputStream(reply.body.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.map { it.name }.toList()
+        }
+        assertEquals(listOf("p1.png", "p2.png"), names)
+    }
+
     @Test
     fun `знание из Done уезжает телефону understood-полями`() {
         result = com.point.core.model.ActionResult.Done(

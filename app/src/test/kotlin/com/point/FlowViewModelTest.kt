@@ -1466,6 +1466,74 @@ class FlowViewModelTest {
         assertEquals("исход без объекта — не вещь для списка «с компьютера»", 0, vm.fromPcCount.value)
     }
 
+    /** Готовая вещь долгой просьбы, какой её кладёт компьютер (#1416): дом, название, родословная. */
+    private fun resultEntry(id: Int, home: String = "in", name: String = "slides.pdf") = com.point.core.flow.PcOutboxEntry(
+        id,
+        mapOf(
+            "name" to name,
+            "mime" to "application/pdf",
+            com.point.core.flow.PcExecFields.HOME to home,
+            com.point.core.flow.PcExecFields.LABEL to "В PDF",
+            com.point.core.flow.PcExecFields.OF to home,
+            com.point.core.flow.PcExecFields.CREATOR to "pdf",
+            com.point.core.flow.PcExecFields.BY to "pc",
+        ),
+    )
+
+    /**
+     * Готовый файл долгой просьбы не возвращался к ней (#1416, живая охота 03.09): телефон
+     * десять раз видел его в очереди, а объект сказал «пока не ответил», и файл остался в
+     * общем списке «с компьютера». Он приходит тем же, чем пришёл бы срочный ответ: находкой
+     * рядом с исходником и словом «готово» с именем файла.
+     */
+    @Test fun `готовый файл долгой просьбы возвращается к своему объекту, а не в список «с компьютера»`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Sent(
+            action = com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_STILL_WORKING),
+        )
+        resolver.realizer = neighbour(action = "pdf", label = "В PDF")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "pc-do:pdf", title = "В PDF"))
+        dispatcher.scheduler.advanceTimeBy(1_000); dispatcher.scheduler.runCurrent()
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, vm.ui.value.message)
+
+        pcTransport.outbox = listOf(resultEntry(4))
+        dispatcher.scheduler.advanceTimeBy(6_000); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertTrue("объект не назвал ни просьбу, ни готовый файл: $said", "В PDF" in said && "slides.pdf" in said)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
+        assertEquals("вещь доехала — вот теперь она подтверждена", listOf(4), pcTransport.acked)
+        assertEquals("вещь просьбы осталась в общем списке «с компьютера»", 0, vm.fromPcCount.value)
+        val frame = vm.ui.value.frame!!
+        assertEquals("человек остаётся на исходнике", "in", frame.obj.id)
+        val made = frame.found.singleOrNull { it.metadata["name"] == "slides.pdf" }
+        assertNotNull("готовый файл не встал рядом с исходником: ${frame.found}", made)
+        assertTrue(
+            "файл не связан с объектом, из которого сделан",
+            frame.relations.any { it.fromId == made!!.id && it.toId == "in" },
+        )
+        assertEquals("родословная потеряна", listOf("in"), made!!.sourceObjects)
+
+        // Сторож своё отработал: «пока не ответил» не говорится, когда ответ уже дома.
+        dispatcher.scheduler.advanceTimeBy(120_000); advanceUntilIdle()
+        assertNotEquals(com.point.core.flow.PC_NO_ANSWER_YET, vm.ui.value.message)
+    }
+
+    /** Готовое по чужому объекту не всплывает поверх экрана без него и ждёт в списке (#1416, PC4). */
+    @Test fun `готовый файл чужой просьбы не садится к другому объекту и остаётся в списке`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = listOf(resultEntry(4, home = "другой-объект"))
+        val vm = vm()
+
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertTrue("чужая вещь подтверждена — и пропала из очереди", pcTransport.acked.isEmpty())
+        assertTrue("чужая вещь села находкой к этому объекту", vm.ui.value.frame!!.found.none { it.metadata["name"] == "slides.pdf" })
+        assertEquals("вещь пропала из списка «с компьютера»", 1, vm.fromPcCount.value)
+    }
+
     /**
      * Ждать позднего исхода стоит у того ответа, который сам говорит, что работа не кончилась
      * (#1073, адверсарное ревью). Признак на исполнителе целиком заставлял телефон целую

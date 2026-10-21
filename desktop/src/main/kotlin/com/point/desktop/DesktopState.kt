@@ -438,28 +438,41 @@ class DesktopState(
             val late = runCatching { work.await() }.getOrNull()
             runCatching {
                 if (late is ActionResult.Success) {
-                    outbox?.add(
-                        com.point.core.model.PointObject(
-                            id = java.util.UUID.randomUUID().toString(),
-                            mime = late.result.mime,
-                            uri = late.result.uri,
-                            state = com.point.core.model.ObjectState(late.result.type),
+                    val made = com.point.core.model.PointObject(
+                        id = java.util.UUID.randomUUID().toString(),
+                        mime = late.result.mime,
+                        uri = late.result.uri,
+                        state = com.point.core.model.ObjectState(late.result.type),
 
-                            // Долгая работа возвращается тем же объектом, что и быстрая
-                            // (#1112): из чего сделан, чем сделан и каким путём. Прежде
-                            // медленный результат приезжал на телефон сиротой с
-                            // происхождением «дано» — как будто его прислал человек.
-                            metadata = late.result.metadata + com.point.core.flow.lineageMeta(
-                                sourceId = homeOf(item),
-                                creator = id,
-                                provenance = late.result.provenance,
-                                executor = PC_EXECUTOR,
-                            ),
-                            sourceObjects = listOf(item.obj.id),
-                            creatorAction = id,
+                        // Долгая работа возвращается тем же объектом, что и быстрая
+                        // (#1112): из чего сделан, чем сделан и каким путём. Прежде
+                        // медленный результат приезжал на телефон сиротой с
+                        // происхождением «дано» — как будто его прислал человек.
+                        metadata = late.result.metadata + com.point.core.flow.lineageMeta(
+                            sourceId = homeOf(item),
+                            creator = id,
                             provenance = late.result.provenance,
-                        ),
+                            executor = PC_EXECUTOR,
+                        ) + resultHome(id, item),
+                        sourceObjects = listOf(item.obj.id),
+                        creatorAction = id,
+                        provenance = late.result.provenance,
                     )
+                    val queued = runCatching { outbox?.add(made) }
+
+                    // Вещь не легла в очередь — телефону отказ словами (#1414): иначе он
+                    // ждал бы готового, которого уже не будет, а сказано было бы одному
+                    // компьютеру.
+                    queued.onFailure {
+                        outbox?.addOutcome(
+                            lateOutcomeMeta(id, item, ActionResult.Failure(RESULT_NOT_QUEUED, recoverable = true)),
+                        )
+                    }.getOrThrow()
+
+                    // Готовое ждёт телефона — и телефону об этом стучат (#1416). Сторож на
+                    // телефоне живёт минуту, а работа на компьютере идёт дольше: без стука
+                    // результат лежал, пока человек сам не откроет Point.
+                    knockPhoneAndWatch(about = item.obj.id) { }
                 } else {
                     // Исход без объекта — «Отменено» у диалога, «готово» словами, отказ —
                     // едет телефону той же очередью (#1073). Прежде ехал только файл, и
@@ -468,7 +481,7 @@ class DesktopState(
                     outbox?.addOutcome(lateOutcomeMeta(id, item, late))
                 }
             }.onFailure {
-                val why = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
+                val why = RESULT_NOT_QUEUED
                 _message.value = why
                 note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
             }
@@ -496,21 +509,32 @@ class DesktopState(
      */
     private fun lateOutcomeMeta(id: String, item: InboxItem, late: ActionResult?): Map<String, String> {
         val f = com.point.core.flow.PcResultFields
-        val e = com.point.core.flow.PcExecFields
         val outcome = com.point.core.flow.pcActionOutcomeOf(late)
             // Работа кончилась ничем — ни исходом, ни объектом: телефону это срыв, а не тишина.
             ?: com.point.core.flow.PcActionOutcome.Failed(DID_NOT_RUN)
         val understood = packedForTravel((late as? ActionResult.Done)?.findings?.metadata.orEmpty())
             .mapKeys { (k, _) -> f.UNDERSTOOD + k }
-        return mapOf(
-            e.HOME to homeOf(item),
-            e.LABEL to phoneFacingLabel(id, titleOf(id, item)),
-        ) + f.of(outcome) + understood
+        return resultHome(id, item) + f.of(outcome) + understood
     }
+
+    /**
+     * Чья это просьба — у исхода словами и у готовой вещи одинаково (#1416).
+     *
+     * Вещь прежде ехала одной родословной («из чего сделана»), а просьбу, к которой она
+     * относится, телефон по ней не узнавал: файл ложился в общий список «с компьютера», а
+     * объект говорил «пока не ответил». Теперь вещь несёт тот же дом и то же название
+     * просьбы, что и исход словами, — и возвращается к своему объекту.
+     */
+    private fun resultHome(id: String, item: InboxItem): Map<String, String> = mapOf(
+        com.point.core.flow.PcExecFields.HOME to homeOf(item),
+        com.point.core.flow.PcExecFields.LABEL to phoneFacingLabel(id, titleOf(id, item)),
+    )
 
     companion object {
 
         private const val DID_NOT_RUN = "Действие не выполнилось — попробуйте ещё раз"
+
+        private const val RESULT_NOT_QUEUED = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
 
         /** Как компьютер называет себя в происхождении знания (#1127). */
         const val PC_EXECUTOR = "pc"
