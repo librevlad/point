@@ -35,6 +35,10 @@ class UserKeyLlmClient(
     override fun canHandle(obj: PointObject): Boolean =
         !obj.mime.startsWith("image/") || frames !== FrameForModel.NONE
 
+    // Свой ключ Claude у человека есть — на его работе вся связка ключей идёт в цепочке первой.
+    override fun strongAt(obj: PointObject, prompt: String): Boolean =
+        claudeStrongAt(obj, prompt) && userKeys.keys().of(ANTHROPIC_PROVIDER_ID) != null
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject = run(obj, prompt, emptySet())
 
     override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
@@ -48,7 +52,12 @@ class UserKeyLlmClient(
         // Виток «сильнее» обходит уже отвечавшие сервисы и среди ключей человека —
         // но только когда есть кем заменить: повтор лучше отказа (#1010, #1176).
         val freshKeys = mine.filter { it.providerId !in avoidServices }
-        val queue = if (avoidServices.isEmpty() || freshKeys.isEmpty()) mine else freshKeys
+        val picked = if (avoidServices.isEmpty() || freshKeys.isEmpty()) mine else freshKeys
+        val queue = if (claudeStrongAt(obj, prompt)) {
+            picked.sortedByDescending { it.providerId == ANTHROPIC_PROVIDER_ID }
+        } else {
+            picked
+        }
 
         val errors = mutableListOf<String>()
         for (key in queue) {

@@ -32,7 +32,11 @@ class FallbackLlmClient(
         // (#795): человек попросил лучший результат, а не самый бережный порядок.
         val strongestFirst = obj.mime.startsWith("image/") ||
             runCatching { yolo.enabled() }.getOrDefault(false)
-        val ordered = if (strongestFirst) providers.sortedByDescending { it.strongVision } else providers
+        val byVision = if (strongestFirst) providers.sortedByDescending { it.strongVision } else providers
+
+        // Кто силён именно в этой работе — первым; сортировка устойчивая, остальной порядок
+        // (бесплатное перед платным) остаётся прежним.
+        val ordered = byVision.sortedByDescending { runCatching { it.strongAt(obj, prompt) }.getOrDefault(false) }
 
         // Сначала режим, потом всё остальное: сервис, который режим не пускает, не должен
         // даже пробоваться.

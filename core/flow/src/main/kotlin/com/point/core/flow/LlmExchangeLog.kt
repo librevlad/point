@@ -26,6 +26,8 @@ class LoggingLlmClient(
 
     override fun canHandle(obj: PointObject): Boolean = inner.canHandle(obj)
 
+    override fun strongAt(obj: PointObject, prompt: String): Boolean = inner.strongAt(obj, prompt)
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         val result = runCatching { inner.run(obj, prompt) }
         if (enabled) runCatching { record(obj, prompt, result) }
