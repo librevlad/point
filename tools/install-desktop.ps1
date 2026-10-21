@@ -64,7 +64,11 @@ if (-not $Msi -or -not (Test-Path $Msi)) {
 # msiexec не открывает путь с прямыми косыми (1619 «пакет не открыть», в логе — «путь пуст»):
 # путь приводится к полному виду Windows до передачи.
 $Msi = (Resolve-Path $Msi).ProviderPath
-$wanted = [IO.Path]::GetFileNameWithoutExtension($Msi) -replace '^Point-', ''
+# Версия — из имени, а не срезанием префикса (#1448): релизный поезд кладёт ассет как
+# `Point-desktop-v<версия>.msi`, сборка — как `Point-<версия>.msi`, а в реестре лежит голая
+# `<версия>`. Срезанный префикс давал `desktop-v0.3.7` и ложное «версия разошлась» каждый раз.
+$name = [IO.Path]::GetFileNameWithoutExtension($Msi)
+$wanted = if ($name -match '\d+\.\d+\.\d+') { $Matches[0] } else { $name -replace '^Point-', '' }
 Write-Output ("Ставлю Point {0} из {1}" -f $wanted, $Msi)
 
 # 1. Point не должен работать: занятые файлы и есть причина поломки.
