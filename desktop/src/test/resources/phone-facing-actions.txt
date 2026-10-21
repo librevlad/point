@@ -19,6 +19,7 @@ qr=QR-код	TEXT,URL				45
 archive=Распаковать	ZIP				50
 excel=В Excel	IMAGE,TEXT,PDF,COLLECTION				50
 image=Сжать	IMAGE				50
+merge-pdf=Объединить в PDF	COLLECTION				50
 ocr=Распознать текст	IMAGE				50
 ocr-cloud=Прочитать сильнее	IMAGE				50
 office=Извлечь текст	OFFICE				50

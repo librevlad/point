@@ -66,6 +66,9 @@ fun desktopCapabilities(
     com.point.core.flow.FindCapability(),
     com.point.core.flow.ExtractAllCapability(),
     com.point.core.flow.CorrectValueCapability(),
+
+    // Картинки набора в PDF собирает pdfbox (#1379, волна 2): лист тот же, что у телефона.
+    com.point.core.flow.MergePdfCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,

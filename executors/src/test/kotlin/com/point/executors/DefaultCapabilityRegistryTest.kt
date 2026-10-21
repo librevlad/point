@@ -39,7 +39,7 @@ class DefaultCapabilityRegistryTest {
             SaveCapability(),
             SaveAllCapability(),
             ShareAllCapability(),
-            MergePdfCapability(),
+            MergePdfCapabilityOnPhone(),
             ScanPdfCapability(),
             OpenCapability(),
             PdfCapability(),

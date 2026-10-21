@@ -1,10 +1,11 @@
-package com.point.executors
-
-import com.point.core.flow.Box
+package com.point.core.flow
 
 /**
  * Лист под страницу PDF и сжатие страницы по её содержимому (#1047, решение владельца
  * 23.08.2026 — «размер листа + сжатие по содержимому»).
+ *
+ * Живёт в `:core:flow` (#1379): тем же листом собирают PDF и телефон (`PdfDocument`), и
+ * компьютер (pdfbox) — один лист на оба устройства, а не две копии правила.
  *
  * PDF меряет страницу в точках 1/72 дюйма, а Point отдавал размером страницы число пикселей
  * снимка: страница со снимка 1500×2000 объявляла себя листом 53×71 см. Такой PDF печатается
@@ -31,7 +32,7 @@ import com.point.core.flow.Box
  */
 
 /** Лист в точках PDF — 1/72 дюйма; в них же `PdfDocument` меряет страницу. */
-internal data class Sheet(val width: Int, val height: Int)
+data class Sheet(val width: Int, val height: Int)
 
 /**
  * Лист под страницу: A4 в её ориентации.
@@ -42,7 +43,7 @@ internal data class Sheet(val width: Int, val height: Int)
  * кадр. Пропорция снимка про бумагу ничего не знает; страница встаёт на лист целиком и по
  * центру, а не растягивается под него.
  */
-internal fun sheetFor(widthPx: Int, heightPx: Int): Sheet =
+fun sheetFor(widthPx: Int, heightPx: Int): Sheet =
     if (heightPx >= widthPx) A4 else Sheet(A4.height, A4.width)
 
 /**
@@ -56,7 +57,7 @@ internal fun sheetFor(widthPx: Int, heightPx: Int): Sheet =
  * Чёрно-белой страницы это правило не касается вовсе: её вес — не в пикселях, а ужатие
  * только испортило бы мелкий шрифт (см. KDoc выше — замер).
  */
-internal fun Sheet.pageMaxPx(): Int = maxOf(width, height) * PRINT_DPI / POINTS_PER_INCH
+fun Sheet.pageMaxPx(): Int = maxOf(width, height) * PRINT_DPI / POINTS_PER_INCH
 
 /**
  * Место страницы на листе: по центру, с полем и без растяжения.
@@ -64,7 +65,7 @@ internal fun Sheet.pageMaxPx(): Int = maxOf(width, height) * PRINT_DPI / POINTS_
  * Поле — не украшение: у принтера край листа не печатается, и без поля страница выходит
  * обрезанной по краям вместо «на лист целиком».
  */
-internal fun Sheet.boxFor(widthPx: Int, heightPx: Int): Box {
+fun Sheet.boxFor(widthPx: Int, heightPx: Int): Box {
     val pageWidth = widthPx.coerceAtLeast(1)
     val pageHeight = heightPx.coerceAtLeast(1)
     val fit = minOf(
@@ -82,7 +83,7 @@ internal fun Sheet.boxFor(widthPx: Int, heightPx: Int): Box {
  * Такую страницу оставляют как есть: она уже сжата до предела, а любое сглаживание или
  * округление только добавит ей полутонов и веса.
  */
-internal fun inkOnPaper(pixels: IntArray): Boolean {
+fun inkOnPaper(pixels: IntArray): Boolean {
     val seen = IntArray(INK_COLOURS)
     var found = 0
     for (pixel in pixels) {
@@ -111,7 +112,7 @@ internal fun inkOnPaper(pixels: IntArray): Boolean {
  * бы ещё ~9 МБ поверх уже собранных страниц, которые `PdfDocument` держит разом. Живёт такой
  * массив одну страницу, но пик приходится на последнюю — когда собранного больше всего.
  */
-internal fun fewerTones(pixels: IntArray) {
+fun fewerTones(pixels: IntArray) {
     for (at in pixels.indices) {
         val pixel = pixels[at]
         pixels[at] = (pixel and ALPHA) or
@@ -128,7 +129,7 @@ private fun step(channel: Int): Int {
 }
 
 /** Лист: на нём же Point печатает текст, разложенный по страницам. */
-internal val A4 = Sheet(595, 842)
+val A4 = Sheet(595, 842)
 
 /** Точек PDF в дюйме. */
 private const val POINTS_PER_INCH = 72

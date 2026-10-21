@@ -52,7 +52,7 @@ class RealCapabilityInventoryTest {
         FixErrorsCapabilityOnPhone(aiKeysReady), FixErrorsStrongerCapabilityOnPhone(aiKeysReady),
         CutoutCapability(), EmailCapability(), EventCapability(),
         ExcelCapabilityOnPhone(aiKeysReady), ExtractAllCapabilityOnPhone(), FindCapabilityOnPhone(),
-        JobReplyCapabilityOnPhone(aiKeysReady), MapCapability(), MergePdfCapability(),
+        JobReplyCapabilityOnPhone(aiKeysReady), MapCapability(), MergePdfCapabilityOnPhone(),
         OpenCapability(), OpenInCapability(), OpenUrlCapability(),
         PagesCapabilityOnPhone(), PcCapability(pairedPc), PhoneAppsCapability(),
         ReadDocumentCapabilityOnPhone(),
