@@ -220,4 +220,29 @@ class DefaultResolverTest {
 
         assertEquals("local", (result as ActionResult.Done).message)
     }
+
+    @Test
+    fun `кто сделает работу — тот же выбор, что и исполнитель`() {
+
+        // #1413: в режиме «делай лучшее» вперёд идёт компьютер, который отправит дальше, —
+        // и слово о цене обязано назвать его, а не телефон.
+        val phone = realizer("read-document", priority = 10)
+        val pc = object : Realizer {
+            override val capabilityId = CapabilityId("read-document")
+            override val meta = RealizerMeta(kind = RealizerKind.REMOTE, leavesCircle = true)
+            override suspend fun perform(input: PointObject, amendment: String?) = ActionResult.Done("pc")
+        }
+        val yolo = object : com.point.core.flow.YoloMode {
+            override fun enabled() = true
+            override suspend fun setEnabled(enabled: Boolean) = Unit
+        }
+        val state = ObjectState(ObjectKind.PDF)
+
+        val careful = DefaultResolver(setOf(phone, pc), registry)
+        val best = DefaultResolver(setOf(phone, pc), registry, com.point.core.flow.DefaultExecutionPolicy(yolo))
+
+        assertEquals(RealizerKind.LOCAL, careful.chosenFor(CapabilityId("read-document"), state)?.kind)
+        assertEquals(RealizerKind.REMOTE, best.chosenFor(CapabilityId("read-document"), state)?.kind)
+        assertEquals(null, best.chosenFor(CapabilityId("nobody"), state))
+    }
 }

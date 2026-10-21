@@ -295,6 +295,17 @@ abstract class CapabilityModule {
             com.point.core.flow.DefaultExecutionPolicy(yolo)
 
         /**
+         * Кого Resolver позовёт первым — для слова о цене на кнопке (#1413). Через Provider:
+         * Resolver сам спрашивает реестр, и прямая зависимость замкнула бы круг. Берётся один
+         * раз на реестр: исполнители (и объявление компьютера) собраны тогда же, когда и он.
+         */
+        @Provides
+        fun chosenExecutor(resolver: javax.inject.Provider<Resolver>): com.point.core.flow.ChosenExecutor {
+            val once by lazy { resolver.get() }
+            return com.point.core.flow.ChosenExecutor { id, state -> once.chosenFor(id, state) }
+        }
+
+        /**
          * Орган «офис → PDF» живёт на компьютере (#403): телефон его не имеет и пересказом
          * не подменяет. Способность видит орган и сама решает, действие это или причина.
          */

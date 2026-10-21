@@ -37,6 +37,13 @@ class DefaultCapabilityRegistry @Inject constructor(
      * по тапу человек узнаёт причину и может сменить режим. Меняются слова, а не список.
      */
     private val privacy: com.point.core.flow.CloudPrivacySettings = OPEN_TO_EVERYONE,
+
+    /**
+     * Кого позовут первым (#1413). Обещание, называющее здешнего исполнителя («· на
+     * телефоне»), говорит правду только о нём: в режиме «делай лучшее» слитое с компьютером
+     * действие уходило на компьютер и в сервис под словами телефона.
+     */
+    private val chosen: com.point.core.flow.ChosenExecutor = com.point.core.flow.ChosenExecutor { _, _ -> null },
 ) : CapabilityRegistry {
 
     private val byIdMap: Map<CapabilityId, Capability> = capabilities.associateBy { it.id }
@@ -105,7 +112,10 @@ class DefaultCapabilityRegistry @Inject constructor(
         tier = tierOf(c.meta),
         intent = primaryIntentOf(c, state),
 
-        yields = c.yields(state),
+        yields = c.yields(state).let { promise ->
+            if (!com.point.core.flow.promiseNamesHere(promise)) promise
+            else com.point.core.flow.promiseOfChosen(promise, runCatching { chosen.chosenFor(c.id, state) }.getOrNull())
+        },
         unusableReason = unusableReason ?: offlineReason(c),
 
         // Какое найденное значение действие продолжает — по нему экран кладёт действие к
