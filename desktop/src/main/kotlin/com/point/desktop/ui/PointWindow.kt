@@ -442,26 +442,6 @@ internal fun linkLine(signedIn: Boolean, others: List<com.point.core.flow.Circle
 /** Строка связи без входа: подключать устройства — дело входа, а не ожидания. */
 internal const val DEVICES_NOT_LINKED = "устройства не подключены"
 
-/**
- * Справа пусто, пока объект не выбран: что сюда встанет. Как его принести, сказано слева, под
- * «Новым объектом», — второй раз здесь это был бы второй вход в то же действие.
- */
-@Composable
-private fun NothingOpen(empty: Boolean) {
-    Column(
-        Modifier.fillMaxSize().padding(40.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        PointGlyph(size = 52.dp)
-        Text(
-            if (empty) "Здесь откроется объект" else "Выберите объект слева",
-            style = PointType.title,
-            modifier = Modifier.padding(top = 16.dp),
-        )
-    }
-}
-
 /** Сообщение окна: капсула внизу, гаснет сама по сроку или по щелчку. */
 @Composable
 internal fun WindowMessage(state: DesktopState, modifier: Modifier = Modifier) {
