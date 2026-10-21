@@ -25,3 +25,17 @@ fun byIntentThenPriority(
     { it.meta.priority },
     { it.id.value },
 )
+
+/**
+ * Вопрос этого действия для этого объекта уже закрыт находкой (#1010, #1411).
+ *
+ * Отвеченный вопрос не предлагается первым заново: расшифрованная запись не зовёт
+ * «Расшифровать» главным, прочитанное — «Прочитать». Действие остаётся в списке, но уступает
+ * следующему шагу. Правило жило только в телефонной политике, и на компьютере после
+ * расшифровки «Расшифровать» по-прежнему стояло первым своим приоритетом.
+ *
+ * Вопрос — заявленный действием (`meta.answers`), когда он не совпадает с id: «Считать QR»
+ * отвечает на qr-content (#1119).
+ */
+fun alreadyAnswered(capability: Capability, graph: GraphState): Boolean =
+    investigationStateOf(graph.obj.metadata, capability.meta.answers ?: capability.id) == InvestigationState.FOUND

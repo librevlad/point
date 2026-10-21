@@ -12,16 +12,60 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-internal fun formatEntities(entities: List<Entity>): String {
-    fun values(type: EntityType) =
-        entities.filter { it.type == type }.map { it.value.trim() }.filter { it.isNotBlank() }.distinct()
+/**
+ * Сводка того, что Point об объекте знает (#1422).
+ *
+ * Прежде сводка была своим списком из четырёх видов и вторым чтением мимо графа: даты и суммы,
+ * уже найденные и показанные действиями на том же экране, в «данные» не попадали. Теперь
+ * первым идёт знание объекта — каждый вид `entity.*`, у которого есть имя для человека, со
+ * всеми его «ещё», — а чтение текста только добавляет то, чего граф не назвал.
+ *
+ * Подписи при знании (источник, спор, строка документа) — не данные и в сводку не идут.
+ */
+internal fun formatEntities(entities: List<Entity>, facts: Map<String, String> = emptyMap()): String {
+    val found = linkedMapOf<String, MutableList<String>>()
+    fun add(key: String, value: String) {
+        val clean = value.trim()
+        if (clean.isBlank()) return
+        val list = found.getOrPut(key) { mutableListOf() }
+        if (list.none { sameValue(it, clean) }) list += clean
+    }
+
+    facts.keys
+        .filter { it.startsWith(META_ENTITY_PREFIX) && !isAnnotationKey(it) && understoodName(it) != null }
+        .sortedBy { key -> SECTION_ORDER.indexOf(key).let { if (it < 0) SECTION_ORDER.size else it } }
+        .forEach { key ->
+            facts[key]?.let { add(key, it) }
+            moreOf(facts, key).forEach { add(key, it) }
+        }
+    entities.forEach { entity -> entity.type.summaryKey()?.let { add(it, entity.value) } }
 
     return buildString {
-        appendSection("Телефоны", values(EntityType.PHONE))
-        appendSection("Почты", values(EntityType.EMAIL))
-        appendSection("Ссылки", values(EntityType.URL))
-        appendSection("Адреса", values(EntityType.ADDRESS))
+        SECTION_ORDER.filter { it in found }.forEach { appendSection(sectionTitle(it), found.getValue(it)) }
+        found.keys.filterNot { it in SECTION_ORDER }.forEach { appendSection(sectionTitle(it), found.getValue(it)) }
     }.trim()
+}
+
+private val SECTION_ORDER = listOf("phone", "email", "url", "address", "date", "amount", "card")
+    .map { META_ENTITY_PREFIX + it }
+
+private fun EntityType.summaryKey(): String? = asMetaKey() ?: if (this == EntityType.MONEY) META_ENTITY_AMOUNT else null
+
+private fun sectionTitle(key: String): String = when (key.removePrefix(META_ENTITY_PREFIX)) {
+    "phone" -> "Телефоны"
+    "email" -> "Почты"
+    "url" -> "Ссылки"
+    "address" -> "Адреса"
+    "date" -> "Даты"
+    "amount" -> "Суммы"
+    "card" -> "Карты"
+    else -> understoodName(key) ?: key.removePrefix(META_ENTITY_PREFIX)
+}
+
+/** Одно значение, записанное по-разному: «+380 67 123 45 67» и «+380671234567». */
+private fun sameValue(a: String, b: String): Boolean {
+    fun core(s: String) = s.lowercase().filter(Char::isLetterOrDigit)
+    return core(a).isNotEmpty() && core(a) == core(b)
 }
 
 private fun StringBuilder.appendSection(title: String, items: List<String>) {
@@ -60,7 +104,7 @@ class ExtractAllRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 val text = com.point.core.flow.entitySourceText(input)
-                val list = formatEntities(extractor.extract(text))
+                val list = formatEntities(extractor.extract(text), input.metadata)
                 if (list.isBlank()) {
                     ActionResult.Failure("Не удалось собрать данные", recoverable = true)
                 } else {
