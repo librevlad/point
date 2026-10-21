@@ -53,6 +53,16 @@ class DefaultResolver @Inject constructor(
         }
     }
 
+    override fun chosenFor(
+        capabilityId: CapabilityId,
+        state: com.point.core.model.ObjectState,
+    ): com.point.core.flow.RealizerMeta? {
+        val candidates = byCapability[capabilityId] ?: return null
+        val usable = staysHomeWhenUnfit(state, candidates) { sendsOutward(it) }
+        if (usable.isEmpty()) return null
+        return (policy.choose(state, usable).firstOrNull() ?: usable.minByOrNull { it.meta.priority })?.meta
+    }
+
     // Согласие спрашивается по объявленному уходу наружу, а не по виду исполнителя (#1088):
     // свой компьютер круга объектом наружу не торгует, но, если он сам сказал, что отправит
     // дальше, вопрос остаётся тем же.

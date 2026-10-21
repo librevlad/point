@@ -551,4 +551,31 @@ class DefaultCapabilityRegistryTest {
         assertEquals(setOf(Intent.SEND), ShareCapability().intents(ObjectState(ObjectKind.IMAGE)))
         assertEquals(setOf(Intent.SEND), SaveCapability().intents(ObjectState(ObjectKind.IMAGE)))
     }
+
+    @Test
+    fun `слово о цене называет того, кого позовут`() {
+
+        // #1413: «Прочитать документ · на телефоне» уходило на компьютер и в сервис.
+        val read = object : com.point.core.flow.Capability {
+            override val id = CapabilityId("read-document")
+            override val icon = "ocr"
+            override fun label(state: ObjectState) = "Прочитать документ"
+            override fun accepts(state: ObjectState) = state.kind == ObjectKind.PDF
+            override fun produces(state: ObjectState) = state
+            override fun yields(state: ObjectState) =
+                com.point.core.model.ActionYield.Same("текст всех страниц · на телефоне")
+        }
+        fun promise(chosen: com.point.core.flow.RealizerMeta?) = DefaultCapabilityRegistry(
+            capabilities = setOf(read),
+            policy = DefaultBubblePolicy(),
+            chosen = com.point.core.flow.ChosenExecutor { _, _ -> chosen },
+        ).bubblesFor(ObjectState(ObjectKind.PDF)).single().yields.let { it as com.point.core.model.ActionYield.Same }.note.orEmpty()
+
+        val here = promise(com.point.core.flow.RealizerMeta())
+        val pc = promise(com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.REMOTE, leavesCircle = true))
+
+        assertTrue(here, here.endsWith("на телефоне"))
+        assertTrue(pc, pc.contains("через компьютер в сервис"))
+        assertFalse(pc, pc.contains("на телефоне"))
+    }
 }
