@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import base64
+
 
 def test_страница_о_данных_открыта_без_пропуска(point):
     page = point.client.get("/privacy")
@@ -62,3 +64,79 @@ def test_удаление_аккаунта_уносит_и_записи_и_ба�
     assert gone.status_code == 200 and gone.json()["deleted"] is True
     # Пропуск того же устройства больше не работает: аккаунта нет, а не «помечен удалённым».
     assert point.as_device(token, "GET", "/circle").status_code in (401, 404)
+
+
+def _drop(point, token, data=b"secret bytes"):
+    put = point.as_device(
+        token, "POST", "/d",
+        content=data,
+        headers={"X-Drop-Name": base64.b64encode("заметка.txt".encode()).decode(), "X-Drop-Mime": "text/plain"},
+    )
+    assert put.status_code == 200, put.text
+    return put.headers["X-Drop-Id"]
+
+
+def test_страница_называет_себя_политикой_конфиденциальности(point):
+    """Магазин требует, чтобы политика была подписана явно (#1485): «О ваших данных» могут не засчитать."""
+    page = point.client.get("/privacy").text
+
+    assert "<title>Point — политика конфиденциальности</title>" in page
+    assert "<h1>Политика конфиденциальности</h1>" in page
+
+
+def test_про_ссылку_для_другого_человека_страница_говорит_правду(point):
+    """Байты ссылки сервер отдаёт любому браузеру без пропуска — значит, он их видит (#1485).
+
+    Первой строкой страницы стояло «содержимое ваших объектов сервер не читает и не хранит»:
+    для своих устройств правда, для этой двери нет. Рецензент магазина сверяет страницу с
+    анкетой, где ссылка названа, — расхождение и есть повод снять приложение.
+    """
+    me = point.sign_in(sub="sub-drop", email="drop@example.com")
+    did = _drop(point, me["device_token"])
+
+    # Чужой браузер, без пропуска: сервер держит присланное открытым.
+    assert point.client.get("/d/" + did + "?raw=1").content == b"secret bytes"
+
+    page = point.client.get("/privacy").text
+    assert "не читает и не хранит" not in page
+    assert "Что вы отдали другому человеку по ссылке" in page
+    assert "сервер видит" in page
+
+
+def test_страница_называет_адрес_для_стука(point):
+    """Адрес, которым компьютер будит телефон, лежит на сервере — и назван в анкете магазина."""
+    me = point.sign_in(sub="sub-push", email="push@example.com")
+    told = point.as_device(
+        me["device_token"], "PUT", "/devices/" + me["device_id"] + "/push", content=b"fcm-address"
+    )
+    assert told.status_code == 200 and told.json()["heard"] is True
+
+    assert "адрес, по которому компьютер может разбудить телефон" in point.client.get("/privacy").text
+
+
+def test_чужие_сервисы_названы_поимённо(point):
+    page = point.client.get("/privacy").text
+
+    for service in ("Google Firebase", "OCR.space", "OVHcloud", "Anthropic Claude"):
+        assert service in page, service
+    # Через Google идёт только «зайди»: содержимое стука в push.py — одна метка, без объекта.
+    assert "без содержимого" in page
+
+
+def test_страница_говорит_что_приложение_берёт_на_телефоне(point):
+    page = point.client.get("/privacy").text
+
+    assert "Что Point берёт на телефоне" in page
+    for what in ("Местоположение", "Микрофон", "Буфер обмена"):
+        assert what in page, what
+
+
+def test_удаление_гасит_и_ссылки_для_других_людей(point):
+    """Страница удаления обещает, что ссылки для других гаснут сразу, — вот проверка."""
+    me = point.sign_in(sub="sub-gone", email="gone@example.com")
+    did = _drop(point, me["device_token"])
+
+    assert point.as_device(me["device_token"], "DELETE", "/account").status_code == 200
+
+    assert point.client.get("/d/" + did).status_code == 404
+    assert "Все ссылки, по которым вы отдали объект другим людям" in point.client.get("/delete-account").text
