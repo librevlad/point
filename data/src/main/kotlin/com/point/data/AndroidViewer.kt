@@ -55,7 +55,7 @@ class AndroidViewer @Inject constructor(
 
     private companion object {
 
-        const val NO_APP_FOR_IT =
+        val NO_APP_FOR_IT: String get() =
             tr("На телефоне нет приложения, которое открывает такие файлы — сохраните файл и откройте его оттуда")
     }
 }

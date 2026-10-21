@@ -82,14 +82,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
-internal const val WHAT_POINT_IS: String =
+internal val WHAT_POINT_IS: String get() =
     tr("Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
         "сделать")
 
-internal const val HOW_TO_SHARE: String =
+internal val HOW_TO_SHARE: String get() =
     tr("Или нажмите «Поделиться» в любом приложении и выберите Point")
 
-internal const val EXAMPLE_DOOR_WHAT: String =
+internal val EXAMPLE_DOOR_WHAT: String get() =
     tr("Снимок визитки лежит в самом Point. Откроется как обычный объект — без ключа, без сети и без " +
         "разрешений.")
 
@@ -101,7 +101,7 @@ internal val CLEAR_RECENT: String get() = tr("Очистить недавнее"
 
 internal val CLEAR_RECENT_ASK: String get() = tr("Убрать всё недавнее?")
 
-internal const val CLEAR_RECENT_WHAT: String =
+internal val CLEAR_RECENT_WHAT: String get() =
     tr("Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать через её меню.")
 
 internal val CLEAR_RECENT_CONFIRM: String get() = tr("Убрать всё")

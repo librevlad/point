@@ -3619,7 +3619,7 @@ class FlowViewModel @Inject constructor(
 
         val REFRESHABLE_META = com.point.core.flow.REFRESHABLE_KNOWLEDGE
 
-        const val CLOUD_DECLINED =
+        val CLOUD_DECLINED: String get() =
             tr("Ничего не отправлено — объект остался на телефоне, действие не выполнено. " +
                 "Без отправки оно не работает: нажмите ещё раз, если передумаете")
     }

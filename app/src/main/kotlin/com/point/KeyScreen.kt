@@ -371,7 +371,7 @@ internal val SHARE_ENTRY: String get() = tr("Системное «Поделит
 internal val TILE_ENTRY_ON: String get() = tr("Плитка в шторке — Point открывается одним касанием сверху.")
 internal val TILE_ENTRY_OFF: String get() = tr("Плитку в шторке можно добавить из «Нового объекта».")
 
-internal const val MEMORY_WHAT =
+internal val MEMORY_WHAT: String get() =
     tr("Point держит последние {0} объектов — копии " +
         "лежат на телефоне, чтобы «Недавнее» открывалось без исходника. Старое забывается само.", com.point.core.flow.HistoryFootprint.KEPT)
 

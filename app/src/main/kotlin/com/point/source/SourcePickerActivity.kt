@@ -232,11 +232,11 @@ class SourcePickerActivity : ComponentActivity() {
         private const val STATE_SOURCE_STATE = "com.point.source.PENDING_STATE"
         private const val STATE_BLOCKED = "com.point.source.BLOCKED_LABEL"
 
-        internal const val LOST_TO_MEMORY =
+        internal val LOST_TO_MEMORY: String get() =
             tr("Point выгрузили из памяти, пока работало другое приложение, — сделанное там не дошло. " +
                 "Попробуйте ещё раз.")
 
-        internal const val SETTINGS_CLOSED =
+        internal val SETTINGS_CLOSED: String get() =
             tr("Настройки не открылись — включите доступ вручную: Приложения → Point → Разрешения")
     }
 }

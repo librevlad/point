@@ -28,12 +28,12 @@ sealed interface Dropped {
     data class NotTaken(val why: String) : Dropped
 }
 
-const val DROP_UNREADABLE =
+val DROP_UNREADABLE: String get() =
     tr("Не удалось прочитать брошенное — сохраните это на диск и принесите файлом")
 
 val DROP_EMPTY: String get() = tr("В брошенном ничего не оказалось — попробуйте ещё раз")
 
-const val DROP_ALIEN =
+val DROP_ALIEN: String get() =
     tr("Это не файл, не картинка и не текст — сохраните на диск и бросьте сюда файлом")
 
 /**

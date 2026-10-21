@@ -107,23 +107,23 @@ class DefaultExternalEye @Inject constructor(
     }
 
     private companion object {
-        const val NOT_CONFIGURED =
+        val NOT_CONFIGURED: String get() =
             tr("Чтение снаружи не настроено — задайте бесплатный ключ Mistral (см. настройки)")
 
         /** Общие слова отказа по режиму (#840): своей копии у читателя нет. */
         val DEVICE_ONLY: String =
             com.point.core.flow.chainClosedBy(com.point.core.flow.PrivacyLevel.DEVICE_ONLY)
 
-        const val STRICT_LEVEL_EMPTY =
+        val STRICT_LEVEL_EMPTY: String get() =
             tr("Читателей, обещавших не учиться на присланном, сейчас нет — смягчите настройку «Куда можно отправлять»")
 
-        const val NOT_FOR_THIS_OBJECT =
+        val NOT_FOR_THIS_OBJECT: String get() =
             tr("Чтение снаружи не берётся за этот объект — читают снимок страницы")
 
         /** Глагол этой цепочки для общей сводки отказов (#1237). */
         val WHAT_FAILED: String get() = tr("прочитать")
 
-        const val KEY_HINT =
+        val KEY_HINT: String get() =
             tr(". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)")
     }
 }

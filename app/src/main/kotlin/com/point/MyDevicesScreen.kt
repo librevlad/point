@@ -212,7 +212,7 @@ private fun DeviceRow(device: CircleDevice, line: String, busy: Boolean, onRevok
 
 internal val DELETE_ACCOUNT: String get() = tr("Удалить аккаунт")
 
-internal const val DELETE_ACCOUNT_WHAT =
+internal val DELETE_ACCOUNT_WHAT: String get() =
     tr("Исчезнут: аккаунт Point, все ваши устройства в круге и всё, что лежит на сервере " +
         "недоставленным. Объекты на самих устройствах останутся. Отменить будет нельзя.")
 

@@ -145,7 +145,7 @@ fun KnockOfferCard(onAllow: () -> Unit, onLater: () -> Unit, modifier: Modifier 
 }
 
 private val KNOCK_OFFER_TITLE: String get() = tr("Сообщать о просьбах компьютера?")
-private const val KNOCK_OFFER_WHY =
+private val KNOCK_OFFER_WHY: String get() =
     tr("Компьютер позовёт вас, когда ему понадобится телефон. Без уведомлений просьба ждёт, пока вы откроете Point сами")
 private val KNOCK_OFFER_ALLOW: String get() = tr("Разрешить")
 private val KNOCK_OFFER_LATER: String get() = tr("Не сейчас")
