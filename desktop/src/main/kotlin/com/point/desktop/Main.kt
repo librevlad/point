@@ -463,6 +463,9 @@ fun main(args: Array<String>) {
         onContact = state::heard,
         onUnknownSender = account::refreshCircleNow,
         log = { line -> println("[mailbox] " + line) },
+
+        // Письмо, так и не принятое, называется человеку плашкой, а не строкой в консоль (#1409).
+        onLost = state::say,
     ).also { it.start() }
 
     val handOffs = Thread({

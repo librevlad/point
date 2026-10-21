@@ -143,7 +143,7 @@ fun letterAgeMs(letterId: String, serverNowMs: Long?): Long? {
 }
 
 /** Время в имени письма — то, что поставил сервер, кладя его в ящик. */
-private fun letterPostedAtMs(letterId: String): Long? {
+fun letterPostedAtMs(letterId: String): Long? {
     val stamp = letterId.substringBefore('-')
     if (stamp.isEmpty() || !stamp.all(Char::isDigit)) return null
     return stamp.toLongOrNull()?.div(1_000_000)

@@ -12,8 +12,8 @@ import java.io.File
  * может повторяться сколько угодно.
  *
  * Письмо, разбор которого валит приложение раз за разом, после [tries] попыток
- * перестаёт ждать, но не стирается: объект человека остаётся на диске, а круг
- * падений прекращается.
+ * перестаёт ждать: круг падений прекращается. Молча оно не лежит (#1409) — такие письма
+ * называет [exhausted], и разбирающий говорит о них человеку, прежде чем убрать.
  */
 class KeptLetters(private val dir: File, val tries: Int = 3) {
 
@@ -41,6 +41,18 @@ class KeptLetters(private val dir: File, val tries: Int = 3) {
         .filter { it.isFile && it.name.endsWith(LETTER) }
         .map { it.name.removeSuffix(LETTER) }
         .filter { attempts(it) < tries }
+        .sorted()
+
+    /**
+     * Письма, исчерпавшие попытки (#1409). Шифртекст на диске человеку не открыть ничем,
+     * поэтому «объект остаётся на диске» им не является: о таком письме говорят словами,
+     * а не держат его вечно.
+     */
+    @Synchronized
+    fun exhausted(): List<String> = dir.listFiles().orEmpty()
+        .filter { it.isFile && it.name.endsWith(LETTER) }
+        .map { it.name.removeSuffix(LETTER) }
+        .filter { attempts(it) >= tries }
         .sorted()
 
     @Synchronized
