@@ -74,9 +74,12 @@ fun keyVerdict(probe: KeyProbe): KeyVerdict {
                 "включить» ещё раз — или возьмите ключ у другого сервиса из списка выше и " +
                 "впишите его сюда вместо этого.",
         )
+        // Сервис обычно сам называет, чего не хватило: ключ Anthropic без рабочего пространства
+        // отвечает 400 с просьбой о заголовке, а Point вместо его слов советовал сменить модель.
         status == 400 -> KeyVerdict.Refused(
             what = "Сервис не понял запрос",
-            fix = "Чаще всего это имя модели. Выберите сервис в списке выше, чтобы оно подставилось само.",
+            fix = serviceWords(probe.error)?.let(::detailOrHint)
+                ?: "Чаще всего это имя модели. Выберите сервис в списке выше, чтобы оно подставилось само.",
         )
         status in 500..599 -> KeyVerdict.Refused(
             what = "Сервис сейчас не отвечает",
@@ -89,8 +92,22 @@ fun keyVerdict(probe: KeyProbe): KeyVerdict {
     }
 }
 
+/** Слова сервиса из тела отказа: из JSON — только `error.message`, иначе текст как есть. */
+private fun serviceWords(error: String?): String? {
+    val text = error?.trim().orEmpty()
+    if (text.isEmpty()) return null
+    val message = runCatching {
+        when (val e = org.json.JSONObject(text).opt("error")) {
+            is org.json.JSONObject -> e.optString("message")
+            is String -> e
+            else -> null
+        }
+    }.getOrNull()
+    return (message ?: text).takeIf { it.isNotBlank() }
+}
+
 private fun detailOrHint(error: String?): String {
-    val said = error?.trim()?.replace(Regex("\\s+"), " ").orEmpty()
+    val said = serviceWords(error)?.replace(Regex("\\s+"), " ").orEmpty()
     return if (said.isEmpty()) {
         "Что именно не так, сервис не сказал. Попробуйте другой сервис из списка выше."
     } else {

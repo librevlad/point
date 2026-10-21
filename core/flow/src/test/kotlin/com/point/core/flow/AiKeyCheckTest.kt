@@ -77,6 +77,16 @@ class AiKeyCheckTest {
     }
 
     @Test
+    fun `непонятый запрос пересказывает слова сервиса, а не гадает про модель`() {
+        // Дословный ответ Anthropic на ключ без рабочего пространства (21.10.2026).
+        val body = """{"type":"error","error":{"type":"invalid_request_error","message":"This API key """ +
+            """is not scoped to a workspace, so this request must include the anthropic-workspace-id header"}}"""
+        val verdict = refusal(KeyProbe(status = 400, error = body))
+        assertTrue(verdict.fix, verdict.fix.contains("anthropic-workspace-id"))
+        assertFalse("сырой JSON уехал на экран: ${verdict.fix}", verdict.fix.contains("invalid_request_error"))
+    }
+
+    @Test
     fun `тело без ответа модели не выдаётся за работающий ключ`() {
 
         val verdict = refusal(KeyProbe(status = 200, reply = null))
