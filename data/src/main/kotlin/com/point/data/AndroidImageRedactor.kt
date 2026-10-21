@@ -2,6 +2,8 @@ package com.point.data
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import com.point.core.flow.Box
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.ImageRedactor
@@ -22,6 +24,11 @@ import kotlinx.coroutines.withContext
  *
  * PNG, а не JPEG: второе сжатие поверх исходного добавляло бы артефакты к тому, что человек
  * и так уже показал.
+ *
+ * Места — в пикселях файла (Focus живёт в сыром кадре, #1013), а результат ставится, как
+ * снимок сняли: метка поворота в PNG не переезжает, и без разворота портретный снимок
+ * выходил замазанным, но лежащим на боку (#1379). Разворот стоит ещё одну копию кадра:
+ * две разом, а не три.
  */
 class AndroidImageRedactor @Inject constructor() : ImageRedactor {
 
@@ -35,14 +42,33 @@ class AndroidImageRedactor @Inject constructor() : ImageRedactor {
                 places.forEach { place -> if (hidePlace(page, place)) covered = true }
                 if (!covered) return@withContext null
 
-                val bytes = ByteArrayOutputStream()
-                    .also { page.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                    .toByteArray()
-                EvidenceImage(bytes, page.width, page.height, extension = "png")
+                val upright = upright(page, imagePath)
+                try {
+                    val bytes = ByteArrayOutputStream()
+                        .also { upright.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                        .toByteArray()
+                    EvidenceImage(bytes, upright.width, upright.height, extension = "png")
+                } finally {
+                    if (upright !== page) upright.recycle()
+                }
             } finally {
                 page.recycle()
             }
         }
+
+    /** Кадр, поставленный по метке камеры; без метки — он же. */
+    private fun upright(page: Bitmap, imagePath: String): Bitmap {
+        val degrees = runCatching {
+            when (ExifInterface(imagePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }.getOrDefault(0f)
+        if (degrees == 0f) return page
+        return Bitmap.createBitmap(page, 0, 0, page.width, page.height, Matrix().apply { postRotate(degrees) }, true)
+    }
 
     /** `false` — место оказалось за краем снимка: замазывать там нечего. */
     private fun hidePlace(page: Bitmap, place: Box): Boolean {

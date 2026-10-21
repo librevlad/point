@@ -66,4 +66,17 @@ class AreaOnPcTest {
         assertEquals(image.getRGB(30, 15), out.getRGB(30, 15))
         assertEquals("png", hidden.extension)
     }
+
+    @Test fun `замазанный портретный снимок стоит, как его сняли`() = runBlocking {
+        // Файл 40×20 с меткой «повернуть на 90°»: место — в пикселях файла, результат — стоя.
+        val image = BufferedImage(40, 20, BufferedImage.TYPE_INT_RGB)
+        val plain = java.io.ByteArrayOutputStream().also { ImageIO.write(image, "jpg", it) }.toByteArray()
+        val file = tmp.newFile("портрет.jpg").apply { writeBytes(spliced(plain, turnedPlacedExif())) }
+
+        val hidden = PcImageRedactor().hide(file.absolutePath, listOf(Box(0f, 0f, 10f, 10f)))!!
+        val out = ImageIO.read(hidden.bytes.inputStream())
+
+        assertEquals(20, out.width)
+        assertEquals(40, out.height)
+    }
 }
