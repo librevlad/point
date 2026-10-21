@@ -313,8 +313,46 @@ class DesktopState(
     fun bubblesFor(item: InboxItem): List<Bubble> {
 
         // Тот же вывод уместного смысла, что и на телефоне: из знания объекта (ADR-0001 §14).
-        val graph = com.point.core.flow.GraphState(item.obj)
+        // Показанное мышью место — Focus (#1379): с ним рядом встают «Взять фрагмент» и
+        // «Замазать», как на телефоне после выделения.
+        val graph = com.point.core.flow.GraphState(
+            item.obj,
+            focus = com.point.core.flow.focusOf(item.obj.metadata, item.obj.id),
+        )
         return registry.bubblesFor(graph.copy(intent = com.point.core.flow.leadingIntent(graph)))
+    }
+
+    /**
+     * Человек обвёл места на снимке (#1379). Focus едет к исполнителю тем же путём, что и на
+     * телефоне, — частью состояния объекта; объект при этом остаётся тем же.
+     *
+     * [places] — в пикселях файла, как их читают исполнители. Одно место — область, несколько —
+     * части, а область — их объединение.
+     */
+    fun showArea(item: InboxItem, places: List<com.point.core.flow.Box>) {
+        if (places.isEmpty()) return clearArea(item)
+        val focus = com.point.core.flow.Focus(
+            item.obj.id,
+            region = places.reduce(com.point.core.flow.Box::union),
+            parts = if (places.size > 1) places else emptyList(),
+        )
+        changeFocus(item) { com.point.core.flow.withFocus(withoutFocus(it), focus) }
+    }
+
+    /** Показанные места забыты: действия над ними уходят вместе с ними. */
+    fun clearArea(item: InboxItem) = changeFocus(item, ::withoutFocus)
+
+    private fun withoutFocus(metadata: Map<String, String>): Map<String, String> = metadata -
+        setOf(
+            com.point.core.flow.META_FOCUS_REGION,
+            com.point.core.flow.META_FOCUS_IDS,
+            com.point.core.flow.META_FOCUS_PARTS,
+        )
+
+    private fun changeFocus(item: InboxItem, change: (Map<String, String>) -> Map<String, String>) {
+        _items.update { list ->
+            list.map { if (it.obj.id == item.obj.id) it.copy(obj = it.obj.copy(metadata = change(it.obj.metadata))) else it }
+        }
     }
 
     fun say(text: String) { _message.value = text }

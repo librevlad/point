@@ -56,7 +56,7 @@ class PcPhotoHeadRealizer : Realizer {
         com.point.core.flow.investigated { withContext(Dispatchers.IO) { findings(input) } }
 
     private fun findings(input: PointObject): Findings {
-        val head = headOf(File(input.uri.value)) ?: return Findings()
+        val head = photoHeadOf(File(input.uri.value)) ?: return Findings()
         val shot = shotDateLabel(head.shotAt)
 
         // Точка — всегда точкой: запятая русской локали превратила бы координаты в четыре числа.
@@ -103,7 +103,7 @@ class PcCleanMetadataRealizer(private val store: ObjectStore) : Realizer {
                     )
 
                 reportStage("Убираю служебные записи")
-                val upright = uprightOpaque(image, headOf(source)?.uprightDegrees ?: 0)
+                val upright = uprightOpaque(image, photoHeadOf(source)?.uprightDegrees ?: 0)
                 val ref = store.newScratchFile("jpg")
                 writeJpeg(upright, File(ref.value))
 
@@ -138,7 +138,7 @@ class PcCleanMetadataRealizer(private val store: ObjectStore) : Realizer {
     }
 }
 
-private fun headOf(file: File): PhotoHead? = runCatching {
+internal fun photoHeadOf(file: File): PhotoHead? = runCatching {
     val start = file.inputStream().use { it.readNBytes(PHOTO_HEAD_BYTES) }
     photoHead(start)
 }.getOrNull()

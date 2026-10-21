@@ -217,6 +217,8 @@ fun main(args: Array<String>) {
             PcMergePdfRealizer(excelStore),
             PcPhotoHeadRealizer(),
             PcCleanMetadataRealizer(excelStore),
+            com.point.core.flow.TakeFragmentRealizer(PcEvidenceCrops(), excelStore, PcUprightAngle),
+            com.point.core.flow.HideAreaRealizer(PcImageRedactor(), excelStore),
             pcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(
