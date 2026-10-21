@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
+import com.point.core.model.tr
 enum class Outcome {
 
     DONE,
@@ -165,7 +166,7 @@ private fun OutcomeMark(accent: Color, failed: Boolean) {
     ) {
         Icon(
             imageVector = if (failed) GlassIcons.Close else GlassIcons.Check,
-            contentDescription = if (failed) "Не получилось" else "Готово",
+            contentDescription = if (failed) tr("Не получилось") else tr("Готово"),
             tint = accent,
             modifier = Modifier.size(18.dp),
         )

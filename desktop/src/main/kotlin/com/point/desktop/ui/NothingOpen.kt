@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.point.core.model.tr
 import com.point.core.ui.PointGlyph
 
 /**
@@ -56,11 +57,11 @@ internal fun NothingOpen(empty: Boolean) {
             PointGlyph(size = 56.dp)
         }
         Text(
-            if (empty) "Здесь откроется объект" else "Выберите объект слева",
+            if (empty) tr("Здесь откроется объект") else tr("Выберите объект слева"),
             style = PointType.title.copy(fontWeight = FontWeight.Medium, fontSize = 17.sp),
         )
         Text(
-            "Point покажет, что в нём, и подскажет, что с ним сделать",
+            tr("Point покажет, что в нём, и подскажет, что с ним сделать"),
             style = PointType.small,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp).widthIn(max = 320.dp),
@@ -70,9 +71,9 @@ internal fun NothingOpen(empty: Boolean) {
             horizontalArrangement = Arrangement.spacedBy(18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            KeyHint("Ctrl", "V", "из буфера")
-            KeyHint("Ctrl", "O", "файл")
-            KeyHint("Ctrl", "Shift", "S", "снимок")
+            KeyHint("Ctrl", "V", tr("из буфера"))
+            KeyHint("Ctrl", "O", tr("файл"))
+            KeyHint("Ctrl", "Shift", "S", tr("снимок"))
         }
     }
 }

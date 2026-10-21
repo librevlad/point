@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.ContactsContract
 import com.point.core.flow.ContactInserter
 import com.point.core.flow.NewContact
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -33,7 +34,7 @@ class AndroidContactInserter @Inject constructor(
         try {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
-            error("На этом устройстве нет приложения контактов")
+            error(tr("На этом устройстве нет приложения контактов"))
         }
     }
 }

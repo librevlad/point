@@ -14,6 +14,7 @@ import com.point.core.flow.PRIVACY_SETTING_TITLE
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.YOLO_TITLE
 import com.point.core.flow.YOLO_WHAT
+import com.point.core.model.tr
 import com.point.core.ui.PortalRow
 import com.point.core.ui.SectionLabel
 
@@ -31,13 +32,13 @@ internal fun PrivacySection(
     SectionTopBar(title = PRIVACY_SECTION_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = 9.dp))
 
     SwitchCard(
-        title = "Отправка в облако",
+        title = tr("Отправка в облако"),
         // #688, охота 2026-08-10: обещание «с названием того, куда он уедет» система
         // не выполняла — подписи действий называли только «сервис». Кто читает объект,
         // теперь видно в «Ключи AI» (#699): вся цепочка по порядку, с последним фактом.
-        description = "Разрешает показывать объект моделям — по вашему тапу. Выключите, и " +
+        description = tr("Разрешает показывать объект моделям — по вашему тапу. Выключите, и " +
             "Point спросит заново. Выложить файл по открытой ссылке этим тумблером нельзя: " +
-            "про такое спрашивают каждый раз.",
+            "про такое спрашивают каждый раз."),
         checked = cloudEnabled,
         onCheckedChange = onToggleCloud,
     )

@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.model.tr
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -37,7 +38,7 @@ interface ShellMenu {
 }
 
 /** Название пункта в меню файла — одно и при старте, и из настроек. */
-const val SHELL_MENU_TITLE = "Открыть в Point"
+val SHELL_MENU_TITLE: String get() = tr("Открыть в Point")
 
 fun shellCommandFor(exe: File): String = "\"${exe.absolutePath}\" \"%1\""
 

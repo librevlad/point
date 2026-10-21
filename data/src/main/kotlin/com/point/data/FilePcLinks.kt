@@ -2,6 +2,7 @@ package com.point.data
 
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.PcLinks
+import com.point.core.model.tr
 import com.point.data.di.UsageDir
 import java.io.File
 import javax.inject.Inject
@@ -62,6 +63,6 @@ class FilePcLinks @Inject constructor(
         if (!file.exists()) return@runCatching null
         val o = JSONObject(file.readText())
         val id = o.optString("device_id").takeIf { it.isNotBlank() } ?: return@runCatching null
-        LinkedPc(id, o.optString("name").ifBlank { "Компьютер" }, o.optString("key"))
+        LinkedPc(id, o.optString("name").ifBlank { tr("Компьютер") }, o.optString("key"))
     }.getOrNull()
 }

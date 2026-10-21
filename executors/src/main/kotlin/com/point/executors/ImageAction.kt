@@ -14,6 +14,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,16 +28,16 @@ class ImageRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Читаю изображение")
+                reportStage(tr("Читаю изображение"))
                 val bitmap = Bitmaps.decodeUpright(input.uri.value)
-                    ?: error("Не удалось прочитать изображение")
-                reportStage("Сжимаю снимок")
+                    ?: error(tr("Не удалось прочитать изображение"))
+                reportStage(tr("Сжимаю снимок"))
                 val ref = store.newScratchFile("jpg")
                 File(ref.value).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 70, it) }
                 bitmap.recycle()
                 ActionResult.Success(
                     ResultObject(ObjectKind.IMAGE, "image/jpeg", ref, mapOf("op" to "compress")),
                 )
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сжатия", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка сжатия"), recoverable = true) }
         }
 }

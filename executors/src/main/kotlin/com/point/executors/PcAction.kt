@@ -19,6 +19,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import javax.inject.Inject
 
 class PcCapability @Inject constructor(
@@ -39,23 +40,23 @@ class PcCapability @Inject constructor(
         network = true,
         localOnly = true,
     )
-    override fun label(state: ObjectState) = "На компьютер"
+    override fun label(state: ObjectState) = tr("На компьютер")
 
     override fun accepts(state: ObjectState) =
         state.kind != ObjectKind.COLLECTION && links.current() != null
 
     override fun produces(state: ObjectState) = state
     override fun missing(state: ObjectState) =
-        if (links.current() == null && state.kind != ObjectKind.COLLECTION) "войдите в аккаунт на компьютере" else null
+        if (links.current() == null && state.kind != ObjectKind.COLLECTION) tr("войдите в аккаунт на компьютере") else null
 
     companion object { val ID = CapabilityId("pc") }
 }
 
-internal const val PC_SEND_STAGE = "Отправляю на компьютер"
+internal val PC_SEND_STAGE: String get() = tr("Отправляю на компьютер")
 
 // Решение владельца (#646): «Отправлено на компьютер — появится в окне Point
 // и в папке Point» — одна строка, боль «куда исчез» закрыта.
-internal const val PC_SENT_WHERE = "Отправлено на компьютер — появится в окне Point и в папке Point"
+internal val PC_SENT_WHERE: String get() = tr("Отправлено на компьютер — появится в окне Point и в папке Point")
 
 /**
  * Имя, под которым объект появится на той стороне. Безымянный объект уезжал как
@@ -80,14 +81,14 @@ internal fun humanSendName(input: PointObject): String {
         if (!firstLine.isNullOrBlank()) return firstLine
     }
     return when (input.state.kind) {
-        com.point.core.model.ObjectKind.IMAGE -> "Снимок"
-        com.point.core.model.ObjectKind.URL -> "Ссылка"
-        com.point.core.model.ObjectKind.TEXT -> "Текст"
+        com.point.core.model.ObjectKind.IMAGE -> tr("Снимок")
+        com.point.core.model.ObjectKind.URL -> tr("Ссылка")
+        com.point.core.model.ObjectKind.TEXT -> tr("Текст")
 
         // Голосовое приезжало на компьютер «Объектом», хотя вид известен (#867).
-        com.point.core.model.ObjectKind.AUDIO -> "Запись"
+        com.point.core.model.ObjectKind.AUDIO -> tr("Запись")
         com.point.core.model.ObjectKind.PDF -> "PDF"
-        else -> "Объект"
+        else -> tr("Объект")
     }
 }
 

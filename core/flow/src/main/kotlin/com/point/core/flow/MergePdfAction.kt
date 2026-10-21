@@ -25,4 +25,4 @@ class MergePdfCapability : Capability {
 }
 
 /** Имя собранного документа — одно на оба устройства. */
-const val MERGED_PDF_NAME = "документ.pdf"
+val MERGED_PDF_NAME: String get() = tr("документ.pdf")

@@ -18,6 +18,7 @@ import com.point.core.flow.knowingAddress
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +60,7 @@ class ScratchObjectStore @Inject constructor(
 
                 val size = context.contentResolver.openInputStream(uri)?.use { input ->
                     dest.outputStream().use { output -> input.copyTo(output) }
-                } ?: error("Не удалось открыть источник: $sourceUri")
+                } ?: error(tr("Не удалось открыть источник: {0}", sourceUri))
 
                 // Имя показывается человеку и уезжает дальше — в «Сохранить», в имя копии
                 // на компьютере, в экспорт. Чистится один раз здесь, у входа (#865).
@@ -106,7 +107,7 @@ class ScratchObjectStore @Inject constructor(
 
                 // Не открылось ничего — набора нет. Пустая папка с подписью «Набор (0)»
                 // была бы объектом, которого человеку не дали.
-                require(opened > 0) { "ни один из ${sources.size} файлов не открылся" }
+                require(opened > 0) { tr("ни один из {0} файлов не открылся", sources.size) }
 
                 PointObject(
                     id = id,
@@ -117,7 +118,7 @@ class ScratchObjectStore @Inject constructor(
                     // Набор называется по тому, что в нём есть, а не по тому, сколько файлов
                     // просили (#1304): подпись «Набор (2)» над одной страницей — обещание, за
                     // которым ничего нет.
-                    metadata = mapOf("name" to "Набор ($opened)") +
+                    metadata = mapOf("name" to tr("Набор ({0})", opened)) +
                         com.point.core.flow.ingestLoss(asked = sources.size, opened = opened),
                 )
             }

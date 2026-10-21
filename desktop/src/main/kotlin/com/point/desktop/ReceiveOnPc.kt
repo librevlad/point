@@ -4,6 +4,7 @@ import com.point.core.flow.DropInbox
 import com.point.core.flow.DropInboxBox
 import com.point.core.flow.DropWait
 import com.point.core.flow.receiveWaitStatus
+import com.point.core.model.tr
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +93,7 @@ class ReceiveOnPc(
                     val arrival = outcome.arrival
                     val file = File(arrival.path)
                     if (!file.isFile || file.length() == 0L) {
-                        show(_waiting.value?.copy(failed = "Файл пришёл пустым — попросите прислать снова"))
+                        show(_waiting.value?.copy(failed = tr("Файл пришёл пустым — попросите прислать снова")))
                         delay(retryPauseMs)
                         continue
                     }

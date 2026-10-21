@@ -12,6 +12,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class CleanMetadataRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Читаю снимок")
+                reportStage(tr("Читаю снимок"))
                 // Кадр ставится, как его сняли: метка поворота уходит вместе с остальными
                 // записями, и без разворота портретный снимок выходил лежащим на боку.
                 // Ужимать при этом нечего — очищены записи, а не содержимое.
@@ -60,7 +61,7 @@ class CleanMetadataRealizer @Inject constructor(
 
                 // Пиксели переписываются заново — вместе со снимком не переезжает ни одна
                 // служебная запись. Картинка та же: очищены записи, а не содержимое.
-                reportStage("Убираю служебные записи")
+                reportStage(tr("Убираю служебные записи"))
                 val ref = store.newScratchFile("jpg")
                 File(ref.value).outputStream().use { source.compress(Bitmap.CompressFormat.JPEG, QUALITY, it) }
                 source.recycle()
@@ -74,7 +75,7 @@ class CleanMetadataRealizer @Inject constructor(
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Очистить не вышло", recoverable = true)
+                ActionResult.Failure(it.message ?: tr("Очистить не вышло"), recoverable = true)
             }
         }
 

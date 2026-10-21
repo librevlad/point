@@ -6,6 +6,7 @@ import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -34,6 +35,6 @@ class MergePdfRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 imagesToPdf(store, input, name = com.point.core.flow.MERGED_PDF_NAME, op = "merge-pdf")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка объединения в PDF", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка объединения в PDF"), recoverable = true) }
         }
 }

@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import com.point.core.model.tr
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,13 +33,13 @@ class OpenDropLinkActivity : ComponentActivity() {
             finish()
             return
         }
-        Toast.makeText(this, "Принимаю по ссылке…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, tr("Принимаю по ссылке…"), Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
             val taken = withContext(Dispatchers.IO) { fetch(link) }
             if (taken == null) {
                 Toast.makeText(
                     this@OpenDropLinkActivity,
-                    "Не удалось принять по ссылке — проверьте интернет, ссылка живёт сутки",
+                    tr("Не удалось принять по ссылке — проверьте интернет, ссылка живёт сутки"),
                     Toast.LENGTH_LONG,
                 ).show()
                 finish()

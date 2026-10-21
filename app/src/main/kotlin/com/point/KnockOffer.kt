@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.point.core.model.tr
 import com.point.core.ui.GlassButton
 import com.point.core.ui.GlassGroup
 import com.point.core.ui.LightButton
@@ -143,11 +144,11 @@ fun KnockOfferCard(onAllow: () -> Unit, onLater: () -> Unit, modifier: Modifier 
     }
 }
 
-private const val KNOCK_OFFER_TITLE = "Сообщать о просьбах компьютера?"
-private const val KNOCK_OFFER_WHY =
-    "Компьютер позовёт вас, когда ему понадобится телефон. Без уведомлений просьба ждёт, пока вы откроете Point сами"
-private const val KNOCK_OFFER_ALLOW = "Разрешить"
-private const val KNOCK_OFFER_LATER = "Не сейчас"
+private val KNOCK_OFFER_TITLE: String get() = tr("Сообщать о просьбах компьютера?")
+private val KNOCK_OFFER_WHY: String get() =
+    tr("Компьютер позовёт вас, когда ему понадобится телефон. Без уведомлений просьба ждёт, пока вы откроете Point сами")
+private val KNOCK_OFFER_ALLOW: String get() = tr("Разрешить")
+private val KNOCK_OFFER_LATER: String get() = tr("Не сейчас")
 
 @Preview(widthDp = 360, backgroundColor = 0xFF101418, showBackground = true)
 @Composable

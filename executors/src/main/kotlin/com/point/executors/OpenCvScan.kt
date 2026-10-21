@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import com.point.core.flow.PageQuad
 import com.point.core.flow.Spot
 import com.point.core.flow.reportStage
+import com.point.core.model.tr
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -64,7 +65,7 @@ object OpenCvScan {
     suspend fun straightened(src: Bitmap): Straightened? {
         var corners: Array<Point>? = null
         val out = prepared(src) { rgba, scratch ->
-            reportStage("Ищу страницу на снимке")
+            reportStage(tr("Ищу страницу на снимке"))
             dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch) { corners = it }
         } ?: return null
         return Straightened(out, corners?.let(::pageQuadOf))
@@ -115,7 +116,7 @@ object OpenCvScan {
         val scratch = mutableListOf(rgba)
         try {
             val straight = align(rgba, scratch) ?: return null
-            reportStage("Выбеливаю бумагу")
+            reportStage(tr("Выбеливаю бумагу"))
             val finished = whitenFinish(straight, scratch)
             val scaled = upscale(finished, scratch)
             val out = Bitmap.createBitmap(scaled.cols(), scaled.rows(), Bitmap.Config.ARGB_8888)
@@ -157,7 +158,7 @@ object OpenCvScan {
     private suspend fun upscale(mat: Mat, scratch: MutableList<Mat>): Mat {
         val longSide = maxOf(mat.rows(), mat.cols())
         if (longSide >= UPSCALE_TARGET) return mat
-        reportStage("Увеличиваю")
+        reportStage(tr("Увеличиваю"))
         val s = UPSCALE_TARGET.toDouble() / longSide
         val up = Mat().also { scratch += it }
         Imgproc.resize(mat, up, Size(mat.cols() * s, mat.rows() * s), 0.0, 0.0, Imgproc.INTER_CUBIC)

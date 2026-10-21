@@ -4,15 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 
 class CameraSource @Inject constructor() : ObjectSource {
 
     override val id = com.point.core.flow.SOURCE_CAMERA
-    override val label = "Снять камерой"
+    override val label = tr("Снять камерой")
 
-    override val what = "документ или вещь прямо сейчас"
+    override val what = tr("документ или вещь прямо сейчас")
     override val icon = "camera"
 
     private var target: File? = null

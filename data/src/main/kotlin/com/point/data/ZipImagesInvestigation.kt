@@ -12,6 +12,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -92,4 +93,4 @@ class ZipImagesInvestigationRealizer @Inject constructor() : Realizer {
     }
 }
 
-private const val FAILED = "архив не удалось прочитать"
+private val FAILED: String get() = tr("архив не удалось прочитать")

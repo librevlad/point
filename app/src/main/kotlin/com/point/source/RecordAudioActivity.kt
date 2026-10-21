@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.point.core.model.tr
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.Portal
@@ -87,7 +88,7 @@ class RecordAudioActivity : ComponentActivity() {
             != PackageManager.PERMISSION_GRANTED
         ) {
 
-            failure = "Point не разрешили слушать микрофон — без этого записать нечего"
+            failure = tr("Point не разрешили слушать микрофон — без этого записать нечего")
             return
         }
         val file = File(cacheDir, "record-${System.currentTimeMillis()}.m4a")
@@ -104,7 +105,7 @@ class RecordAudioActivity : ComponentActivity() {
             }
         }.getOrElse {
 
-            failure = "Не удалось начать запись — микрофон занят другим приложением"
+            failure = tr("Не удалось начать запись — микрофон занят другим приложением")
             return
         }
         recorder = rec
@@ -126,7 +127,7 @@ class RecordAudioActivity : ComponentActivity() {
         recording = false
         if (!ok || file == null || !file.isFile || file.length() == 0L) {
             file?.delete()
-            failure = "Запись слишком короткая — ничего не записалось"
+            failure = tr("Запись слишком короткая — ничего не записалось")
             return
         }
         setResult(RESULT_OK, Intent().putExtra(EXTRA_PATH, file.absolutePath).putExtra(EXTRA_MIME, MIME))
@@ -180,22 +181,22 @@ internal fun RecordScreen(
         ScreenHeader(
             // Экран носит то же имя, по которому сюда вошли (#895): в списке «с чего
             // начать» это «Записать голос», а не «Звукозапись».
-            title = if (recording) recordClock(seconds) else "Записать голос",
-            subtitle = if (recording) "Идёт запись — остановите, когда закончите" else "Запишет Point, ничего больше не нужно",
+            title = if (recording) recordClock(seconds) else tr("Записать голос"),
+            subtitle = if (recording) tr("Идёт запись — остановите, когда закончите") else tr("Запишет Point, ничего больше не нужно"),
             horizontalAlignment = Alignment.CenterHorizontally,
         )
         OutcomeBanner(failure, Outcome.FAILED)
         Column(modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
             PortalRow(
-                title = if (recording) "Остановить" else "Записать",
-                subtitle = if (recording) "получится звукозапись" else "Point расшифрует запись словами",
+                title = if (recording) tr("Остановить") else tr("Записать"),
+                subtitle = if (recording) tr("получится звукозапись") else tr("Point расшифрует запись словами"),
                 onClick = onToggle,
                 icon = bubbleIcon("transcribe"),
                 accent = bubbleColor("transcribe"),
             )
         }
         TextButton(onClick = onCancel) {
-            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Отмена"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

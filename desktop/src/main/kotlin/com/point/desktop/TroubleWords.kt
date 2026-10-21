@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.model.tr
 import java.io.File
 
 /**
@@ -17,16 +18,16 @@ fun troubleWords(error: Throwable): String = when {
     // Классов не хватает ровно тогда, когда работает старая установка поверх нового кода:
     // у владельца стоял Point от 6 августа, а действие приехало 10-го.
     error is NoClassDefFoundError || error is ClassNotFoundException ->
-        "Не нашли часть приложения — похоже, установлена старая версия. Обновите Point на компьютере"
+        tr("Не нашли часть приложения — похоже, установлена старая версия. Обновите Point на компьютере")
 
-    error is OutOfMemoryError -> "Не хватило памяти на эту работу — попробуйте объект поменьше"
+    error is OutOfMemoryError -> tr("Не хватило памяти на эту работу — попробуйте объект поменьше")
 
-    error is java.io.FileNotFoundException -> "Файла не нашлось на месте — возможно, его убрали"
+    error is java.io.FileNotFoundException -> tr("Файла не нашлось на месте — возможно, его убрали")
 
     error is java.net.UnknownHostException || error is java.net.ConnectException ->
-        "Сервер не ответил — проверьте подключение"
+        tr("Сервер не ответил — проверьте подключение")
 
-    else -> "Что-то пошло не так — работа не выполнена"
+    else -> tr("Что-то пошло не так — работа не выполнена")
 }
 
 /**
@@ -38,7 +39,7 @@ fun keepTrouble(dir: File, error: Throwable) {
         dir.mkdirs()
         File(dir, "trouble.txt").writeText(
             buildString {
-                appendLine("Point ${BuildInfo.VERSION}, сборка ${BuildInfo.BUILT_ON}")
+                appendLine(tr("Point {0}, сборка {1}", BuildInfo.VERSION, BuildInfo.BUILT_ON))
                 appendLine(error.toString())
                 error.stackTrace.take(STACK_LINES).forEach { appendLine("    at $it") }
             },

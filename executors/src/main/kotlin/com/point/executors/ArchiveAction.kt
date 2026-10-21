@@ -13,6 +13,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,11 +28,11 @@ class ArchiveRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
 
-                reportStage("Распаковываю архив")
+                reportStage(tr("Распаковываю архив"))
                 val dir = archive.extract(input)
                 val count = File(dir.value).walkTopDown().count { it.isFile }
                 if (count == 0) {
-                    ActionResult.Failure("Пустой или неподдерживаемый архив", recoverable = true)
+                    ActionResult.Failure(tr("Пустой или неподдерживаемый архив"), recoverable = true)
                 } else {
 
                     ActionResult.Success(
@@ -43,6 +44,6 @@ class ArchiveRealizer @Inject constructor(
                         ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распаковки", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка распаковки"), recoverable = true) }
         }
 }

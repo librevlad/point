@@ -6,6 +6,7 @@ import com.point.core.flow.DeviceKind
 import com.point.core.flow.PointAccount
 import com.point.core.flow.SignIn
 import com.point.core.flow.SignInDriver
+import com.point.core.model.tr
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -202,7 +203,7 @@ class AccountFlow(
                 updateDevices {
                     it.copy(
                         loading = false,
-                        error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
+                        error = tr("Не удалось спросить сервер о ваших устройствах — проверьте интернет"),
                         devices = remembered ?: it.devices,
                         checkedNow = false,
                     )
@@ -224,7 +225,7 @@ class AccountFlow(
         scope.launch {
             val ok = runCatching { client.revoke(account, deviceId) }.getOrDefault(false)
             if (!ok) {
-                updateDevices { it.copy(busy = false, error = "Сервер не отключил устройство — попробуйте ещё раз") }
+                updateDevices { it.copy(busy = false, error = tr("Сервер не отключил устройство — попробуйте ещё раз")) }
                 return@launch
             }
             if (deviceId == account.deviceId) {

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.point.core.model.tr
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalPlate
 import com.point.core.ui.PortalRow
@@ -71,9 +72,9 @@ fun ConsentScreen(
         )
         Spacer(Modifier.height(18.dp))
         ScreenHeader(
-            title = title.ifBlank { "Отправить в облако?" },
+            title = title.ifBlank { tr("Отправить в облако?") },
 
-            subtitle = destination.ifBlank { "Объект уйдёт на сервер AI-провайдера и вернётся результатом." },
+            subtitle = destination.ifBlank { tr("Объект уйдёт на сервер AI-провайдера и вернётся результатом.") },
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.widthIn(max = PortalColumnWidth),
         )
@@ -81,7 +82,7 @@ fun ConsentScreen(
         Column(modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
 
             PortalRow(
-                title = confirm.ifBlank { "Разрешить" },
+                title = confirm.ifBlank { tr("Разрешить") },
                 onClick = onAllow,
                 icon = bubbleIcon(CLOUD_ICON),
                 primary = true,
@@ -90,7 +91,7 @@ fun ConsentScreen(
         }
         Spacer(Modifier.height(10.dp))
         TextButton(onClick = onDecline) {
-            Text("Не сейчас", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Не сейчас"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

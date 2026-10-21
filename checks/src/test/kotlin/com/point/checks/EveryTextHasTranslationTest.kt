@@ -24,7 +24,7 @@ class EveryTextHasTranslationTest {
     private val sources: List<File> = repo.listFiles().orEmpty()
         .filter { it.isDirectory && it.name != "build" && !it.name.startsWith('.') }
         .flatMap { top -> top.walkTopDown().onEnter { it.name != "build" && !it.name.startsWith('.') }.toList() }
-        .filter { it.isFile && it.extension == "kt" && "/src/main/" in it.invariantSeparatorsPath }
+        .filter { it.isFile && it.extension == "kt" && ("/src/main/" in it.invariantSeparatorsPath || "/src/shared/" in it.invariantSeparatorsPath) }
 
     private val catalog: Map<String, List<String>> by lazy {
         catalogFile.readLines(Charsets.UTF_8)

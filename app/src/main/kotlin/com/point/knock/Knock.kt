@@ -10,6 +10,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.point.HomeActivity
 import com.point.R
 
+import com.point.core.model.tr
 /**
  * Стук компьютера: «зайди, для тебя что-то есть» (#817).
  *
@@ -68,12 +69,12 @@ object Knock {
         )
     }
 
-    private const val CHANNEL_NAME = "Просьбы компьютера"
-    private const val CHANNEL_WHAT = "Компьютер просит телефон что-то сделать с объектом"
-    private const val TAP = "Нажмите, чтобы забрать объект и сделать"
+    private val CHANNEL_NAME: String get() = tr("Просьбы компьютера")
+    private val CHANNEL_WHAT: String get() = tr("Компьютер просит телефон что-то сделать с объектом")
+    private val TAP: String get() = tr("Нажмите, чтобы забрать объект и сделать")
 
     /** Готовое забирают, а не делают (#1416). */
-    const val TAP_READY = "Нажмите, чтобы забрать готовое"
+    val TAP_READY: String get() = tr("Нажмите, чтобы забрать готовое")
 }
 
 /**
@@ -82,9 +83,9 @@ object Knock {
  * Уведомление называет работу и объект — по нему видно, на что человек соглашается тапом.
  */
 fun phoneRequestNotice(action: String, name: String): String =
-    "Компьютер просит: $action" + name.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+    tr("Компьютер просит: {0}", action) + name.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
 
 /** Готово то, о чём просил телефон (#1416): человека зовут за результатом, а не к работе. */
 fun readyOnPcNotice(label: String, name: String): String =
-    "Готово на компьютере" + label.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty() +
+    tr("Готово на компьютере") + label.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty() +
         name.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()

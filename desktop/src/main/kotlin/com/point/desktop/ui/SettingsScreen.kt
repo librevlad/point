@@ -1,5 +1,7 @@
 package com.point.desktop.ui
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -112,7 +114,7 @@ fun SettingsRoot(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // Порядок и слова разделов — те же, что на телефоне (#881).
-        Section("Аккаунт и устройства") {
+        Section(tr("Аккаунт и устройства")) {
             PortalRow(
                 title = MY_DEVICES_TITLE,
                 subtitle = if (signedIn) devicesLine(email, devices) else com.point.desktop.NEEDS_SIGN_IN_FOR_DEVICES,
@@ -120,7 +122,7 @@ fun SettingsRoot(
             )
         }
 
-        Section("AI и приватность") {
+        Section(tr("AI и приватность")) {
             PortalRow(
                 title = KEY_SECTION_TITLE,
                 subtitle = keysLine(config),
@@ -140,10 +142,10 @@ fun SettingsRoot(
 
         // Звук на компьютере играет и приезжает с телефона, но выключателя здесь не было:
         // поменять настройку можно было только с той стороны (#886).
-        Section("Поведение Point") {
+        Section(tr("Поведение Point")) {
             SwitchRow(
-                title = "Звук действий",
-                subtitle = "Тихий отклик, когда объект приезжает с телефона.",
+                title = tr("Звук действий"),
+                subtitle = tr("Тихий отклик, когда объект приезжает с телефона."),
                 on = sound,
             ) {
                 sound = !sound
@@ -151,10 +153,10 @@ fun SettingsRoot(
             }
         }
 
-        Section("Данные") {
+        Section(tr("Данные")) {
             PortalRow(
                 title = MEMORY_TITLE,
-                subtitle = "Убирается через сутки · перетащенный файл не трогается",
+                subtitle = tr("Убирается через сутки · перетащенный файл не трогается"),
                 onClick = { onOpen(SettingsPage.DATA) },
             )
         }
@@ -163,9 +165,9 @@ fun SettingsRoot(
         // Переключатель говорит состояние словом, а нажатие меняет его. Слово — правда:
         // когда запись в реестр не встала, включённый флаг не говорит «Показывается», а когда
         // не снялась — выключенный не говорит «Не показывается» (#1082).
-        Section("Интеграции") {
+        Section(tr("Интеграции")) {
             SwitchRow(
-                title = "«Открыть в Point» в меню файла",
+                title = tr("«Открыть в Point» в меню файла"),
                 subtitle = rightClickLine(rightClick, rightClickTrouble, rightClickChecking),
                 on = rightClick,
             ) {
@@ -197,7 +199,7 @@ fun SettingsRoot(
         // установки перестаёт быть загадкой — «у меня от шестого августа» видно сразу.
         // Номер один на оба устройства: телефон говорил 0.3.0, компьютер — 3.0.0 (#886).
         Text(
-            "Point ${com.point.desktop.BuildInfo.VERSION} · сборка ${com.point.desktop.BuildInfo.BUILT_ON}",
+            tr("Point {0} · сборка {1}", com.point.desktop.BuildInfo.VERSION, com.point.desktop.BuildInfo.BUILT_ON),
             style = PointType.mono,
             modifier = Modifier.padding(start = 10.dp),
         )
@@ -215,20 +217,19 @@ fun SettingsRoot(
  * прикрыть ею сбой, только короче.
  */
 internal fun rightClickLine(on: Boolean, trouble: Boolean?, checking: Boolean): String = when {
-    checking -> "Проверяется"
-    trouble == null -> "Не удалось проверить — Windows не ответила"
-    on && trouble -> "Не удалось включить — запись в меню файла не встала"
-    on -> "Показывается"
-    trouble -> "Не удалось выключить — пункт остался в меню файла"
-    else -> "Не показывается"
+    checking -> tr("Проверяется")
+    trouble == null -> tr("Не удалось проверить — Windows не ответила")
+    on && trouble -> tr("Не удалось включить — запись в меню файла не встала")
+    on -> tr("Показывается")
+    trouble -> tr("Не удалось выключить — пункт остался в меню файла")
+    else -> tr("Не показывается")
 }
 
 internal fun devicesLine(email: String, devices: Int): String {
     val count = when {
-        devices <= 0 -> "устройств пока нет"
-        devices == 1 -> "одно устройство"
-        devices in 2..4 -> "$devices устройства"
-        else -> "$devices устройств"
+        devices <= 0 -> tr("устройств пока нет")
+        devices == 1 -> tr("одно устройство")
+        else -> "$devices " + trPlural(devices, "устройство", "устройства", "устройств")
     }
     return listOf(email, count).filter { it.isNotBlank() }.joinToString(" · ")
 }
@@ -252,11 +253,11 @@ fun SettingsDevices(
     ) {
         devicesPane()
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("ИМЯ ЭТОГО КОМПЬЮТЕРА", style = PointType.label)
+            Text(tr("ИМЯ ЭТОГО КОМПЬЮТЕРА"), style = PointType.label)
             Field(
                 value = name,
                 onChange = { name = it; onSave(config.copy(name = it.trim().ifBlank { config.name })) },
-                hint = "Так его видят ваши другие устройства",
+                hint = tr("Так его видят ваши другие устройства"),
             )
         }
     }
@@ -300,22 +301,22 @@ fun SettingsPrivacy(
             }
         }
 
-        Text("Показывать объект моделям", style = PointType.body)
+        Text(tr("Показывать объект моделям"), style = PointType.body)
         Text(
             if (allowed) {
-                "Разрешено. Point показывает объект сервису, когда вы нажали действие, " +
-                    "которое без этого не работает. Заберите разрешение — и он спросит заново."
+                tr("Разрешено. Point показывает объект сервису, когда вы нажали действие, " +
+                    "которое без этого не работает. Заберите разрешение — и он спросит заново.")
             } else {
-                "Пока не разрешено. Point спросит перед первым действием, которому нужен сервис."
+                tr("Пока не разрешено. Point спросит перед первым действием, которому нужен сервис.")
             },
             style = PointType.small,
         )
-        if (allowed) Action("Забрать разрешение", onRevoke)
+        if (allowed) Action(tr("Забрать разрешение"), onRevoke)
 
-        Text("Выложить по открытой ссылке", style = PointType.body)
+        Text(tr("Выложить по открытой ссылке"), style = PointType.body)
         Text(
-            "Про такое Point спрашивает каждый раз и ответ не запоминает: ссылка на сутки — " +
-                "каждый раз новая ставка.",
+            tr("Про такое Point спрашивает каждый раз и ответ не запоминает: ссылка на сутки — " +
+                "каждый раз новая ставка."),
             style = PointType.small,
         )
     }
@@ -323,9 +324,9 @@ fun SettingsPrivacy(
 
 /** Сказанное после уборки: молчание читалось как «не сработало» (#1081). */
 internal fun sweptText(swept: Int?): String = when {
-    swept == null -> "Убрать прямо сейчас"
-    swept == 0 -> "Убирать было нечего"
-    else -> "Убрано объектов: $swept"
+    swept == null -> tr("Убрать прямо сейчас")
+    swept == 0 -> tr("Убирать было нечего")
+    else -> tr("Убрано объектов: {0}", swept)
 }
 
 /** Экран данных: что лежит и как это убрать. */
@@ -336,9 +337,9 @@ fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается " +
+            tr("Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается " +
                 "само. Кнопка убирает это прямо сейчас — вместе со списком «Недавнего». " +
-                "Файл, который вы перетащили мышью, не трогается никогда.",
+                "Файл, который вы перетащили мышью, не трогается никогда."),
             style = PointType.small,
         )
         Action(sweptText(swept), onSweepNow)
@@ -418,7 +419,7 @@ internal fun Field(
                     Box(Modifier.weight(1f)) { inner() }
                     if (secret && revealable && value.isNotBlank()) {
                         Text(
-                            if (shown) "Скрыть" else "Показать",
+                            if (shown) tr("Скрыть") else tr("Показать"),
                             style = PointType.small.copy(color = PointColors.link),
                             modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(6.dp))
                                 .handCursor().clickable { shown = !shown },

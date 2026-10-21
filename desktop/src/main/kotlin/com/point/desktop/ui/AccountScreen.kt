@@ -19,6 +19,7 @@ import com.point.core.flow.SIGN_IN_ACTION
 import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
 import com.point.core.flow.signInWaitingLine
+import com.point.core.model.tr
 import com.point.core.ui.actionTint
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.PointGlyph
@@ -45,7 +46,7 @@ fun SignInPane(
     ) {
         PortalRing(bright = state is SignIn.SignedIn)
         Text(
-            if (state is SignIn.SignedIn) "Вы вошли" else SIGN_IN_TITLE,
+            if (state is SignIn.SignedIn) tr("Вы вошли") else SIGN_IN_TITLE,
             style = PointType.display,
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 460.dp),
@@ -54,31 +55,31 @@ fun SignInPane(
             SignIn.SignedOut -> {
                 Explain(com.point.core.flow.SIGN_IN_WHY)
                 LightButton(SIGN_IN_ACTION, onSignIn)
-                PillButton("Не сейчас", onCancel)
+                PillButton(tr("Не сейчас"), onCancel)
             }
 
             is SignIn.Waiting -> {
                 Text(signInWaitingLine(state.code), style = PointType.body, textAlign = TextAlign.Center)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillButton("Открыть страницу входа снова", { onOpenAgain(state.url) })
-                    PillButton("Отменить", onCancel)
+                    PillButton(tr("Открыть страницу входа снова"), { onOpenAgain(state.url) })
+                    PillButton(tr("Отменить"), onCancel)
                 }
             }
 
             is SignIn.SignedIn -> {
                 Text(state.account.email, style = PointType.body)
                 Explain(
-                    "Этот компьютер теперь в вашем круге. Войдите в тот же аккаунт на телефоне — и они найдут " +
-                        "друг друга сами. Чтобы забрать присланное, Point на этом компьютере должен быть запущен.",
+                    tr("Этот компьютер теперь в вашем круге. Войдите в тот же аккаунт на телефоне — и они найдут " +
+                        "друг друга сами. Чтобы забрать присланное, Point на этом компьютере должен быть запущен."),
                 )
-                LightButton("Продолжить", onContinue)
+                LightButton(tr("Продолжить"), onContinue)
             }
 
             is SignIn.Refused -> {
                 Text(state.what, style = PointType.title, textAlign = TextAlign.Center)
                 Explain(state.fix)
                 LightButton(SIGN_IN_ACTION, onSignIn)
-                PillButton("Не сейчас", onCancel)
+                PillButton(tr("Не сейчас"), onCancel)
             }
         }
     }
@@ -102,11 +103,11 @@ fun ConnectDevicesPane(error: String?, onSignIn: () -> Unit) {
         modifier = Modifier.fillMaxWidth().glassPanel().padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Подключить устройства", style = PointType.title)
+        Text(tr("Подключить устройства"), style = PointType.title)
         Text(
-            "Телефон, планшет или другой компьютер найдут этот компьютер, когда вы войдёте в один " +
+            tr("Телефон, планшет или другой компьютер найдут этот компьютер, когда вы войдёте в один " +
                 "аккаунт на каждом. Устройств может быть сколько угодно. Работать с Point здесь " +
-                "можно и без входа.",
+                "можно и без входа."),
             style = PointType.small,
         )
         error?.let { Text(it, style = PointType.small.copy(color = PointColors.close)) }
@@ -146,19 +147,19 @@ fun MyDevicesPane(
                         tint = actionTint(com.point.core.ui.bubbleColor(key)),
                         onClick = null,
                     ) {
-                        PillButton("Отключить", { onRevoke(device.id) }, enabled = !busy, small = true)
+                        PillButton(tr("Отключить"), { onRevoke(device.id) }, enabled = !busy, small = true)
                     }
                 }
             }
         }
         if (devices.size <= 1) {
             Text(
-                "Пока вы один. Войдите в тот же аккаунт на телефоне — он появится здесь сам.",
+                tr("Пока вы один. Войдите в тот же аккаунт на телефоне — он появится здесь сам."),
                 style = PointType.small,
                 modifier = Modifier.padding(start = 10.dp),
             )
         }
-        PillButton("Выйти", onSignOut, enabled = !busy, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
+        PillButton(tr("Выйти"), onSignOut, enabled = !busy, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
     }
 }
 

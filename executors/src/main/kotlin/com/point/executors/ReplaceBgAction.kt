@@ -15,6 +15,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -26,7 +27,7 @@ class ReplaceBgCapability @Inject constructor() : Capability {
     // Долгая работа, как «Убрать фон» (#1128): та же модель сегментации, те же минуты
     // на медленном телефоне — и тот же экран «Идёт N с» с «Отменить», а не тишина.
     override val meta = CapabilityMeta(priority = 42, latency = Latency.SLOW)
-    override fun label(state: ObjectState) = "Заменить фон"
+    override fun label(state: ObjectState) = tr("Заменить фон")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
@@ -43,16 +44,16 @@ class ReplaceBgRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
 
-        if (amendment == null) return ActionResult.NeedsImage("Выберите фон")
+        if (amendment == null) return ActionResult.NeedsImage(tr("Выберите фон"))
         return withContext(Dispatchers.IO) {
             runCatching {
                 val background = store.ingest(amendment, "image/jpeg")
-                reportStage("Отделяю объект от фона")
+                reportStage(tr("Отделяю объект от фона"))
                 val subject = remover.cutout(input.uri.value)
-                reportStage("Ставлю новый фон")
+                reportStage(tr("Ставлю новый фон"))
                 val result = compositor.composite(subject.value, background.uri.value)
                 ActionResult.Success(ResultObject(ObjectKind.IMAGE, "image/png", result, mapOf("op" to "replace-bg")))
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось заменить фон", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось заменить фон"), recoverable = true) }
         }
     }
 }

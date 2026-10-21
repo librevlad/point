@@ -20,6 +20,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 /**
  * Способности, которые добавляет объявление компьютера (#628, решение владельца
  * «одна способность — одна кнопка»).
@@ -187,7 +188,7 @@ class RemotePcRealizer(
             ).knowingAddress()
             val known = landed(returned.understanding)
             ActionResult.Done(
-                "${action.label} — готово: ${returned.name}",
+                tr("{0} — готово: {1}", action.label, returned.name),
                 known.copy(
                     objects = listOf(produced),
                     relations = listOf(
@@ -208,7 +209,7 @@ class RemotePcRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
 
         action.unavailable?.let { why ->
-            val reason = "Компьютер сейчас не может это сделать" + if (why.isBlank()) "" else " — $why"
+            val reason = tr("Компьютер сейчас не может это сделать") + if (why.isBlank()) "" else " — $why"
             return ActionResult.Failure(reason, recoverable = true)
         }
         val pc = links.current()
@@ -234,14 +235,14 @@ class RemotePcRealizer(
                 is PcActionOutcome.Done ->
 
                     ActionResult.Done(
-                        done.detail?.takeIf { it.isNotBlank() } ?: "${action.label} — готово",
+                        done.detail?.takeIf { it.isNotBlank() } ?: tr("{0} — готово", action.label),
                         // Понятое компьютером ложится в исходник тем же путём Done+findings:
                         // перенос не теряет знание (PC2).
                         landed(outcome.understanding).takeIf { outcome.understanding.isNotEmpty() },
                     )
                 is PcActionOutcome.Failed -> ActionResult.Failure(
                     done.reason.takeIf { it.isNotBlank() }
-                        ?: "Компьютер не смог выполнить «${action.label}»",
+                        ?: tr("Компьютер не смог выполнить «{0}»", action.label),
                     recoverable = true,
                 )
             }

@@ -1,5 +1,7 @@
 package com.point.desktop
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import com.point.core.flow.decodePcMeta
 import com.point.core.flow.encodePcMeta
 import com.point.core.model.ActionResult
@@ -147,15 +149,15 @@ fun recentBesides(
 
 fun stepOf(capabilityId: String, title: String, at: Long, result: ActionResult): JournalStep = when (result) {
     is ActionResult.Done -> JournalStep(capabilityId, title, at, StepOutcome.DONE, result.message)
-    is ActionResult.Success -> JournalStep(capabilityId, title, at, StepOutcome.DONE, "получился новый объект")
+    is ActionResult.Success -> JournalStep(capabilityId, title, at, StepOutcome.DONE, tr("получился новый объект"))
     is ActionResult.Failure -> JournalStep(capabilityId, title, at, StepOutcome.FAILED, result.reason)
 
     // Вопрос и выбор картинки — ожидание продолжения, а не провал (ADR-0001 §18).
     is ActionResult.NeedsInput ->
-        JournalStep(capabilityId, title, at, StepOutcome.AWAITING, "остановилось на вопросе: ${result.prompt}")
+        JournalStep(capabilityId, title, at, StepOutcome.AWAITING, tr("остановилось на вопросе: {0}", result.prompt))
 
     is ActionResult.NeedsImage ->
-        JournalStep(capabilityId, title, at, StepOutcome.AWAITING, "остановилось на выборе картинки")
+        JournalStep(capabilityId, title, at, StepOutcome.AWAITING, tr("остановилось на выборе картинки"))
 }
 
 /** Шаг ждёт продолжения на другом устройстве: исхода у него пока нет (#1112). */
@@ -168,28 +170,21 @@ fun awaitingStep(
 ): JournalStep = JournalStep(capabilityId, title, at, StepOutcome.AWAITING, note, awaiting)
 
 fun sourceLabel(source: ObjectSource): String = when (source) {
-    ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> "с телефона"
-    ObjectSource.DROPPED -> "перетащен в окно"
-    ObjectSource.CLIPBOARD -> "взят из буфера"
-    ObjectSource.LOCAL -> "с этого компьютера"
+    ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> tr("с телефона")
+    ObjectSource.DROPPED -> tr("перетащен в окно")
+    ObjectSource.CLIPBOARD -> tr("взят из буфера")
+    ObjectSource.LOCAL -> tr("с этого компьютера")
 }
 
 fun sourceShort(source: ObjectSource): String = when (source) {
-    ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> "с телефона"
-    ObjectSource.DROPPED -> "перетащен"
-    ObjectSource.CLIPBOARD -> "из буфера"
-    ObjectSource.LOCAL -> "с компьютера"
+    ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> tr("с телефона")
+    ObjectSource.DROPPED -> tr("перетащен")
+    ObjectSource.CLIPBOARD -> tr("из буфера")
+    ObjectSource.LOCAL -> tr("с компьютера")
 }
 
 fun stepsWord(count: Int): String {
-    val mod100 = count % 100
-    val word = when {
-        mod100 in 11..14 -> "действий"
-        count % 10 == 1 -> "действие"
-        count % 10 in 2..4 -> "действия"
-        else -> "действий"
-    }
-    return "$count $word"
+    return "$count " + trPlural(count, "действие", "действия", "действий")
 }
 
 fun whenLabel(at: Long, now: Long, zone: ZoneId): String {
@@ -200,15 +195,15 @@ fun whenLabel(at: Long, now: Long, zone: ZoneId): String {
 
     val year = if (date.year == today.year) "" else " ${date.year}"
     return when (date) {
-        today -> "сегодня $clock"
-        today.minusDays(1) -> "вчера $clock"
+        today -> tr("сегодня {0}", clock)
+        today.minusDays(1) -> tr("вчера {0}", clock)
         else -> "${date.dayOfMonth} ${monthOf(date)}$year · $clock"
     }
 }
 
 private fun monthOf(date: LocalDate): String = listOf(
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    tr("января"), tr("февраля"), tr("марта"), tr("апреля"), tr("мая"), tr("июня"),
+    tr("июля"), tr("августа"), tr("сентября"), tr("октября"), tr("ноября"), tr("декабря"),
 )[date.monthValue - 1]
 
 interface JournalStore {

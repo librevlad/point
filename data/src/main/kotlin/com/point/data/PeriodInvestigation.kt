@@ -12,6 +12,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import javax.inject.Inject
 
 class PeriodInvestigation @Inject constructor() : Capability {
@@ -26,7 +27,7 @@ class PeriodInvestigation @Inject constructor() : Capability {
         mayYield = setOf(Feature.HAS_PERIOD),
     )
 
-    override fun label(state: ObjectState) = "Смотрю документ…"
+    override fun label(state: ObjectState) = tr("Смотрю документ…")
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
 

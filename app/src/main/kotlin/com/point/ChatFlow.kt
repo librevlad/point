@@ -5,6 +5,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ChatRole
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -128,6 +129,6 @@ class ChatFlow(
     }
 
     companion object {
-        const val ANSWER_NOT_KEPT = "Не удалось забрать ответ"
+        val ANSWER_NOT_KEPT: String get() = tr("Не удалось забрать ответ")
     }
 }

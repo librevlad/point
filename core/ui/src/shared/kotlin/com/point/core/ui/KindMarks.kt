@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 /**
  * Марка на каждый вид объекта (#825).
  *
@@ -105,16 +106,16 @@ private val SPREADSHEET_EXTS = setOf("xlsx", "xls", "xlsm", "xlsb", "ods", "csv"
 
 /** Как марка называется голосовому доступу: тем же словом, что и вид объекта на экране. */
 fun kindMarkLabel(mark: KindMark): String = when (mark) {
-    KindMark.SPREADSHEET -> "Таблица"
-    KindMark.TEXT -> "Текст"
-    KindMark.IMAGE -> "Изображение"
+    KindMark.SPREADSHEET -> tr("Таблица")
+    KindMark.TEXT -> tr("Текст")
+    KindMark.IMAGE -> tr("Изображение")
     KindMark.PDF -> "PDF"
-    KindMark.ARCHIVE -> "Архив"
-    KindMark.AUDIO -> "Запись"
-    KindMark.LINK -> "Ссылка"
-    KindMark.COLLECTION -> "Коллекция"
-    KindMark.DOCUMENT -> "Документ"
-    KindMark.UNKNOWN -> "Объект"
+    KindMark.ARCHIVE -> tr("Архив")
+    KindMark.AUDIO -> tr("Запись")
+    KindMark.LINK -> tr("Ссылка")
+    KindMark.COLLECTION -> tr("Коллекция")
+    KindMark.DOCUMENT -> tr("Документ")
+    KindMark.UNKNOWN -> tr("Объект")
 }
 
 /**

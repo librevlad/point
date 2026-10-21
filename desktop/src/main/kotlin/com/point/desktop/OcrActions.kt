@@ -5,6 +5,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.withoutKey
 import com.point.core.model.ActionResult
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -16,7 +17,7 @@ import java.net.URL
  * Прежде компьютер показывал телефонное «сначала на телефоне» как своё — шаг, которого здесь
  * не будет.
  */
-internal const val OCR_ON_PC_PROMISE = "текст · уйдёт в сервис"
+internal val OCR_ON_PC_PROMISE: String get() = tr("текст · уйдёт в сервис")
 
 class PcCloudOcrRealizer(
     private val config: () -> OcrConfig,
@@ -40,7 +41,7 @@ class PcCloudOcrRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 val file = File(input.uri.value).takeIf(File::isFile)
-                    ?: return@withContext ActionResult.Failure("Файла картинки нет на диске", recoverable = false)
+                    ?: return@withContext ActionResult.Failure(tr("Файла картинки нет на диске"), recoverable = false)
 
                 // Снимок тяжелее предела сервиса Point укладывает сам (#592): прежде он отказывал
                 // и советовал сначала нажать «Сделать легче» — два тапа там, где человек хотел
@@ -48,8 +49,8 @@ class PcCloudOcrRealizer(
                 val fitted = if (file.length() > MAX_BYTES) ImageFit.toFit(file, MAX_BYTES) else null
                 if (file.length() > MAX_BYTES && fitted == null) {
                     return@withContext ActionResult.Failure(
-                        "Снимок " + String.format(java.util.Locale.ROOT, "%.1f", file.length() / (1024.0 * 1024)) +
-                            " МБ — сервис принимает до 1 МБ, а уменьшить этот снимок не вышло.",
+                        tr("Снимок ") + String.format(java.util.Locale.ROOT, "%.1f", file.length() / (1024.0 * 1024)) +
+                            tr(" МБ — сервис принимает до 1 МБ, а уменьшить этот снимок не вышло."),
                         recoverable = false,
                     )
                 }
@@ -65,7 +66,7 @@ class PcCloudOcrRealizer(
                     // (#1054). Пустой лист и пометка — один ответ, и правило одно на обе
                     // поверхности: пометка текстом снимка не становится.
                     return@withContext ActionResult.Done(
-                        "На снимке не нашлось текста" + if (fitted == null) "" else " · " + shrunkNote(fitted),
+                        tr("На снимке не нашлось текста") + if (fitted == null) "" else " · " + shrunkNote(fitted),
                         com.point.core.model.Findings(
                             metadata = mapOf(
                                 com.point.core.flow.investigationKey(capabilityId) to
@@ -87,9 +88,9 @@ class PcCloudOcrRealizer(
                     com.point.core.model.Provenance.OCR,
                 )
                 ActionResult.Done(
-                    "Прочитал снимок" +
+                    tr("Прочитал снимок") +
                         (if (fitted == null) "" else " · " + shrunkNote(fitted)) +
-                        if (found.isEmpty()) "" else ". Нашёл: " + entitySummary(found),
+                        if (found.isEmpty()) "" else tr(". Нашёл: ") + entitySummary(found),
                     com.point.core.model.Findings(
                         features = entities.features + com.point.core.model.Feature.HAS_TEXT,
                         metadata = entities.metadata + mapOf(
@@ -105,7 +106,7 @@ class PcCloudOcrRealizer(
                 // «Сервис не принял ключ» накрывалось общим «не ответил», и человек шёл ждать
                 // вместо того, чтобы поправить ключ.
                 ActionResult.Failure(
-                    com.point.core.flow.ownWordsOf(it) ?: "Сервис чтения не ответил — попробуйте позже",
+                    com.point.core.flow.ownWordsOf(it) ?: tr("Сервис чтения не ответил — попробуйте позже"),
                     recoverable = true,
                 )
             }
@@ -170,8 +171,8 @@ class PcCloudOcrRealizer(
     }
 
     private fun hintFor(code: Int): String? = when (code) {
-        401, 403 -> "проверьте ocr.key в ~/.point-pc/config"
-        404 -> "проверьте ocr.url там же"
+        401, 403 -> tr("проверьте ocr.key в ~/.point-pc/config")
+        404 -> tr("проверьте ocr.url там же")
         else -> null
     }
 

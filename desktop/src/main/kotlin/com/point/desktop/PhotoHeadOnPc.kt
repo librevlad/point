@@ -21,6 +21,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.image.BufferedImage
@@ -91,7 +92,7 @@ class PcCleanMetadataRealizer(private val store: ObjectStore) : Realizer {
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Читаю снимок")
+                reportStage(tr("Читаю снимок"))
                 val source = File(input.uri.value)
                 val image = source.takeIf(File::isFile)?.let { ImageIO.read(it) }
                     ?: return@withContext ActionResult.Failure(
@@ -102,7 +103,7 @@ class PcCleanMetadataRealizer(private val store: ObjectStore) : Realizer {
                         recoverable = false,
                     )
 
-                reportStage("Убираю служебные записи")
+                reportStage(tr("Убираю служебные записи"))
                 val upright = uprightOpaque(image, photoHeadOf(source)?.uprightDegrees ?: 0)
                 val ref = store.newScratchFile("jpg")
                 writeJpeg(upright, File(ref.value))
@@ -133,7 +134,7 @@ class PcCleanMetadataRealizer(private val store: ObjectStore) : Realizer {
     }
 
     private companion object {
-        const val NOT_CLEANED = "Очистить не вышло — этот формат снимка компьютер не открывает"
+        val NOT_CLEANED: String get() = tr("Очистить не вышло — этот формат снимка компьютер не открывает")
         const val QUALITY = 0.95f
     }
 }

@@ -13,6 +13,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 /*
  * Как вещь называется в шапке своего экрана — одно слово на телефон и компьютер.
  *
@@ -38,11 +39,11 @@ fun objectMeasure(obj: PointObject): String? {
 fun objectVerdict(obj: PointObject): ObjectVerdict {
     val state = obj.state
     val headline = when {
-        state.has(Feature.IS_PURCHASE) -> "Покупка"
-        state.has(Feature.IS_MEETING) -> "Встреча"
-        state.has(Feature.IS_RECIPE) -> "Рецепт"
-        state.has(Feature.IS_JOB) -> "Вакансия"
-        state.has(Feature.HAS_VCARD) -> "Визитка"
+        state.has(Feature.IS_PURCHASE) -> tr("Покупка")
+        state.has(Feature.IS_MEETING) -> tr("Встреча")
+        state.has(Feature.IS_RECIPE) -> tr("Рецепт")
+        state.has(Feature.IS_JOB) -> tr("Вакансия")
+        state.has(Feature.HAS_VCARD) -> tr("Визитка")
 
         else -> documentLabel(obj.metadata[META_SEMANTIC_TYPE]) ?: heroKindLabel(obj)
     }

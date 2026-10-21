@@ -11,6 +11,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -23,7 +24,7 @@ class OpenInCapability @Inject constructor() : Capability {
     // чужим экраном (#1131): подпись «Открываю в …» гаснет возвратом человека.
     override val meta = CapabilityMeta(priority = 60, localOnly = true, handsOff = true)
 
-    override fun label(state: ObjectState) = "Открыть другим приложением"
+    override fun label(state: ObjectState) = tr("Открыть другим приложением")
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL
     override fun produces(state: ObjectState) = state
@@ -41,9 +42,9 @@ class OpenInRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 val target = launcher.handlers(input).firstOrNull()
-                    ?: error("Нет приложения для этого объекта")
+                    ?: error(tr("Нет приложения для этого объекта"))
                 launcher.launch(target, input)
-                ActionResult.Done("Открываю в ${target.label}")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
+                ActionResult.Done(tr("Открываю в {0}", target.label))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть"), recoverable = true) }
         }
 }

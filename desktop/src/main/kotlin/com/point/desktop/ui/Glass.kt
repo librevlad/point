@@ -38,6 +38,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.point.core.model.tr
 import com.point.core.ui.GlassIcons
 import com.point.core.ui.GlassTone
 import com.point.core.ui.drawWallpaper
@@ -157,7 +158,7 @@ fun PaneHeader(title: String, onBack: () -> Unit, modifier: Modifier = Modifier)
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        RoundButton(GlassIcons.ChevronLeft, "Назад", onBack)
+        RoundButton(GlassIcons.ChevronLeft, tr("Назад"), onBack)
         Text(title, style = PointType.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

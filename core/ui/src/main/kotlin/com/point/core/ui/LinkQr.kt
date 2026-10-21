@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.qrMatrix
+import com.point.core.model.tr
 import kotlin.math.floor
 
 @Composable
@@ -37,7 +38,7 @@ fun LinkQr(
             .clip(plate)
             .background(Color.White)
 
-            .semantics { contentDescription = "QR-код ссылки" },
+            .semantics { contentDescription = tr("QR-код ссылки") },
     ) {
 
         val quiet = 4
@@ -64,8 +65,8 @@ internal fun issuedLinkOf(metadata: Map<String, String>): String? {
 
 internal fun issuedLinkWarning(metadata: Map<String, String>): String {
     val expires = metadata[META_DROP_EXPIRES]?.takeIf { it.isNotBlank() }
-    val life = if (expires == null) "" else " Живёт $expires."
-    return "Заберёт любой, у кого есть ссылка: файл лежит на сервере открытым.$life"
+    val life = if (expires == null) "" else tr(" Живёт {0}.", expires)
+    return tr("Заберёт любой, у кого есть ссылка: файл лежит на сервере открытым.{0}", life)
 }
 
 internal const val META_ENTITY_URL = "entity.url"

@@ -15,6 +15,7 @@ import com.point.core.model.Provenance
 import com.point.core.flow.AiCapability
 import com.point.core.flow.aiSuggestions
 import com.point.core.flow.aiTransformTarget
+import com.point.core.model.tr
 import java.io.File
 
 /**
@@ -78,7 +79,7 @@ class ChatTalk @javax.inject.Inject constructor(
             .getOrElse {
                 if (it is kotlinx.coroutines.CancellationException) throw it
                 failed = true
-                "Не получилось ответить: ${it.message ?: "ошибка"}"
+                tr("Не получилось ответить: {0}", it.message ?: tr("ошибка"))
             }
         return heard(chat.copy(content = known), reply, failed)
     }
@@ -119,7 +120,7 @@ class ChatTalk @javax.inject.Inject constructor(
     }
 
     companion object {
-        const val ANSWER_NAME = "Ответ AI"
-        const val ANSWER_STOPPED = "Ответ остановлен"
+        val ANSWER_NAME: String get() = tr("Ответ AI")
+        val ANSWER_STOPPED: String get() = tr("Ответ остановлен")
     }
 }

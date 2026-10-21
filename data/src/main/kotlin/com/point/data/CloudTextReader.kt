@@ -10,6 +10,7 @@ import com.point.core.flow.allowedAt
 import com.point.core.flow.allowedBy
 import com.point.core.flow.noTextAnswer
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import javax.inject.Inject
 import com.point.core.flow.summariseCloudErrors
 
@@ -106,23 +107,23 @@ class DefaultExternalEye @Inject constructor(
     }
 
     private companion object {
-        const val NOT_CONFIGURED =
-            "Чтение снаружи не настроено — задайте бесплатный ключ Mistral (см. настройки)"
+        val NOT_CONFIGURED: String get() =
+            tr("Чтение снаружи не настроено — задайте бесплатный ключ Mistral (см. настройки)")
 
         /** Общие слова отказа по режиму (#840): своей копии у читателя нет. */
         val DEVICE_ONLY: String =
             com.point.core.flow.chainClosedBy(com.point.core.flow.PrivacyLevel.DEVICE_ONLY)
 
-        const val STRICT_LEVEL_EMPTY =
-            "Читателей, обещавших не учиться на присланном, сейчас нет — смягчите настройку «Куда можно отправлять»"
+        val STRICT_LEVEL_EMPTY: String get() =
+            tr("Читателей, обещавших не учиться на присланном, сейчас нет — смягчите настройку «Куда можно отправлять»")
 
-        const val NOT_FOR_THIS_OBJECT =
-            "Чтение снаружи не берётся за этот объект — читают снимок страницы"
+        val NOT_FOR_THIS_OBJECT: String get() =
+            tr("Чтение снаружи не берётся за этот объект — читают снимок страницы")
 
         /** Глагол этой цепочки для общей сводки отказов (#1237). */
-        const val WHAT_FAILED = "прочитать"
+        val WHAT_FAILED: String get() = tr("прочитать")
 
-        const val KEY_HINT =
-            ". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)"
+        val KEY_HINT: String get() =
+            tr(". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)")
     }
 }

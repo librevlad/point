@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.speakPointLanguage
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.DropLink
@@ -53,6 +54,7 @@ class DesktopDropLink(
                     doOutput = true
                     connectTimeout = 10_000
                     readTimeout = 120_000
+                    speakPointLanguage()
                     pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
 
                     setRequestProperty(

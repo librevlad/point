@@ -4,6 +4,7 @@ import android.app.StatusBarManager
 import android.content.Context
 import android.os.Build
 
+import com.point.core.model.tr
 private const val SHADE_PREFS = "shade"
 
 private const val KEY_TILE_ADDED = "tile_added"
@@ -44,6 +45,6 @@ fun tileAddOutcome(result: Int): TileAddOutcome = when (result) {
 
 fun tileAddMessage(outcome: TileAddOutcome): String? = when (outcome) {
     TileAddOutcome.ADDED, TileAddOutcome.DECLINED -> null
-    TileAddOutcome.ALREADY -> "Плитка Point уже в шторке"
-    TileAddOutcome.FAILED -> "Не получилось предложить плитку — её можно добавить в редакторе шторки"
+    TileAddOutcome.ALREADY -> tr("Плитка Point уже в шторке")
+    TileAddOutcome.FAILED -> tr("Не получилось предложить плитку — её можно добавить в редакторе шторки")
 }

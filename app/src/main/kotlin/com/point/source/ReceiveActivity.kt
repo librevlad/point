@@ -36,6 +36,7 @@ import com.point.core.flow.DropOpen
 import com.point.core.flow.DropInboxBox
 import com.point.core.flow.DropWait
 import com.point.core.flow.receiveWaitStatus
+import com.point.core.model.tr
 import com.point.core.ui.LinkCard
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
@@ -174,7 +175,7 @@ class ReceiveActivity : ComponentActivity() {
     private fun copyLink() {
         val text = link ?: return
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-        cm.setPrimaryClip(ClipData.newPlainText("Ссылка для отправки файла", text))
+        cm.setPrimaryClip(ClipData.newPlainText(tr("Ссылка для отправки файла"), text))
     }
 
     private fun sendLink() {
@@ -182,7 +183,7 @@ class ReceiveActivity : ComponentActivity() {
         startActivity(
             Intent.createChooser(
                 Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text),
-                "Отправить ссылку",
+                tr("Отправить ссылку"),
             ),
         )
     }
@@ -229,7 +230,7 @@ private fun ReceiveScreen(
             // которое эту причину снимает (#897).
             failure != null -> {
                 ScreenHeader(
-                    title = "Приём не открылся",
+                    title = tr("Приём не открылся"),
                     subtitle = failure,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 )
@@ -238,8 +239,8 @@ private fun ReceiveScreen(
                         modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
                     ) {
                         PortalRow(
-                            title = "Войти",
-                            subtitle = "Ссылку приёма выдаёт сервер — для этого устройство должно быть в вашем аккаунте.",
+                            title = tr("Войти"),
+                            subtitle = tr("Ссылку приёма выдаёт сервер — для этого устройство должно быть в вашем аккаунте."),
                             onClick = onSignIn,
                             icon = bubbleIcon("account"),
                             accent = bubbleColor("account"),
@@ -254,38 +255,38 @@ private fun ReceiveScreen(
             link == null -> {
                 Portal(size = 148.dp)
                 ScreenHeader(
-                    title = "Принять файл",
-                    subtitle = "Готовим ссылку…",
+                    title = tr("Принять файл"),
+                    subtitle = tr("Готовим ссылку…"),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 )
             }
 
             else -> {
                 ScreenHeader(
-                    title = "Принять файл",
-                    subtitle = "Покажите код рядом или отправьте ссылку тому, кто далеко",
+                    title = tr("Принять файл"),
+                    subtitle = tr("Покажите код рядом или отправьте ссылку тому, кто далеко"),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 )
                 LinkCard(
                     url = link,
-                    title = "Пусть отправят файл сюда",
+                    title = tr("Пусть отправят файл сюда"),
 
-                    warning = "Откроет любой, у кого есть ссылка. Живёт сутки. Файл полежит " +
-                        "на сервере Point, пока телефон его не заберёт.",
+                    warning = tr("Откроет любой, у кого есть ссылка. Живёт сутки. Файл полежит " +
+                        "на сервере Point, пока телефон его не заберёт."),
                 )
                 Column(
                     modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(11.dp),
                 ) {
                     PortalRow(
-                        title = "Скопировать ссылку",
+                        title = tr("Скопировать ссылку"),
                         onClick = onCopy,
                         icon = bubbleIcon("copy"),
                         accent = bubbleColor("copy"),
                         appearIndex = 0,
                     )
                     PortalRow(
-                        title = "Отправить ссылку",
+                        title = tr("Отправить ссылку"),
                         onClick = onSend,
                         icon = bubbleIcon("share"),
                         accent = bubbleColor("share"),
@@ -306,7 +307,7 @@ private fun ReceiveScreen(
             }
         }
         TextButton(onClick = onCancel) {
-            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Отмена"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

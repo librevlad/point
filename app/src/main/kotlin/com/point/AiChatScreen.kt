@@ -45,6 +45,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import com.point.core.ui.Portal
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalPlate
@@ -84,7 +85,7 @@ fun AiChatScreen(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Спросить AI",
+                    text = tr("Спросить AI"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -157,7 +158,7 @@ fun AiChatScreen(
                 Column(Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
                     PortalRow(
                         // Второй строки нет (#582): имя строки уже сказало, что произойдёт.
-                        title = "Забрать ответ",
+                        title = tr("Забрать ответ"),
                         onClick = onTakeAnswer,
                         icon = bubbleIcon("text"),
                         accent = bubbleColor("text"),
@@ -198,11 +199,11 @@ private fun ChatSuggestions(suggestions: List<String>, onSend: (String) -> Unit,
             modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            SectionLabel("О чём спросить")
+            SectionLabel(tr("О чём спросить"))
             // Подсказка — не весь выбор: своё можно написать внизу. Без этой строки три
             // строки читались как список того, что вообще позволено.
             Text(
-                "Нажмите готовое или напишите своё внизу.",
+                tr("Нажмите готовое или напишите своё внизу."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -260,7 +261,7 @@ private fun TypingBubble() {
         ) {
             ThinkingDot()
             Text(
-                text = "Думаю…",
+                text = tr("Думаю…"),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -281,7 +282,7 @@ private fun ChatInput(pending: Boolean, onSend: (String) -> Unit, onCancel: () -
             value = text,
             onValueChange = { text = it },
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Задайте вопрос…") },
+            placeholder = { Text(tr("Задайте вопрос…")) },
             maxLines = 4,
             shape = com.point.core.ui.GlassFieldShape,
             colors = com.point.core.ui.glassFieldColors(),
@@ -295,7 +296,7 @@ private fun ChatInput(pending: Boolean, onSend: (String) -> Unit, onCancel: () -
                 .clickable(enabled = active) {
                     if (pending) onCancel() else { onSend(text); text = "" }
                 }
-                .semantics { contentDescription = if (pending) "Остановить" else "Отправить" },
+                .semantics { contentDescription = if (pending) tr("Остановить") else tr("Отправить") },
         ) {
             PortalPlate(
                 accent = MaterialTheme.colorScheme.primary,
@@ -378,4 +379,4 @@ private fun PreviewChatThread() = PointTheme(darkTheme = true) {
 }
 
 /** Разговор не делает вещей сам: он называет действие, которое их делает (#804). */
-private const val OFFER_WHAT = "Это делает действие объекта — нажмите, и оно выполнится"
+private val OFFER_WHAT: String get() = tr("Это делает действие объекта — нажмите, и оно выполнится")

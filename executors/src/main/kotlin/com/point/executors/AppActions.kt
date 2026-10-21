@@ -12,6 +12,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -40,7 +41,7 @@ class AppOpenRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 launcher.launch(AppTarget(app.label, app.packageName, app.activity), input)
-                ActionResult.Done("Открываю в ${app.label}")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
+                ActionResult.Done(tr("Открываю в {0}", app.label))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть"), recoverable = true) }
         }
 }

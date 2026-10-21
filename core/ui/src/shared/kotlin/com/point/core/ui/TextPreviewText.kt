@@ -1,5 +1,7 @@
 package com.point.core.ui
 
+import com.point.core.model.tr
+
 /*
  * Обещания длинного текста и длинного списка — одни на телефон и на ПК (#1086/#1098).
  *
@@ -36,20 +38,20 @@ fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
  * видит своими глазами.
  */
 fun expandTextLabel(hiddenChars: Int, atLimit: Boolean): String = when {
-    hiddenChars <= 0 -> "Показать целиком"
-    atLimit -> "Показать больше · ещё не менее ${grouped(hiddenChars)} символов"
-    else -> "Показать целиком · ещё ${grouped(hiddenChars)} символов"
+    hiddenChars <= 0 -> tr("Показать целиком")
+    atLimit -> tr("Показать больше · ещё не менее {0} символов", grouped(hiddenChars))
+    else -> tr("Показать целиком · ещё {0} символов", grouped(hiddenChars))
 }
 
 /** Подпись под развёрнутым текстом, который сам упёрся в предел чтения. */
 fun truncatedPreviewNotice(shownChars: Int): String =
-    "Показаны первые ${grouped(shownChars)} символов — в объекте может быть ещё"
+    tr("Показаны первые {0} символов — в объекте может быть ещё", grouped(shownChars))
 
 /** Свёрнутый текст раскрыт — обратный ход у него тот же на обеих поверхностях. */
-const val COLLAPSE_LABEL = "Свернуть"
+val COLLAPSE_LABEL: String get() = tr("Свернуть")
 
 /** Список показан не весь: сколько ещё есть — сказано числом, а не многоточием (#1098). */
-fun showMoreLabel(hidden: Int): String = "Показать ещё · ${grouped(hidden)}"
+fun showMoreLabel(hidden: Int): String = tr("Показать ещё · {0}", grouped(hidden))
 
 internal fun grouped(n: Int): String =
     n.toString().reversed().chunked(3).joinToString(" ").reversed()

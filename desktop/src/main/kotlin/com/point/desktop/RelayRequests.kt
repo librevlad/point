@@ -11,6 +11,7 @@ import com.point.core.flow.encodePcCaps
 import com.point.core.flow.encodePcOutbox
 import com.point.core.flow.encodePcReceiveReply
 
+import com.point.core.model.tr
 class RelayRequests(
     private val remoteActions: () -> List<PcRemoteAction>,
     private val outbox: Outbox,
@@ -84,11 +85,11 @@ class RelayRequests(
                 // Сервер доставляет «хотя бы раз» — повтор письма не рождает второй объект.
                 log("письмо уже приносили — принято не будет")
                 Reply(
-                    body = encodePcReceiveReply(com.point.core.flow.PcActionOutcome.Done("уже получено"))
+                    body = encodePcReceiveReply(com.point.core.flow.PcActionOutcome.Done(tr("уже получено")))
                         .toByteArray(Charsets.UTF_8),
                 )
             } else {
-                val name = meta["name"]?.takeIf { it.isNotBlank() } ?: "объект"
+                val name = meta["name"]?.takeIf { it.isNotBlank() } ?: tr("объект")
 
                 val understanding = meta - setOf("name", "mime", "action", RelayRpc.KIND, RelayRpc.ID)
                 val done = runCatching {
@@ -107,7 +108,7 @@ class RelayRequests(
                     }
                 }.getOrElse { e ->
                     log("объект не принят: ${e.javaClass.simpleName}")
-                    com.point.core.model.ActionResult.Failure("компьютер не смог принять объект", recoverable = true)
+                    com.point.core.model.ActionResult.Failure(tr("компьютер не смог принять объект"), recoverable = true)
                 }
                 replyFor(done)
             }
@@ -121,7 +122,7 @@ class RelayRequests(
             val entryId = meta["id"]?.toIntOrNull()
             val file = entryId?.let { outbox.file(it) }
             if (file == null) {
-                Reply(meta = mapOf("error" to "нет такого объекта"))
+                Reply(meta = mapOf("error" to tr("нет такого объекта")))
             } else {
 
                 val named = outbox.entries().firstOrNull { it.id == entryId }?.meta?.get("name")

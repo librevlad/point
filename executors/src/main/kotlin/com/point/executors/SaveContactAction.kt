@@ -15,6 +15,7 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -26,7 +27,7 @@ class SaveContactCapability @Inject constructor() : Capability {
     // Шаг кончается карточкой в приложении контактов — сохраняет её человек (#1131):
     // возврат ни с чем гасит «Открыл карточку контакта», а не оставляет её висеть.
     override val meta = CapabilityMeta(priority = 17, handsOff = true)
-    override fun label(state: ObjectState) = "Сохранить контакт"
+    override fun label(state: ObjectState) = tr("Сохранить контакт")
     override fun accepts(state: ObjectState) =
         !state.has(Feature.HAS_VCARD) && (state.has(Feature.HAS_PHONE) || state.has(Feature.HAS_EMAIL))
     override fun produces(state: ObjectState) = state
@@ -46,7 +47,7 @@ class SaveContactRealizer @Inject constructor(
             runCatching {
                 val phone = contactValue(input, "phone", EntityType.PHONE)
                 val email = contactValue(input, "email", EntityType.EMAIL)
-                phone ?: email ?: error("Ни телефона, ни почты не нашлось")
+                phone ?: email ?: error(tr("Ни телефона, ни почты не нашлось"))
 
                 // Всё знание о человеке — в карточку (#679): имя и адрес Point уже
                 // прочитал, человеку не нужно вписывать их заново.
@@ -59,10 +60,10 @@ class SaveContactRealizer @Inject constructor(
                 inserter.insertContact(contact)
 
                 // Карточка ОТКРЫТА, а не сохранена: сохранит человек (#679/#674).
-                ActionResult.Done(contact.name?.let { "Открыл карточку контакта: $it" }
-                    ?: "Открыл карточку контакта — допишите и сохраните")
+                ActionResult.Done(contact.name?.let { tr("Открыл карточку контакта: {0}", it) }
+                    ?: tr("Открыл карточку контакта — допишите и сохраните"))
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Не удалось открыть карточку контакта", recoverable = true)
+                ActionResult.Failure(it.message ?: tr("Не удалось открыть карточку контакта"), recoverable = true)
             }
         }
 

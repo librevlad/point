@@ -18,6 +18,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 /*
  * Действия раскладываются по тому, о чём они, — одно правило на телефон и компьютер (#879).
  *
@@ -57,7 +58,7 @@ fun shownAtOnce(section: ActionSection<*>): Int =
 /** О чём раздел действий. */
 enum class SectionTopic { VALUE, UNDERSTAND, MAKE, THING }
 
-const val UNDERSTAND_TITLE = "Разобраться"
+val UNDERSTAND_TITLE: String get() = tr("Разобраться")
 
 /**
  * Раздел действий.
@@ -142,7 +143,7 @@ fun actionSections(
 ): List<ActionSection<Bubble>> = actionSections(bubbles, { it }, state, thing, thingIsValue, make)
 
 /** Раздел нового из вещи, когда вид вещи не назван. */
-const val MAKE_TITLE = "Сделать из этого"
+val MAKE_TITLE: String get() = tr("Сделать из этого")
 
 /**
  * «Разобраться» идёт раньше самой вещи, только когда есть что понимать (#1101, #994;
@@ -186,17 +187,17 @@ private fun promisesResult(yields: ActionYield): Boolean = when (yields) {
  * падеже, в каком о ней говорят «что сделать с …».
  */
 fun thingTitle(obj: PointObject): String {
-    if (obj.state.has(Feature.IS_PRESENTATION)) return "С презентацией"
+    if (obj.state.has(Feature.IS_PRESENTATION)) return tr("С презентацией")
     return when (kindMarkOf(obj)) {
-        KindMark.SPREADSHEET -> "С таблицей"
-        KindMark.TEXT -> "С текстом"
-        KindMark.IMAGE -> "С изображением"
-        KindMark.PDF -> "С PDF"
-        KindMark.ARCHIVE -> "С архивом"
-        KindMark.AUDIO -> "С записью"
-        KindMark.LINK -> "Со ссылкой"
-        KindMark.COLLECTION -> "С коллекцией"
-        KindMark.DOCUMENT -> "С документом"
+        KindMark.SPREADSHEET -> tr("С таблицей")
+        KindMark.TEXT -> tr("С текстом")
+        KindMark.IMAGE -> tr("С изображением")
+        KindMark.PDF -> tr("С PDF")
+        KindMark.ARCHIVE -> tr("С архивом")
+        KindMark.AUDIO -> tr("С записью")
+        KindMark.LINK -> tr("Со ссылкой")
+        KindMark.COLLECTION -> tr("С коллекцией")
+        KindMark.DOCUMENT -> tr("С документом")
         KindMark.UNKNOWN -> valueTitle(obj.state.kind)
     }
 }
@@ -206,47 +207,47 @@ fun thingTitle(obj: PointObject): String {
  * Тот же вид, что в [thingTitle], в том падеже, в каком говорят «сделать из …».
  */
 fun makeTitle(obj: PointObject): String {
-    if (obj.state.has(Feature.IS_PRESENTATION)) return "Сделать из презентации"
-    return "Сделать из " + when (kindMarkOf(obj)) {
-        KindMark.SPREADSHEET -> "таблицы"
-        KindMark.TEXT -> "текста"
-        KindMark.IMAGE -> "изображения"
-        KindMark.PDF -> "PDF"
-        KindMark.ARCHIVE -> "архива"
-        KindMark.AUDIO -> "записи"
-        KindMark.LINK -> "ссылки"
-        KindMark.COLLECTION -> "коллекции"
-        KindMark.DOCUMENT -> "документа"
+    if (obj.state.has(Feature.IS_PRESENTATION)) return tr("Сделать из презентации")
+    return when (kindMarkOf(obj)) {
+        KindMark.SPREADSHEET -> tr("Сделать из таблицы")
+        KindMark.TEXT -> tr("Сделать из текста")
+        KindMark.IMAGE -> tr("Сделать из изображения")
+        KindMark.PDF -> tr("Сделать из PDF")
+        KindMark.ARCHIVE -> tr("Сделать из архива")
+        KindMark.AUDIO -> tr("Сделать из записи")
+        KindMark.LINK -> tr("Сделать из ссылки")
+        KindMark.COLLECTION -> tr("Сделать из коллекции")
+        KindMark.DOCUMENT -> tr("Сделать из документа")
         KindMark.UNKNOWN -> valueFrom(obj.state.kind)
     }
 }
 
 private fun valueFrom(kind: ObjectKind): String = when (kind) {
-    KIND_PHONE -> "номера"
-    KIND_EMAIL -> "почты"
-    KIND_ADDRESS -> "адреса"
-    KIND_DATE -> "даты"
-    KIND_URL -> "ссылки"
-    KIND_IDENTIFIER -> "номера"
-    KIND_ORGANIZATION -> "организации"
-    KIND_PERSON -> "человека"
-    KIND_AMOUNT -> "суммы"
-    KIND_PLACE -> "места"
-    else -> "файла"
+    KIND_PHONE -> tr("Сделать из номера")
+    KIND_EMAIL -> tr("Сделать из почты")
+    KIND_ADDRESS -> tr("Сделать из адреса")
+    KIND_DATE -> tr("Сделать из даты")
+    KIND_URL -> tr("Сделать из ссылки")
+    KIND_IDENTIFIER -> tr("Сделать из номера")
+    KIND_ORGANIZATION -> tr("Сделать из организации")
+    KIND_PERSON -> tr("Сделать из человека")
+    KIND_AMOUNT -> tr("Сделать из суммы")
+    KIND_PLACE -> tr("Сделать из места")
+    else -> tr("Сделать из файла")
 }
 
 private fun valueTitle(kind: ObjectKind): String = when (kind) {
-    KIND_PHONE -> "С номером"
-    KIND_EMAIL -> "С почтой"
-    KIND_ADDRESS -> "С адресом"
-    KIND_DATE -> "С датой"
-    KIND_URL -> "Со ссылкой"
-    KIND_IDENTIFIER -> "С номером"
-    KIND_ORGANIZATION -> "С организацией"
-    KIND_PERSON -> "С человеком"
-    KIND_AMOUNT -> "С суммой"
-    KIND_PLACE -> "С местом"
-    else -> "С файлом"
+    KIND_PHONE -> tr("С номером")
+    KIND_EMAIL -> tr("С почтой")
+    KIND_ADDRESS -> tr("С адресом")
+    KIND_DATE -> tr("С датой")
+    KIND_URL -> tr("Со ссылкой")
+    KIND_IDENTIFIER -> tr("С номером")
+    KIND_ORGANIZATION -> tr("С организацией")
+    KIND_PERSON -> tr("С человеком")
+    KIND_AMOUNT -> tr("С суммой")
+    KIND_PLACE -> tr("С местом")
+    else -> tr("С файлом")
 }
 
 /** Вещь сама значение — найденный номер, адрес, человек: её продолжения обоснованы ею же. */

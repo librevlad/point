@@ -1,5 +1,7 @@
 package com.point.desktop
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import java.awt.Image
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
@@ -26,13 +28,13 @@ sealed interface Dropped {
     data class NotTaken(val why: String) : Dropped
 }
 
-const val DROP_UNREADABLE =
-    "Не удалось прочитать брошенное — сохраните это на диск и принесите файлом"
+val DROP_UNREADABLE: String get() =
+    tr("Не удалось прочитать брошенное — сохраните это на диск и принесите файлом")
 
-const val DROP_EMPTY = "В брошенном ничего не оказалось — попробуйте ещё раз"
+val DROP_EMPTY: String get() = tr("В брошенном ничего не оказалось — попробуйте ещё раз")
 
-const val DROP_ALIEN =
-    "Это не файл, не картинка и не текст — сохраните на диск и бросьте сюда файлом"
+val DROP_ALIEN: String get() =
+    tr("Это не файл, не картинка и не текст — сохраните на диск и бросьте сюда файлом")
 
 /**
  * Порядок разбора — от целого к частному: файл, потом пиксели, потом текст.
@@ -127,7 +129,12 @@ fun takeDropped(
  * говорится вслух; один файл открывается сам и в отдельных словах не нуждается.
  */
 fun filesTakenMessage(count: Int): String? =
-    if (count <= 1) null else "Взял $count ${filesWord(count)} — они одним набором"
+    if (count <= 1) null else trPlural(
+        count,
+        "Взял {0} файл — они одним набором",
+        "Взял {0} файла — они одним набором",
+        "Взял {0} файлов — они одним набором",
+    ).replace("{0}", count.toString())
 
 /**
  * Пачка теперь — один объект-коллекция (#1099): открывать её не страшно, выбирает из
@@ -135,9 +142,3 @@ fun filesTakenMessage(count: Int): String? =
  */
 fun droppedAsBatch(brought: Dropped): Boolean = false
 
-private fun filesWord(count: Int): String = when {
-    count % 100 in 11..14 -> "файлов"
-    count % 10 == 1 -> "файл"
-    count % 10 in 2..4 -> "файла"
-    else -> "файлов"
-}

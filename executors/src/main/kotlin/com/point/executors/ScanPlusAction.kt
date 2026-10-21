@@ -7,6 +7,7 @@ import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.tr
 import javax.inject.Inject
 
 class ScanPlusCapability @Inject constructor() : Capability {
@@ -14,12 +15,12 @@ class ScanPlusCapability @Inject constructor() : Capability {
     override val icon = "scan"
     override val meta = CapabilityMeta(latency = Latency.SLOW)
 
-    override fun label(state: ObjectState) = "Скан с цветом"
+    override fun label(state: ObjectState) = tr("Скан с цветом")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
 
     override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.IMAGE, "картинку · дольше, зато на устройстве")
+        ActionYield.New(ObjectKind.IMAGE, tr("картинку · дольше, зато на устройстве"))
 
     companion object { val ID = CapabilityId("scan-plus") }
 }

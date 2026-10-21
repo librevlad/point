@@ -12,6 +12,7 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.OwnWords
 import com.point.core.flow.ownWords
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
@@ -69,12 +70,12 @@ class MlKitBackgroundRemover(
         val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: ownWords(UNREADABLE_IMAGE)
         try {
             val result = segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
-            val foreground = result.foregroundBitmap ?: ownWords("Объект на фото не найден")
+            val foreground = result.foregroundBitmap ?: ownWords(tr("Объект на фото не найден"))
             val opaque = opaqueRatio(foreground)
 
-            if (opaque < MIN_OPAQUE_RATIO) ownWords("Объект на фото не найден")
+            if (opaque < MIN_OPAQUE_RATIO) ownWords(tr("Объект на фото не найден"))
             if (opaque > MAX_OPAQUE_RATIO) {
-                ownWords("На фото почти нет фона — объект занимает весь кадр")
+                ownWords(tr("На фото почти нет фона — объект занимает весь кадр"))
             }
             val ref = store.newScratchFile("png")
             File(ref.value).outputStream().use { foreground.compress(Bitmap.CompressFormat.PNG, 100, it) }

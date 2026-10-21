@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.Box as Place
 import com.point.core.model.ObjectKind
+import com.point.core.model.tr
 import com.point.desktop.InboxItem
 
 /**
@@ -112,14 +113,14 @@ private fun AreaHint(area: PictureArea) {
     ) {
         Text(
             if (area.places.isEmpty()) {
-                "Обведите мышью место на снимке — его можно взять фрагментом или замазать"
+                tr("Обведите мышью место на снимке — его можно взять фрагментом или замазать")
             } else {
-                "С Shift обводится ещё одно место"
+                tr("С Shift обводится ещё одно место")
             },
             style = PointType.small,
             modifier = Modifier.weight(1f),
         )
-        if (area.places.isNotEmpty()) PillButton("Сбросить", area.onClear, small = true)
+        if (area.places.isNotEmpty()) PillButton(tr("Сбросить"), area.onClear, small = true)
     }
 }
 

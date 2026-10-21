@@ -19,6 +19,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 
 /**
@@ -57,7 +58,7 @@ internal suspend fun imagesToPdf(
     var wholeFrames = 0
     for (file in files) {
         val src = Bitmaps.decodeUpright(file.absolutePath) ?: continue
-        reportStage("Страница ${pages + 1}")
+        reportStage(tr("Страница {0}", pages + 1))
         val straight = straighten(src)
         if (straight == null) wholeFrames++
         val bitmap = straight ?: wholeFrame(src)
@@ -69,10 +70,10 @@ internal suspend fun imagesToPdf(
 
     if (pages == 0) {
         document.close()
-        return ActionResult.Failure("В коллекции нет изображений для PDF", recoverable = true)
+        return ActionResult.Failure(tr("В коллекции нет изображений для PDF"), recoverable = true)
     }
 
-    reportStage("Собираю PDF")
+    reportStage(tr("Собираю PDF"))
     val ref = store.newScratchFile("pdf")
     File(ref.value).outputStream().use { document.writeTo(it) }
     document.close()

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import com.point.core.flow.DropInbox
 import com.point.core.flow.DropInboxBox
+import com.point.core.model.tr
 import java.io.File
 import javax.inject.Inject
 
@@ -13,8 +14,8 @@ class ReceiveFileSource @Inject constructor(
 ) : ObjectSource {
 
     override val id = "receive"
-    override val label = "Принять файл по ссылке"
-    override val what = "дайте ссылку тому, кто пришлёт вам файл"
+    override val label = tr("Принять файл по ссылке")
+    override val what = tr("дайте ссылку тому, кто пришлёт вам файл")
     override val account = true
     override val icon = "link"
     override val network = true

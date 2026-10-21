@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import com.point.core.model.tr
 import javax.inject.Inject
 
 class ClipboardSource @Inject constructor(
@@ -12,10 +13,10 @@ class ClipboardSource @Inject constructor(
 ) : ObjectSource {
 
     override val id = "clipboard"
-    override val label = "Взять из буфера"
+    override val label = tr("Взять из буфера")
     // У каждой строки есть пояснение — иначе список читается как две разных вещи:
     // с обещанием и без (#895).
-    override val what = "то, что вы скопировали, станет объектом"
+    override val what = tr("то, что вы скопировали, станет объектом")
     override val icon = "copy"
 
     override fun isAvailable(context: Context) =
@@ -35,7 +36,7 @@ class ClipboardSource @Inject constructor(
             textFile = { text -> java.io.File(sharedTexts.create(text)).toURI().toString() },
         )
 
-        if (produced == null) Toast.makeText(context, "В буфере пусто", Toast.LENGTH_SHORT).show()
+        if (produced == null) Toast.makeText(context, tr("В буфере пусто"), Toast.LENGTH_SHORT).show()
         return produced
     }
 }

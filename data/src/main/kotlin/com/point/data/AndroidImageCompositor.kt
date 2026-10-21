@@ -8,6 +8,7 @@ import android.graphics.RectF
 import com.point.core.flow.ImageCompositor
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,8 +20,8 @@ class AndroidImageCompositor @Inject constructor(
 
     override suspend fun composite(subjectPath: String, backgroundPath: String): ScratchRef =
         withContext(Dispatchers.IO) {
-            val subject = BitmapFactory.decodeFile(subjectPath) ?: error("Не удалось прочитать объект")
-            val background = decodeBoundedUpright(backgroundPath, MAX_PX) ?: error("Не удалось прочитать фон")
+            val subject = BitmapFactory.decodeFile(subjectPath) ?: error(tr("Не удалось прочитать объект"))
+            val background = decodeBoundedUpright(backgroundPath, MAX_PX) ?: error(tr("Не удалось прочитать фон"))
             try {
                 val out = Bitmap.createBitmap(subject.width, subject.height, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(out)
@@ -37,7 +38,7 @@ class AndroidImageCompositor @Inject constructor(
         }
 
     override suspend fun blur(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
-        val src = decodeBoundedUpright(imagePath, MAX_PX) ?: error("Не удалось прочитать изображение")
+        val src = decodeBoundedUpright(imagePath, MAX_PX) ?: error(tr("Не удалось прочитать изображение"))
         val blurred = blurByScale(src)
         try {
             val ref = store.newScratchFile("png")

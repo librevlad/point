@@ -17,6 +17,7 @@ import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcLinks
 import com.point.core.flow.PcUnreachable
 import com.point.core.flow.pcUnreachableText
+import com.point.core.model.tr
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import javax.inject.Inject
@@ -34,7 +35,7 @@ class ClipboardSyncActivity : ComponentActivity() {
         if (hasFocus && !handled) {
             handled = true
             lifecycleScope.launch {
-                runCatching { sync() }.onFailure { toast("Не удалось синхронизировать") }
+                runCatching { sync() }.onFailure { toast(tr("Не удалось синхронизировать")) }
                 finish()
             }
         }
@@ -52,7 +53,7 @@ class ClipboardSyncActivity : ComponentActivity() {
             when (val sent = clipboardSync.push(pc, phone)) {
                 is ClipPush.Sent -> {
                     prefs.edit().putString(KEY_LAST, phoneSig).apply()
-                    toast(if (phone.isText) "Буфер → компьютер" else "Файл → компьютер")
+                    toast(if (phone.isText) tr("Буфер → компьютер") else tr("Файл → компьютер"))
                 }
                 is ClipPush.Unreachable -> toast(pcUnreachableText(PcUnreachable.PC_ASLEEP))
                 is ClipPush.Failed -> toast(failText(sent.why))
@@ -62,15 +63,15 @@ class ClipboardSyncActivity : ComponentActivity() {
             when (val answer = clipboardSync.pull(pc)) {
                 is ClipPull.Unreachable -> toast(pcUnreachableText(PcUnreachable.PC_ASLEEP))
                 is ClipPull.Failed -> toast(failText(answer.why))
-                is ClipPull.Empty -> toast("Буфер уже синхронизирован")
+                is ClipPull.Empty -> toast(tr("Буфер уже синхронизирован"))
                 is ClipPull.Got -> {
                     val payload = answer.payload
                     if (payload.signature() == phoneSig) {
-                        toast("Буфер уже синхронизирован")
+                        toast(tr("Буфер уже синхронизирован"))
                     } else {
                         setPhoneClipboard(payload)
                         prefs.edit().putString(KEY_LAST, payload.signature()).apply()
-                        toast(if (payload.isText) "Буфер ← компьютер" else "Файл ← компьютер")
+                        toast(if (payload.isText) tr("Буфер ← компьютер") else tr("Файл ← компьютер"))
                     }
                 }
             }

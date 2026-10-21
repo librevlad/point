@@ -1,6 +1,7 @@
 package com.point
 
 import com.point.core.flow.AppTarget
+import com.point.core.model.tr
 import com.point.core.ui.Outcome
 import com.point.core.flow.AiServiceLine
 import com.point.core.flow.UserAiKeys
@@ -91,7 +92,7 @@ fun quietStage(ui: FlowUiState): String? = ui.busyStage?.takeIf { objectWorking(
 fun openChatOf(ui: FlowUiState): ChatState? = ui.chat?.takeIf { ui.chatOpen }
 
 fun keyOfferLabel(message: String?): String? =
-    if (message != null && com.point.core.flow.refusalNeedsKey(message)) "Задать свой ключ AI" else null
+    if (message != null && com.point.core.flow.refusalNeedsKey(message)) tr("Задать свой ключ AI") else null
 
 data class KeyErrand(
 

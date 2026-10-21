@@ -9,6 +9,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectState
 
+import com.point.core.model.tr
 class DesktopRegistry(
     private val capabilities: Set<Capability>,
 
@@ -120,7 +121,7 @@ class DesktopResolver(
         return when {
             chosen.isEmpty() -> throw NoWayHere(
                 candidates.firstNotNullOfOrNull { it.unavailableReason() }
-                    ?: "На компьютере это действие для такого объекта не выполняется",
+                    ?: tr("На компьютере это действие для такого объекта не выполняется"),
             )
 
             chosen.size == 1 -> chosen.first()

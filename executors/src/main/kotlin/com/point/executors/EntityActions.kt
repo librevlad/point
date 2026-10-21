@@ -9,6 +9,7 @@ import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.UrlOpener
+import com.point.core.model.tr
 import java.net.URLEncoder
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -35,7 +36,7 @@ class CallCapability @Inject constructor() : Capability {
     // сам по себе — порядок решает то, чем человек пользуется (обучение на выборах).
     // Шаг кончается набором номера в чужом приложении (#1131).
     override val meta = CapabilityMeta(priority = 40, handsOff = true)
-    override fun label(state: ObjectState) = "Позвонить"
+    override fun label(state: ObjectState) = tr("Позвонить")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
@@ -51,10 +52,10 @@ class CallRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val phone = com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
+                val phone = com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE) ?: error(tr("Номер не найден"))
                 opener.open("tel:" + dialable(phone))
-                ActionResult.Done("Открыл набор: $phone")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось позвонить", recoverable = true) }
+                ActionResult.Done(tr("Открыл набор: {0}", phone))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось позвонить"), recoverable = true) }
         }
 }
 
@@ -62,7 +63,7 @@ class SmsCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "message"
     override val meta = CapabilityMeta(priority = 42, handsOff = true)
-    override fun label(state: ObjectState) = "Сообщение"
+    override fun label(state: ObjectState) = tr("Сообщение")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
@@ -78,10 +79,10 @@ class SmsRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val phone = com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
+                val phone = com.point.core.flow.firstEntity(extractor, input, EntityType.PHONE) ?: error(tr("Номер не найден"))
                 opener.open("smsto:" + dialable(phone))
-                ActionResult.Done("Открыл сообщение: $phone")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть сообщения", recoverable = true) }
+                ActionResult.Done(tr("Открыл сообщение: {0}", phone))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть сообщения"), recoverable = true) }
         }
 }
 
@@ -89,7 +90,7 @@ class EmailCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "email"
     override val meta = CapabilityMeta(priority = 13, handsOff = true)
-    override fun label(state: ObjectState) = "Написать письмо"
+    override fun label(state: ObjectState) = tr("Написать письмо")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_EMAIL)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
@@ -105,10 +106,10 @@ class EmailRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val email = com.point.core.flow.firstEntity(extractor, input, EntityType.EMAIL) ?: error("Email не найден")
+                val email = com.point.core.flow.firstEntity(extractor, input, EntityType.EMAIL) ?: error(tr("Email не найден"))
                 opener.open("mailto:$email")
-                ActionResult.Done("Открыл письмо: $email")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть почту", recoverable = true) }
+                ActionResult.Done(tr("Открыл письмо: {0}", email))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть почту"), recoverable = true) }
         }
 }
 
@@ -116,7 +117,7 @@ class MapCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "map"
     override val meta = CapabilityMeta(priority = 15, handsOff = true)
-    override fun label(state: ObjectState) = "Открыть на карте"
+    override fun label(state: ObjectState) = tr("Открыть на карте")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_ADDRESS)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
@@ -132,15 +133,15 @@ class MapRealizer @Inject constructor(
 
     override suspend fun preview(input: PointObject): Preview? =
         com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS)
-            ?.let { Preview("Открыть на карте", listOf(it), confirmLabel = "Открыть") }
+            ?.let { Preview(tr("Открыть на карте"), listOf(it), confirmLabel = tr("Открыть")) }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val address = com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS) ?: error("Адрес не найден")
+                val address = com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS) ?: error(tr("Адрес не найден"))
                 opener.open("geo:0,0?q=" + URLEncoder.encode(address, "UTF-8"))
-                ActionResult.Done("Открыл на карте: $address")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть карту", recoverable = true) }
+                ActionResult.Done(tr("Открыл на карте: {0}", address))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть карту"), recoverable = true) }
         }
 }
 
@@ -153,7 +154,7 @@ class EventCapability(
     override val id = ID
     override val icon = "event"
     override val meta = CapabilityMeta(priority = 16, handsOff = true)
-    override fun label(state: ObjectState) = "Создать событие"
+    override fun label(state: ObjectState) = tr("Создать событие")
 
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE) || state.has(Feature.IS_MEETING)
 
@@ -178,7 +179,7 @@ class EventRealizer @Inject constructor(
     override val capabilityId = EventCapability.ID
 
     override suspend fun preview(input: PointObject): Preview = withContext(Dispatchers.IO) {
-        Preview("Создать событие", listOf(eventTitle(input)), confirmLabel = "Создать")
+        Preview(tr("Создать событие"), listOf(eventTitle(input)), confirmLabel = tr("Создать"))
     }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -194,8 +195,8 @@ class EventRealizer @Inject constructor(
                 // приложении (#1131). «Создаю событие» звучало продолжающейся работой и
                 // висело вечно: человек уходил из календаря ни с чем, а Point всё «создавал».
                 // Событие создаёт человек в календаре, и знать об этом Point не может.
-                ActionResult.Done("Открыл календарь — событие создаётся там")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть календарь", recoverable = true) }
+                ActionResult.Done(tr("Открыл календарь — событие создаётся там"))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть календарь"), recoverable = true) }
         }
 
     /**
@@ -209,5 +210,5 @@ class EventRealizer @Inject constructor(
 
     private fun eventTitle(input: PointObject): String =
         com.point.core.flow.entitySourceText(input).lineSequence().map { it.trim() }
-            .firstOrNull { it.isNotBlank() }?.take(100) ?: "Событие"
+            .firstOrNull { it.isNotBlank() }?.take(100) ?: tr("Событие")
 }

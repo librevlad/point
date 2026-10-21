@@ -107,6 +107,7 @@ class Mailbox(
         (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = connectTimeoutMs
             readTimeout = readTimeoutMs
+            speakPointLanguage()
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 

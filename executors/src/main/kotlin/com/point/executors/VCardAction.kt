@@ -11,6 +11,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,7 +24,7 @@ internal fun vCardSummary(text: String): List<String> {
     return buildList {
         name?.takeIf { it.isNotBlank() }?.let(::add)
         addAll(phones)
-    }.ifEmpty { listOf("Контакт") }
+    }.ifEmpty { listOf(tr("Контакт")) }
 }
 
 class VCardCapability @Inject constructor() : Capability {
@@ -31,7 +32,7 @@ class VCardCapability @Inject constructor() : Capability {
     override val icon = "contact"
     // Шаг кончается карточкой в приложении контактов — сохраняет её человек (#1131).
     override val meta = CapabilityMeta(priority = 11, handsOff = true)
-    override fun label(state: ObjectState) = "Добавить в контакты"
+    override fun label(state: ObjectState) = tr("Добавить в контакты")
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_VCARD)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
@@ -48,7 +49,7 @@ class VCardRealizer @Inject constructor(
         val text = withContext(Dispatchers.IO) {
             File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
         }
-        return Preview("Добавить в контакты", vCardSummary(text), confirmLabel = "Добавить")
+        return Preview(tr("Добавить в контакты"), vCardSummary(text), confirmLabel = tr("Добавить"))
     }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -58,8 +59,8 @@ class VCardRealizer @Inject constructor(
                 viewer.view(input.copy(mime = VCARD_MIME))
                 // Тот же случай, что и с календарём (#1131): Point открыл чужой экран, и
                 // на этом его шаг кончился — многоточие обещало работу, которой уже нет.
-                ActionResult.Done("Открыл карточку контакта")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть контакт", recoverable = true) }
+                ActionResult.Done(tr("Открыл карточку контакта"))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть контакт"), recoverable = true) }
         }
 
     private companion object { const val VCARD_MIME = "text/x-vcard" }

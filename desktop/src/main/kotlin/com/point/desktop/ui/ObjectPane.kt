@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.yieldLabel
+import com.point.core.model.tr
 import com.point.core.ui.SectionTopic
 import com.point.core.ui.bubbleColor
 import com.point.desktop.DesktopState
@@ -123,7 +124,7 @@ internal fun ObjectPane(
                         }
                         if (hasContent) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                GroupHeader("Содержимое", top = 0.dp)
+                                GroupHeader(tr("Содержимое"), top = 0.dp)
                                 content()
                             }
                         }
@@ -175,13 +176,13 @@ private fun Invite(fresh: InboxItem, onOpen: (InboxItem) -> Unit) {
     ) {
         StatusDot(PointColors.cyan)
         Text(
-            "Пришло: " + (fresh.obj.metadata["name"] ?: "объект"),
+            tr("Пришло: ") + (fresh.obj.metadata["name"] ?: tr("объект")),
             style = PointType.small.copy(color = PointColors.text),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Text("открыть", style = PointType.small.copy(color = PointColors.link))
+        Text(tr("открыть"), style = PointType.small.copy(color = PointColors.link))
     }
 }
 
@@ -218,7 +219,7 @@ private fun ActionSections(
         val hidden = rows.size - shown.size
         if (hidden > 0 || expanded) {
             Text(
-                if (expanded) "Свернуть" else com.point.core.ui.showMoreLabel(hidden),
+                if (expanded) tr("Свернуть") else com.point.core.ui.showMoreLabel(hidden),
                 style = PointType.small.copy(color = PointColors.link),
                 modifier = Modifier.padding(start = 6.dp, top = 6.dp).clip(RoundedCornerShape(8.dp)).handCursor()
                     .clickable { expanded = !expanded }
@@ -240,7 +241,7 @@ private fun ActionRow(
     when {
         action.unavailable != null -> MutedStation(
             action.title,
-            where = if (action.onPhone) "на телефоне" else null,
+            where = if (action.onPhone) tr("на телефоне") else null,
             reason = action.unavailable,
             icon = action.icon,
             appearIndex = index,
@@ -258,7 +259,7 @@ private fun ActionRow(
         action.remote != null -> Station(
             action.title,
             bubbleColor(action.icon),
-            where = "на телефоне",
+            where = tr("на телефоне"),
             primary = primary,
             icon = action.icon,
             appearIndex = index,
@@ -296,9 +297,9 @@ private fun ValueLine(
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             value?.let { Text(it, style = PointType.title.copy(fontSize = PointType.reading.fontSize), maxLines = 2, overflow = TextOverflow.Ellipsis) }
-            if (disputed.isNotEmpty()) Text("или: " + disputed.joinToString(", "), style = PointType.note)
-            if (more.isNotEmpty()) Text("ещё: " + more.joinToString(", "), style = PointType.note)
+            if (disputed.isNotEmpty()) Text(tr("или: ") + disputed.joinToString(", "), style = PointType.note)
+            if (more.isNotEmpty()) Text(tr("ещё: ") + more.joinToString(", "), style = PointType.note)
         }
-        copy?.let { PillButton("Скопировать", { onCopy(it) }, small = true) }
+        copy?.let { PillButton(tr("Скопировать"), { onCopy(it) }, small = true) }
     }
 }

@@ -4,6 +4,7 @@ import android.util.Base64
 import com.point.core.flow.DropLink
 import com.point.core.flow.DropOutcome
 import com.point.core.flow.NetworkAvailability
+import com.point.core.flow.speakPointLanguage
 import java.io.File
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -51,6 +52,7 @@ class RelayDropLink(
                     doOutput = true
                     connectTimeout = 10_000
                     readTimeout = 60_000
+                    speakPointLanguage()
                     pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
 
                     setRequestProperty("X-Drop-Name", Base64.encodeToString(fileName.toByteArray(), Base64.NO_WRAP))

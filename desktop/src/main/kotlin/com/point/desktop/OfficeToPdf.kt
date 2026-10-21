@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.model.tr
 import java.io.File
 
 interface OfficeToPdf {
@@ -27,7 +28,7 @@ class LocalOfficeToPdf(
 
     override fun whyUnavailable(): String? =
         if (chooseTool(libreOffice != null, powerPointInstalled) == null) {
-            "На компьютере нет LibreOffice или PowerPoint"
+            tr("На компьютере нет LibreOffice или PowerPoint")
         } else {
             null
         }

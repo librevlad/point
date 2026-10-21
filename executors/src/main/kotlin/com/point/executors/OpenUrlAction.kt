@@ -11,6 +11,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -20,7 +21,7 @@ class OpenUrlCapability @Inject constructor() : Capability {
     override val icon = "link"
     // Ссылку открывает браузер — шаг Point кончается чужим экраном (#1131).
     override val meta = CapabilityMeta(priority = 20, handsOff = true)
-    override fun label(state: ObjectState) = "Открыть ссылку"
+    override fun label(state: ObjectState) = tr("Открыть ссылку")
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.URL || state.has(Feature.HAS_URL)
     override fun produces(state: ObjectState) = state
@@ -30,7 +31,7 @@ class OpenUrlCapability @Inject constructor() : Capability {
     // человеку нельзя (#792). Причина остаётся только там, где чтение и правда поможет.
     override fun missing(state: ObjectState) =
         if (state.kind == ObjectKind.IMAGE && !state.has(Feature.HAS_TEXT)) {
-            "сначала распознайте текст"
+            tr("сначала распознайте текст")
         } else {
             null
         }
@@ -52,9 +53,9 @@ class OpenUrlRealizer @Inject constructor(
                 // Свой файл-путь отвечал «Ссылка не найдена» рядом с «Нашёл ссылку»
                 // на узле ссылки из QR (скрин владельца 2026-08-09).
                 val url = com.point.core.flow.firstEntity(extractor, input, com.point.core.flow.EntityType.URL)
-                    ?: error("Ссылка не найдена")
+                    ?: error(tr("Ссылка не найдена"))
                 opener.open(url)
-                ActionResult.Done("Открываю: $url")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
+                ActionResult.Done(tr("Открываю: {0}", url))
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть"), recoverable = true) }
         }
 }

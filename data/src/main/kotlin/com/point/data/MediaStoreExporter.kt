@@ -7,6 +7,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import com.point.core.flow.Exporter
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,9 +30,9 @@ class MediaStoreExporter @Inject constructor(
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
             val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            val item = resolver.insert(collection, values) ?: error("Не удалось создать запись в Downloads")
+            val item = resolver.insert(collection, values) ?: error(tr("Не удалось создать запись в Downloads"))
             resolver.openOutputStream(item)?.use { out -> source.inputStream().use { it.copyTo(out) } }
-                ?: error("Не удалось открыть поток для записи")
+                ?: error(tr("Не удалось открыть поток для записи"))
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(item, values, null, null)
@@ -45,7 +46,7 @@ class MediaStoreExporter @Inject constructor(
             "Downloads/$saved"
         } else {
             val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                ?: error("Внешнее хранилище недоступно")
+                ?: error(tr("Внешнее хранилище недоступно"))
             val dest = File(dir, name)
             source.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
             dest.absolutePath

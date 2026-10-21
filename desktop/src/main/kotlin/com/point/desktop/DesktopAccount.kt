@@ -9,6 +9,7 @@ import com.point.core.flow.DeviceKind
 import com.point.core.flow.PointAccount
 import com.point.core.flow.SignIn
 import com.point.core.flow.SignInDriver
+import com.point.core.model.tr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -137,7 +138,7 @@ class DesktopAccount(
                     _circle.value = answer.devices
                     syncSettings()
                 }
-                CircleAnswer.Unreachable -> _error.value = "Не удалось спросить сервер о ваших устройствах"
+                CircleAnswer.Unreachable -> _error.value = tr("Не удалось спросить сервер о ваших устройствах")
 
                 CircleAnswer.Revoked -> forget(com.point.core.flow.PC_DEVICE_REVOKED)
             }
@@ -163,7 +164,7 @@ class DesktopAccount(
             val ok = runCatching { client.revoke(account, deviceId) }.getOrDefault(false)
             _busy.value = false
             if (!ok) {
-                _error.value = "Сервер не отключил устройство — попробуйте ещё раз"
+                _error.value = tr("Сервер не отключил устройство — попробуйте ещё раз")
                 return@launch
             }
             if (deviceId == account.deviceId) forget() else refreshCircle()

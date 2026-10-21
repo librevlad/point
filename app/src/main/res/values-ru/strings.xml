@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clipboard_tile">Общий буфер</string>
+    <string name="receive_file">Принять файл</string>
+    <string name="voice_recorder">Звукозапись</string>
+</resources>

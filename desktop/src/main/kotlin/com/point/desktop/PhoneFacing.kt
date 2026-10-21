@@ -4,6 +4,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.advertisedActions
 
+import com.point.core.model.tr
 /**
  * Умения компьютера — все, что лежат в его реестре и едут телефону объявлением. Общие
  * способности он делит с телефоном, а не заводит свои копии; дорогу чтения снимка в общем
@@ -94,13 +95,13 @@ fun desktopCapabilities(
  * места в одном списке читались как два разных места.
  */
 private val namedByPlace = mapOf(
-    "pc-open" to "Открыть на компьютере",
-    "pc-copy" to "В буфер компьютера",
-    "pc-reveal" to "Показать в папке на компьютере",
-    "pc-save-as" to "Сохранить на компьютере",
-    "pc-print" to "Напечатать на компьютере",
-    "pc-download" to "Скачать видео на компьютер",
-    "pc-open-link" to "Открыть в браузере на компьютере",
+    "pc-open" to tr("Открыть на компьютере"),
+    "pc-copy" to tr("В буфер компьютера"),
+    "pc-reveal" to tr("Показать в папке на компьютере"),
+    "pc-save-as" to tr("Сохранить на компьютере"),
+    "pc-print" to tr("Напечатать на компьютере"),
+    "pc-download" to tr("Скачать видео на компьютер"),
+    "pc-open-link" to tr("Открыть в браузере на компьютере"),
 )
 
 /**

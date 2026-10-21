@@ -27,6 +27,7 @@ import com.point.core.flow.SIGN_IN_ACTION
 import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
 import com.point.core.flow.signInWaitingLine
+import com.point.core.model.tr
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeCard
 import com.point.core.ui.Portal
@@ -59,7 +60,7 @@ fun SignInScreen(
         Portal(size = 148.dp, intensity = if (state is SignIn.SignedIn) 1f else 0.55f)
         Spacer(Modifier.height(16.dp))
         ScreenHeader(
-            title = if (state is SignIn.SignedIn) "Вы вошли" else SIGN_IN_TITLE,
+            title = if (state is SignIn.SignedIn) tr("Вы вошли") else SIGN_IN_TITLE,
             // Экран просил действие, не назвав причины: заголовок обещал, что устройства
             // увидят друг друга, но зачем это человеку — оставалось догадкой (#891).
             subtitle = (state as? SignIn.SignedIn)?.account?.email?.takeIf { it.isNotBlank() }
@@ -91,7 +92,7 @@ fun SignInScreen(
                     }
 
                     PortalRow(
-                        title = "Открыть страницу входа снова",
+                        title = tr("Открыть страницу входа снова"),
                         onClick = { onOpenAgain(state.url) },
                         icon = bubbleIcon("link"),
                         chevron = false,
@@ -100,12 +101,12 @@ fun SignInScreen(
 
                 is SignIn.SignedIn -> {
                     OutcomeCard(
-                        title = "Это устройство теперь в вашем круге",
-                        detail = "Остальные ваши телефоны и компьютеры видят его сразу — связывать ничего не нужно.",
+                        title = tr("Это устройство теперь в вашем круге"),
+                        detail = tr("Остальные ваши телефоны и компьютеры видят его сразу — связывать ничего не нужно."),
                         outcome = Outcome.DONE,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    PrimaryAction("Продолжить", onContinue)
+                    PrimaryAction(tr("Продолжить"), onContinue)
                 }
 
                 is SignIn.Refused -> {
@@ -124,7 +125,7 @@ fun SignInScreen(
         if (state is SignIn.Waiting) {
             Spacer(Modifier.height(10.dp))
             TextButton(onClick = onCancel) {
-                Text("Отменить", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(tr("Отменить"), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

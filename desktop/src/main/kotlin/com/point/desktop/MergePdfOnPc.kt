@@ -12,6 +12,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.pdmodel.PDDocument
@@ -43,7 +44,7 @@ class PcMergePdfRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching { merge(input) }
-                .getOrElse { ActionResult.Failure("Собрать PDF не вышло — попробуйте ещё раз или соберите на телефоне", recoverable = true) }
+                .getOrElse { ActionResult.Failure(tr("Собрать PDF не вышло — попробуйте ещё раз или соберите на телефоне"), recoverable = true) }
         }
 
     private suspend fun merge(input: PointObject): ActionResult {
@@ -56,13 +57,13 @@ class PcMergePdfRealizer(
         return PDDocument().use { document ->
             for (file in files) {
                 val image = runCatching { ImageIO.read(file) }.getOrNull() ?: continue
-                reportStage("Страница ${pages + 1}")
+                reportStage(tr("Страница {0}", pages + 1))
                 document.addPicture(image)
                 pages++
             }
             if (pages == 0) return ActionResult.Failure(NO_PICTURES, recoverable = true)
 
-            reportStage("Собираю PDF")
+            reportStage(tr("Собираю PDF"))
             val ref = store.newScratchFile("pdf")
             document.save(File(ref.value))
             ActionResult.Success(
@@ -125,6 +126,6 @@ class PcMergePdfRealizer(
 
     private companion object {
 
-        const val NO_PICTURES = "В наборе нет картинок — добавьте снимки, и PDF соберётся"
+        val NO_PICTURES: String get() = tr("В наборе нет картинок — добавьте снимки, и PDF соберётся")
     }
 }

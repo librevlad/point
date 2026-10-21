@@ -13,6 +13,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -51,9 +52,9 @@ internal interface PageScan {
 internal class OpenCvPageScan(private val store: ObjectStore) : PageScan {
 
     override suspend fun scan(imagePath: String): ScannedPage? {
-        reportStage("Читаю снимок")
+        reportStage(tr("Читаю снимок"))
         val src = Bitmaps.decodeUpright(imagePath, Bitmaps.SCAN_PLUS_MAX_PX)
-            ?: error("Не удалось прочитать изображение")
+            ?: error(tr("Не удалось прочитать изображение"))
         try {
             OpenCvScan.enhance(src)?.let { return saved(it, wholeFrame = false) }
 
@@ -61,7 +62,7 @@ internal class OpenCvPageScan(private val store: ObjectStore) : PageScan {
             // снятого в упор листа своё зрение страницей не считает, и отказ отнял бы у
             // человека работу, которую он получает сегодня. Но за выпрямленную страницу
             // результат не выдаётся — пометку кладёт исполнитель.
-            reportStage("Страницу целиком не нашёл — обрабатываю снимок как есть")
+            reportStage(tr("Страницу целиком не нашёл — обрабатываю снимок как есть"))
             return OpenCvScan.enhanceAsIs(src)?.let { saved(it, wholeFrame = true) }
         } finally {
             src.recycle()
@@ -69,7 +70,7 @@ internal class OpenCvPageScan(private val store: ObjectStore) : PageScan {
     }
 
     private suspend fun saved(page: Bitmap, wholeFrame: Boolean): ScannedPage {
-        reportStage("Сохраняю")
+        reportStage(tr("Сохраняю"))
         val ref = store.newScratchFile("jpg")
         File(ref.value).outputStream().use { page.compress(Bitmap.CompressFormat.JPEG, Bitmaps.JPEG_QUALITY, it) }
         page.recycle()
@@ -98,7 +99,7 @@ class PageScanRealizer internal constructor(
 
     override fun isAvailable(): Boolean = OpenCvScan.available
 
-    override fun unavailableReason(): String = "нужен пакет обработки снимков"
+    override fun unavailableReason(): String = tr("нужен пакет обработки снимков")
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
@@ -120,6 +121,6 @@ class PageScanRealizer internal constructor(
 
     internal companion object {
 
-        const val SCAN_FAILED = "Страницу на снимке не удалось выпрямить — снимите её целиком и при ровном свете"
+        val SCAN_FAILED: String get() = tr("Страницу на снимке не удалось выпрямить — снимите её целиком и при ровном свете")
     }
 }

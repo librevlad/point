@@ -9,6 +9,7 @@ import com.point.core.flow.FRAME_NOT_READY
 import com.point.core.flow.withoutKey
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 /**
  * Телефонная половина разговора с OCR.space: собрать кадр и сходить в сеть (#1255).
  *
@@ -26,7 +27,7 @@ class OcrSpaceReader(
     override val reader = OCR_SPACE_ACTOR
 
     override val privacy = ReaderPrivacy(
-        where = "OCR.space (a9t9 software), Германия (ЕС)",
+        where = tr("OCR.space (a9t9 software), Германия (ЕС)"),
         promise = ReaderPromise.UNKNOWN,
     )
 
