@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Время в списке объектов — структура, а не подпись в каждой строке (#880).
  *
@@ -12,10 +14,10 @@ package com.point.core.flow
  * компьютер режут список одинаково, отличается только оформление заголовка.
  */
 enum class TimeSection(val label: String) {
-    NOW("Сейчас"),
-    TODAY("Сегодня"),
-    YESTERDAY("Вчера"),
-    EARLIER("Раньше"),
+    NOW(tr("Сейчас")),
+    TODAY(tr("Сегодня")),
+    YESTERDAY(tr("Вчера")),
+    EARLIER(tr("Раньше")),
 }
 
 private const val MINUTE = 60_000L

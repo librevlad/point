@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Итог чтения документа по страницам — одно правило на телефон и компьютер (#1254).
  *
@@ -46,18 +48,18 @@ fun pagesRead(total: Int, readable: Int, broken: Int, brokenSaid: String? = null
 
 /** Прочитано — знание о документе, а не о страницах: текст ложится на сам документ. */
 private fun pagesReadSaid(readable: Int, total: Int): String =
-    "Прочитано страниц: $readable из $total — текст у документа"
+    tr("Прочитано страниц: {0} из {1} — текст у документа", readable, total)
 
 /**
  * Часть страниц сорвалась — и человек об этом слышит (#1255). Без этой приписки «1 из 10»
  * читается как «на остальных девяти текста нет», хотя их никто не прочёл.
  */
 private fun brokenNote(broken: Int, brokenSaid: String?): String =
-    if (broken <= 0) "" else " · не прочиталось страниц: $broken" + brokenSaid?.let { " — $it" }.orEmpty()
+    if (broken <= 0) "" else tr(" · не прочиталось страниц: {0}", broken) + brokenSaid?.let { " — $it" }.orEmpty()
 
 /**
  * Страницы прочитаны, и текста на них нет — это знание, а не сбой (Конституция §13). Так же
  * отвечает чтение одиночного снимка: «не нашлось» — ответ на заданный вопрос, и второй раз
  * платить за него человек не должен.
  */
-const val NO_TEXT_IN_DOCUMENT = "В документе не нашлось текста"
+val NO_TEXT_IN_DOCUMENT: String get() = tr("В документе не нашлось текста")

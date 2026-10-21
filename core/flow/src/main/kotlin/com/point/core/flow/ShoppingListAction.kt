@@ -6,6 +6,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -19,7 +20,7 @@ class ShoppingListCapability(
     override val id = ID
     override val icon = "cart"
     override val meta = CapabilityMeta(priority = 30, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = labelNeedingKey("Список покупок", keys.keySet())
+    override fun label(state: ObjectState) = labelNeedingKey(tr("Список покупок"), keys.keySet())
     override fun accepts(state: ObjectState) = state.has(Feature.IS_RECIPE)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
@@ -35,12 +36,12 @@ class ShoppingListRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 val text = entitySourceText(input).take(MAX_CHARS)
-                if (text.isBlank()) return@withContext ActionResult.Failure("Нет текста рецепта", recoverable = true)
-                reportStage("Собираю список")
+                if (text.isBlank()) return@withContext ActionResult.Failure(tr("Нет текста рецепта"), recoverable = true)
+                reportStage(tr("Собираю список"))
 
                 // Рецепт уже в запросе — снимок страницы модели не нужен (#1244).
                 ActionResult.Success(llm.run(textStandIn(input), SHOPPING_LIST_PROMPT + text))
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось составить список", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось составить список"), recoverable = true) }
         }
 
     private companion object {

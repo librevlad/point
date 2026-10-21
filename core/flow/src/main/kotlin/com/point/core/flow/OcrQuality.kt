@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Можно ли объявить прочитанное текстом снимка.
  *
@@ -100,10 +102,10 @@ fun weaklyRead(layer: AtomLayer): Boolean {
 }
 
 fun degeneratedReading(text: String, minRepeats: Int = MIN_REPEATS): String? {
-    if (text.isBlank()) return "страница вернулась пустой"
-    if (text.none(Char::isLetterOrDigit)) return "в ответе нет ни одной буквы и ни одной цифры"
+    if (text.isBlank()) return tr("страница вернулась пустой")
+    if (text.none(Char::isLetterOrDigit)) return tr("в ответе нет ни одной буквы и ни одной цифры")
     val repeated = longestRun(meaningfulLines(text))
-    return if (repeated < minRepeats) null else "одна и та же строка повторена $repeated раз подряд"
+    return if (repeated < minRepeats) null else tr("одна и та же строка повторена {0} раз подряд", repeated)
 }
 
 private fun meaningfulLines(text: String): List<String> = text.lineSequence()

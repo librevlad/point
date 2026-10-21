@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlin.math.roundToInt
 
 /**
@@ -13,8 +14,8 @@ const val META_DURATION_SECONDS = "duration.seconds"
 /** Точная длительность словами: «16 сек», «2 мин 05 сек». */
 fun exactRecordingLength(seconds: Long): String? {
     if (seconds <= 0) return null
-    if (seconds < 60) return "$seconds сек"
-    return "%d мин %02d сек".format(seconds / 60, seconds % 60)
+    if (seconds < 60) return tr("{0} сек", seconds)
+    return tr("%d мин %02d сек").format(seconds / 60, seconds % 60)
 }
 
 fun recordingMinutes(mime: String, sizeBytes: Long, fileName: String? = null): Double? {
@@ -30,18 +31,18 @@ fun recordingLength(mime: String, sizeBytes: Long, fileName: String? = null): St
 
     if (seconds < 5) return null
 
-    if (seconds < 60) return "примерно $seconds сек"
-    return "примерно ${minutes.roundToInt()} мин"
+    if (seconds < 60) return tr("примерно {0} сек", seconds)
+    return tr("примерно {0} мин", minutes.roundToInt())
 }
 
 fun listeningStage(mime: String, sizeBytes: Long, fileName: String? = null): String {
     val minutes = recordingMinutes(mime, sizeBytes, fileName)
     if (minutes == null || minutes < LONG_MINUTES) return LISTENING
     val length = recordingLength(mime, sizeBytes, fileName) ?: return LISTENING
-    return "$LISTENING — $length, это займёт время"
+    return tr("{0} — {1}, это займёт время", LISTENING, length)
 }
 
-const val LISTENING = "Слушаю запись"
+val LISTENING: String get() = tr("Слушаю запись")
 
 const val LONG_MINUTES = 2.0
 

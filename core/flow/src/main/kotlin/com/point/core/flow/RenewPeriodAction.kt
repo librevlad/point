@@ -8,6 +8,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -18,13 +19,13 @@ class RenewPeriodCapability : Capability {
     override val icon = "renew"
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "На новый период"
+    override fun label(state: ObjectState) = tr("На новый период")
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.OFFICE && state.has(Feature.HAS_PERIOD)
 
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, tr("таблицу"))
 
     companion object { val ID = CapabilityId("renew-period") }
 }
@@ -50,10 +51,10 @@ class RenewPeriodRealizer(
                 val renewed = sheet?.let { renewPeriod(it.rows) }
 
                     ?: return@runCatching ActionResult.Failure(
-                        "В таблице нет столбца с датами подряд — продлевать нечего",
+                        tr("В таблице нет столбца с датами подряд — продлевать нечего"),
                         recoverable = false,
                     )
-                reportStage("Собираю бланк")
+                reportStage(tr("Собираю бланк"))
                 val ref = writer.write(renewed.rows)
                 ActionResult.Success(
                     ResultObject(
@@ -62,7 +63,7 @@ class RenewPeriodRealizer(
                         ref,
                         mapOf(
                             "op" to "renew-period",
-                            "name" to "бланк ${fileStamp(renewed.period)}.xlsx",
+                            "name" to tr("бланк {0}.xlsx", fileStamp(renewed.period)),
                             "rows" to renewed.rows.size.toString(),
                             "shifted" to renewed.shifted.toString(),
                             META_SEMANTIC_SUMMARY to renewalSummary(renewed, sheet.name.takeIf { book.size > 1 }),
@@ -70,7 +71,7 @@ class RenewPeriodRealizer(
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Не удалось продлить таблицу", recoverable = true)
+                ActionResult.Failure(it.message ?: tr("Не удалось продлить таблицу"), recoverable = true)
             }
         }
 
@@ -81,23 +82,23 @@ class RenewPeriodRealizer(
 
 /** [sheetName] — какой лист книги продлён; называется, когда листов несколько (#1417). */
 internal fun renewalSummary(renewed: RenewedTable, sheetName: String? = null): String = buildString {
-    append("Бланк на ").append(human(renewed.period.from)).append(" – ").append(human(renewed.period.to))
-    append(" (был ").append(short(renewed.previous.from)).append(" – ")
+    append(tr("Бланк на ")).append(human(renewed.period.from)).append(" – ").append(human(renewed.period.to))
+    append(tr(" (был ")).append(short(renewed.previous.from)).append(" – ")
     append(short(renewed.previous.to)).append(")")
     if (!sheetName.isNullOrBlank()) {
-        append(" · лист «").append(sheetName).append("»")
+        append(tr(" · лист «")).append(sheetName).append("»")
     }
     if (renewed.cleared.isNotEmpty()) {
-        append(" · очищено, у каждой даты своё: ").append(names(renewed.cleared))
+        append(tr(" · очищено, у каждой даты своё: ")).append(names(renewed.cleared))
     }
     if (renewed.kept.isNotEmpty()) {
-        append(" · оставлено: ").append(names(renewed.kept))
+        append(tr(" · оставлено: ")).append(names(renewed.kept))
     }
 }
 
 private fun names(columns: List<String>): String =
     if (columns.size <= MAX_NAMED_COLUMNS) columns.joinToString(", ")
-    else columns.take(MAX_NAMED_COLUMNS).joinToString(", ") + " и ещё ${columns.size - MAX_NAMED_COLUMNS}"
+    else columns.take(MAX_NAMED_COLUMNS).joinToString(", ") + tr(" и ещё {0}", columns.size - MAX_NAMED_COLUMNS)
 
 private const val MAX_NAMED_COLUMNS = 3
 

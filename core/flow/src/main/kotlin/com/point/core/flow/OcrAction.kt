@@ -9,6 +9,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -29,14 +30,14 @@ internal const val OCR_FOCUS_PROMPT =
 internal fun ocrPromptFor(obj: PointObject): String =
     if (focusOf(obj.metadata, obj.id)?.region != null) OCR_FOCUS_PROMPT else OCR_CLOUD_PROMPT
 
-internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
+internal val OCR_CLOUD_STAGE: String get() = tr("Читаю снимок в облаке")
 
 /**
  * Слово телефона о дороге чтения (#1021): первым читает свой движок, в сервис — только после
  * вопроса. Живёт рядом с цепочкой, которая это и держит, а не в общем словаре — иначе
  * компьютер показывал его как своё.
  */
-const val OCR_ON_PHONE_PROMISE = "текст · сначала на телефоне, потом спрошу про сервис"
+val OCR_ON_PHONE_PROMISE: String get() = tr("текст · сначала на телефоне, потом спрошу про сервис")
 
 class DeviceOcrRealizer(
     private val store: ObjectStore,
@@ -61,7 +62,7 @@ class DeviceOcrRealizer(
                 )
             }
 
-            reportStage("Читаю текст на устройстве")
+            reportStage(tr("Читаю текст на устройстве"))
 
             // Сначала спрашиваем сам движок: он отдаёт уверенность по каждому слову.
             // Где уверенности нет, судить остаётся по составу ответа (#694).
@@ -69,7 +70,7 @@ class DeviceOcrRealizer(
             val text = layer?.text ?: runCatching { recognizer.recognize(input) }.getOrDefault("")
             if (poorlyRead(text, layer)) {
 
-                return@withContext ActionResult.Failure("Не разобрал текст на этом снимке", recoverable = true)
+                return@withContext ActionResult.Failure(tr("Не разобрал текст на этом снимке"), recoverable = true)
             }
             runCatching {
                 val ref = store.newScratchFile("txt")
@@ -82,7 +83,7 @@ class DeviceOcrRealizer(
                         ocrMeta(input),
                     ),
                 )
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка записи результата"), recoverable = true) }
         }
 }
 
@@ -114,7 +115,7 @@ class CloudOcrRealizer(
 
             reportStage(OCR_CLOUD_STAGE)
             runCatching { guarded(input, llm.run(input, ocrPromptFor(input))) }
-                .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
+                .getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка распознавания в облаке"), recoverable = true) }
         }
 }
 
@@ -123,13 +124,13 @@ class CloudOcrCapability() : Capability {
     override val icon = "ocr-cloud"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
-    override fun label(state: ObjectState) = "Прочитать сильнее"
+    override fun label(state: ObjectState) = tr("Прочитать сильнее")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
 
     // Знание того же объекта, а не новый объект (#1097): текст ложится на исходник.
     override fun produces(state: ObjectState) = state.with(com.point.core.model.Feature.HAS_TEXT)
 
-    override fun yields(state: ObjectState) = ActionYield.Same("текст точнее · снимок уйдёт в сервис")
+    override fun yields(state: ObjectState) = ActionYield.Same(tr("текст точнее · снимок уйдёт в сервис"))
 
     override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.UNDERSTAND)
 
@@ -171,7 +172,7 @@ class CloudOcrDirectRealizer(
                     return@runCatching ActionResult.Failure(unreadable(why), recoverable = true)
                 }
                 strongerReadingLands(store.newScratchFile("txt"), page)
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка распознавания в облаке"), recoverable = true) }
         }
 }
 
@@ -192,7 +193,7 @@ private fun strongerReadingLands(
 ): ActionResult = runCatching {
     File(ref.value).writeText(page)
     ActionResult.Done(
-        "Прочитано сильнее — текст объекта обновлён",
+        tr("Прочитано сильнее — текст объекта обновлён"),
         com.point.core.model.Findings(
             features = setOf(com.point.core.model.Feature.HAS_TEXT),
             metadata = buildMap {
@@ -213,7 +214,7 @@ private fun strongerReadingLands(
             },
         ),
     )
-}.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+}.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка записи результата"), recoverable = true) }
 
 private suspend fun readWithExternalEye(
     eye: ExternalEye,
@@ -225,7 +226,7 @@ private suspend fun readWithExternalEye(
 ): ActionResult {
     reportStage(OCR_CLOUD_STAGE)
     val reading = runCatching { eye.read(input) }.getOrElse {
-        return ActionResult.Failure(it.message ?: "Прочитать снаружи не удалось", recoverable = true)
+        return ActionResult.Failure(it.message ?: tr("Прочитать снаружи не удалось"), recoverable = true)
     }
 
     // Markdown-обёртка провайдера — не текст страницы (#661): «![img-0.jpeg](…)» и
@@ -237,7 +238,7 @@ private suspend fun readWithExternalEye(
     }
     if (asKnowledge) {
         val ref = runCatching { store.newScratchFile("txt") }
-            .getOrElse { return ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+            .getOrElse { return ActionResult.Failure(it.message ?: tr("Ошибка записи результата"), recoverable = true) }
         return strongerReadingLands(
             ref,
             page,
@@ -272,7 +273,7 @@ private suspend fun readWithExternalEye(
                 },
             ),
         )
-    }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+    }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка записи результата"), recoverable = true) }
 }
 
 private fun guarded(input: PointObject, result: ResultObject): ActionResult {
@@ -304,7 +305,7 @@ private fun noTextFound(input: PointObject): ActionResult = ActionResult.Done(
     ),
 )
 
-internal const val NO_TEXT_ON_PICTURE = "Текста на снимке не нашлось"
+internal val NO_TEXT_ON_PICTURE: String get() = tr("Текста на снимке не нашлось")
 
 /**
  * Ответ пришёл, а текста в нём нет (#1259).
@@ -314,8 +315,8 @@ internal const val NO_TEXT_ON_PICTURE = "Текста на снимке не н�
  * в metadata `engine` у результата и в журнале. Ему адресован сам факт и следующий шаг.
  */
 private fun unreadable(why: String): String =
-    "Не смог прочитать этот снимок — ответ пришёл нечитаемым ($why). " +
-        "Лучше переснять при ровном свете и поближе."
+    tr("Не смог прочитать этот снимок — ответ пришёл нечитаемым ({0}). " +
+        "Лучше переснять при ровном свете и поближе.", why)
 
 /**
  * Слова отказа по режиму приватности — общие (#840): они были записаны здесь, в `:data` и в

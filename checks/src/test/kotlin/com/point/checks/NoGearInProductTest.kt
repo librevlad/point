@@ -97,7 +97,7 @@ class NoGearInProductTest {
         val sources = productSources.map { it.toRelativeString(repo) to code(it.readText()) }
 
         val copies = SETTINGS_WORDS.flatMap { name ->
-            val declaration = Regex("""const val $name = "([^"\n]+)"""")
+            val declaration = Regex("""(?:const val $name = |val $name: String get\(\) = tr\()"([^"\n]+)"""")
             val homes = sources.mapNotNull { (path, code) ->
                 declaration.find(code)?.let { path to it.groupValues[1] }
             }

@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Сколько файлов из набора не открылось при приёме (#1304).
  *
@@ -38,7 +40,9 @@ fun ingestLossNote(metadata: Map<String, String>): String? {
     val asked = metadata[META_INGEST_ASKED]?.toIntOrNull() ?: return null
     val opened = metadata[META_INGEST_OPENED]?.toIntOrNull() ?: return null
     if (asked <= opened) return null
-    return "Из $asked ${filesAfterCount(asked)} открыл${opened.opened()} $opened"
+    // Окончания — русские (в переводе их нет, украинский и английский строят фразу по-своему
+    // из тех же чисел {0} и {3}).
+    return tr("Из {0} {1} открыл{2} {3}", asked, filesAfterCount(asked), opened.opened(), opened)
 }
 
 /** «из 2 файлов», но «из 21 файла». */

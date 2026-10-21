@@ -35,7 +35,7 @@ private fun chatSystemPrompt(kind: ObjectKind): String {
         else -> "объектом"
     }
     return "Ты — помощник Point. Помогаешь пользователю разобраться с этим $subject. " +
-        "Отвечай кратко, по делу и по-русски; не выдумывай фактов."
+        "Отвечай кратко, по делу и ${userLanguageAdverb()}; не выдумывай фактов."
 }
 
 fun buildChatPrompt(

@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlinx.coroutines.launch
 
 interface DropInbox {
@@ -57,7 +58,7 @@ fun dropOpenRefusal(status: Int, serverMessage: String?, online: Boolean): Strin
     val said = serverMessage?.trim().orEmpty()
     return when {
         status == TOO_MANY_INBOXES && said.isNotEmpty() -> "$said. $OLD_LINKS_EXPIRE"
-        status == TOO_MANY_INBOXES -> "Открытых ссылок слишком много. $OLD_LINKS_EXPIRE"
+        status == TOO_MANY_INBOXES -> tr("Открытых ссылок слишком много. {0}", OLD_LINKS_EXPIRE)
         said.isNotEmpty() -> said
 
         // Ответ пришёл, а прочесть его не вышло — `responseCode` = -1 на неразборном ответе.
@@ -69,10 +70,10 @@ fun dropOpenRefusal(status: Int, serverMessage: String?, online: Boolean): Strin
 
 private const val TOO_MANY_INBOXES = 507
 
-private const val OLD_LINKS_EXPIRE = "Прежние ссылки перестают действовать через сутки"
+private val OLD_LINKS_EXPIRE: String get() = tr("Прежние ссылки перестают действовать через сутки")
 
 /** Связь есть, а сервер не ответил — это не про Wi-Fi человека. */
-const val NO_SERVER_TEXT = "Сервер Point не ответил. Попробуйте ещё раз"
+val NO_SERVER_TEXT: String get() = tr("Сервер Point не ответил. Попробуйте ещё раз")
 
 /**
  * Три беды, которые раньше говорили чужим именем (#797, решение владельца 11.08.2026: «дать
@@ -82,18 +83,18 @@ const val NO_SERVER_TEXT = "Сервер Point не ответил. Попроб
  * круге устройств — и по этой фразе нельзя было понять ни человеку, что чинить, ни нам, какая
  * из веток сработала.
  */
-const val NO_SERVER_ADDRESS_TEXT = "Point не знает, к какому серверу идти"
+val NO_SERVER_ADDRESS_TEXT: String get() = tr("Point не знает, к какому серверу идти")
 
 // Причина называет причину, а не место, где её чинить: кнопка «Войти» стоит рядом на том
 // же экране, и «войдите в настройках» спорило с ней само с собой (#897).
-const val NOT_IN_ACCOUNT_TEXT = "Это устройство не в вашем аккаунте"
+val NOT_IN_ACCOUNT_TEXT: String get() = tr("Это устройство не в вашем аккаунте")
 
 /** То же самое подписью источника — до тапа, а не отказом после (#897). */
-const val NOT_IN_ACCOUNT_NOTE = "нужен вход — устройство не в аккаунте"
+val NOT_IN_ACCOUNT_NOTE: String get() = tr("нужен вход — устройство не в аккаунте")
 
-const val ODD_ANSWER_TEXT = "Сервер ответил непонятным — ссылку выдать не вышло"
+val ODD_ANSWER_TEXT: String get() = tr("Сервер ответил непонятным — ссылку выдать не вышло")
 
-const val NO_LINK_TEXT = "Ящик открыт, а ссылку на него собрать не вышло"
+val NO_LINK_TEXT: String get() = tr("Ящик открыт, а ссылку на него собрать не вышло")
 
 /**
  * Запрос сорвался на самом устройстве, не дойдя до сервера (#1077).
@@ -102,7 +103,7 @@ const val NO_LINK_TEXT = "Ящик открыт, а ссылку на него �
  * сервер в ту же минуту открывал ящик другому устройству. Сорвавшийся вызов звался чужим
  * именем, а чем он сорвался — не попадало никуда: ни на экран, ни в журнал.
  */
-const val REQUEST_BROKE_TEXT = "Point не смог отправить запрос серверу — сбой на этом устройстве"
+val REQUEST_BROKE_TEXT: String get() = tr("Point не смог отправить запрос серверу — сбой на этом устройстве")
 
 /**
  * Сервер ответил и приём не открыл, а почему — не сказал (#1077).
@@ -111,7 +112,7 @@ const val REQUEST_BROKE_TEXT = "Point не смог отправить запр�
  * действительно не было. Прежде так звался и не-2xx без текста в теле — неправда: разговор
  * состоялся, и человек шёл проверять связь и сервер вместо того, чтобы повторить позже.
  */
-const val SERVER_REFUSED_TEXT = "Сервер Point не открыл приём файла — попробуйте позже"
+val SERVER_REFUSED_TEXT: String get() = tr("Сервер Point не открыл приём файла — попробуйте позже")
 
 /**
  * Файл сервер отдал целиком, а лечь на устройство он не смог (#1077).
@@ -120,8 +121,8 @@ const val SERVER_REFUSED_TEXT = "Сервер Point не открыл приём
  * бы молчанием сервера. На компьютере эта причина видна человеку прямо на экране приёма: он
  * повторял бы приём по кругу вместо того, чтобы освободить место.
  */
-const val SAVE_BROKE_TEXT =
-    "Файл дошёл, а сохранить его на этом устройстве не вышло — проверьте свободное место"
+val SAVE_BROKE_TEXT: String get() =
+    tr("Файл дошёл, а сохранить его на этом устройстве не вышло — проверьте свободное место")
 
 /**
  * Имя беде, когда сорвался сам вызов (#1077): разговор с сервером не состоялся — это про сервер;
@@ -143,9 +144,9 @@ sealed interface DropWait {
 }
 
 fun receiveWaitStatus(failures: Int): String = when {
-    failures < 1 -> "Ждём файл…"
-    failures < 3 -> "Связь пропала — пробую снова…"
-    else -> "Нет связи с сервером Point. Ссылка не потерялась: файл придёт, когда связь вернётся."
+    failures < 1 -> tr("Ждём файл…")
+    failures < 3 -> tr("Связь пропала — пробую снова…")
+    else -> tr("Нет связи с сервером Point. Ссылка не потерялась: файл придёт, когда связь вернётся.")
 }
 
 data class DropInboxBox(val id: String, val link: String)
@@ -158,7 +159,7 @@ fun dropInboxId(random: ByteArray): String =
 fun isDropInboxId(id: String): Boolean =
     id.length in 22..64 && id.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }
 
-fun dropFileName(raw: String): String = safeFileName(raw, ifBlank = "файл")
+fun dropFileName(raw: String): String = safeFileName(raw, ifBlank = tr("файл"))
 
 fun dropInboxLink(relayUrl: String, id: String): String? {
     val base = relayUrl.trim().trimEnd('/')

@@ -8,6 +8,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -52,13 +53,13 @@ private val SECTION_ORDER = listOf("phone", "email", "url", "address", "date", "
 private fun EntityType.summaryKey(): String? = asMetaKey() ?: if (this == EntityType.MONEY) META_ENTITY_AMOUNT else null
 
 private fun sectionTitle(key: String): String = when (key.removePrefix(META_ENTITY_PREFIX)) {
-    "phone" -> "Телефоны"
-    "email" -> "Почты"
-    "url" -> "Ссылки"
-    "address" -> "Адреса"
-    "date" -> "Даты"
-    "amount" -> "Суммы"
-    "card" -> "Карты"
+    "phone" -> tr("Телефоны")
+    "email" -> tr("Почты")
+    "url" -> tr("Ссылки")
+    "address" -> tr("Адреса")
+    "date" -> tr("Даты")
+    "amount" -> tr("Суммы")
+    "card" -> tr("Карты")
     else -> understoodName(key) ?: key.removePrefix(META_ENTITY_PREFIX)
 }
 
@@ -80,7 +81,7 @@ class ExtractAllCapability : Capability {
     override val icon = "list"
 
     override val meta = CapabilityMeta(priority = 30, latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Собрать данные"
+    override fun label(state: ObjectState) = tr("Собрать данные")
 
     // Собирать имеет смысл там, где есть ЧТО собирать: на узле-одиночке действие
     // возвращало копию самого себя новым объектом (#676, охота 2026-08-09).
@@ -106,12 +107,12 @@ class ExtractAllRealizer(
                 val text = com.point.core.flow.entitySourceText(input)
                 val list = formatEntities(extractor.extract(text), input.metadata)
                 if (list.isBlank()) {
-                    ActionResult.Failure("Не удалось собрать данные", recoverable = true)
+                    ActionResult.Failure(tr("Не удалось собрать данные"), recoverable = true)
                 } else {
                     val ref = store.newScratchFile("txt")
                     File(ref.value).writeText(list)
                     ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ref, mapOf("op" to "extract-all")))
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось собрать данные", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось собрать данные"), recoverable = true) }
         }
 }

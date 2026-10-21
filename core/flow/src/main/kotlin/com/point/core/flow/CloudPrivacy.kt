@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 enum class PrivacyLevel {
 
     FREE_FIRST,
@@ -11,24 +13,24 @@ enum class PrivacyLevel {
 
     val title: String
         get() = when (this) {
-            FREE_FIRST -> "Максимум бесплатного"
-            NO_TRAINING -> "Не учатся на моём"
-            DEVICE_ONLY -> "Только на этом устройстве"
+            FREE_FIRST -> tr("Максимум бесплатного")
+            NO_TRAINING -> tr("Не учатся на моём")
+            DEVICE_ONLY -> tr("Только на этом устройстве")
         }
 
     val what: String
         get() = when (this) {
             FREE_FIRST ->
-                "Читают все бесплатные сервисы, какие есть, — так распознаётся больше всего даром. " +
-                    "Часть из них учится на присланном и держит его у себя."
+                tr("Читают все бесплатные сервисы, какие есть, — так распознаётся больше всего даром. " +
+                    "Часть из них учится на присланном и держит его у себя.")
             NO_TRAINING ->
-                "Наружу — только к тем, кто письменно обещал не учиться на присланном и не хранить его. " +
-                    "Их меньше, и трудную страницу они возьмут не всегда."
+                tr("Наружу — только к тем, кто письменно обещал не учиться на присланном и не хранить его. " +
+                    "Их меньше, и трудную страницу они возьмут не всегда.")
             // Правило одно на телефон и компьютер, значит и слова — одни: «с телефона»
             // на экране компьютера читалось как чужая настройка (#893).
             DEVICE_ONLY ->
-                "Ничего не уходит с устройства. Остаётся то, что Point читает сам, — фото документов " +
-                    "ему даются плохо."
+                tr("Ничего не уходит с устройства. Остаётся то, что Point читает сам, — фото документов " +
+                    "ему даются плохо.")
         }
 
     companion object {
@@ -55,9 +57,9 @@ enum class ReaderPromise {
 
     val what: String
         get() = when (this) {
-            NO_TRAINING -> "обещал не учиться на присланном и не хранить его"
-            TRAINS -> "учится на присланном и держит его у себя"
-            UNKNOWN -> "про обучение на присланном не сказал ничего"
+            NO_TRAINING -> tr("обещал не учиться на присланном и не хранить его")
+            TRAINS -> tr("учится на присланном и держит его у себя")
+            UNKNOWN -> tr("про обучение на присланном не сказал ничего")
         }
 }
 
@@ -78,7 +80,7 @@ fun <T> allowedBy(level: PrivacyLevel, readers: List<T>, privacyOf: (T) -> Reade
     readers.filter { allowedAt(level, privacyOf(it)) }
 
 val AI_CHAIN_PRIVACY = ReaderPrivacy(
-    where = "чужой сервер",
+    where = tr("чужой сервер"),
     promise = ReaderPromise.UNKNOWN,
 )
 
@@ -90,7 +92,7 @@ val AI_CHAIN_PRIVACY = ReaderPrivacy(
  * получался равен «выключить AI целиком», хотя называется иначе.
  */
 val PROMISED_SERVICE = ReaderPrivacy(
-    where = "сервис, обещавший не учиться на присланном",
+    where = tr("сервис, обещавший не учиться на присланном"),
     promise = ReaderPromise.NO_TRAINING,
 )
 
@@ -105,15 +107,15 @@ fun anyoneAllowedAt(level: PrivacyLevel): Boolean = allowedAt(level, PROMISED_SE
  */
 fun promiseOfService(id: String): ReaderPrivacy =
     AI_PROVIDERS.firstOrNull { it.id == id }?.privacy
-        ?: ReaderPrivacy(where = id.ifBlank { "сервис" }, promise = ReaderPromise.UNKNOWN)
+        ?: ReaderPrivacy(where = id.ifBlank { tr("сервис") }, promise = ReaderPromise.UNKNOWN)
 
 interface CloudPrivacySettings {
     fun level(): PrivacyLevel
     suspend fun setLevel(level: PrivacyLevel)
 }
 
-const val PRIVACY_SETTING_TITLE = "Куда можно отправлять"
+val PRIVACY_SETTING_TITLE: String get() = tr("Куда можно отправлять")
 
-const val PRIVACY_SETTING_HINT =
-    "Объект уходит только после вашего тапа, и перед отправкой Point говорит, куда именно. " +
-        "Здесь вы выбираете, кому его вообще можно предлагать."
+val PRIVACY_SETTING_HINT: String get() =
+    tr("Объект уходит только после вашего тапа, и перед отправкой Point говорит, куда именно. " +
+        "Здесь вы выбираете, кому его вообще можно предлагать.")

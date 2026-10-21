@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.ObjectKind
 
+import com.point.core.model.tr
 /**
  * Своими словами о том, почему снимок не прочитался.
  *
@@ -23,10 +24,10 @@ fun readerFailure(reason: String?, kind: ObjectKind): String = when (troubleOf(r
 }
 
 /** Чтение оборвалось по времени — про попытку, а не про файл человека (#684/#685). */
-const val READ_TOO_SLOW = "Чтение заняло слишком долго и оборвалось"
+val READ_TOO_SLOW: String get() = tr("Чтение заняло слишком долго и оборвалось")
 
 /** Снимок не влез в чтение здесь и сейчас — тоже про попытку, а не про сам снимок. */
-const val READ_TOO_BIG = "Снимок слишком большой, чтобы его прочитать"
+val READ_TOO_BIG: String get() = tr("Снимок слишком большой, чтобы его прочитать")
 
 /**
  * Не вышло сейчас — про попытку, а не про файл человека (#1258).
@@ -37,7 +38,7 @@ const val READ_TOO_BIG = "Снимок слишком большой, чтобы
  * фотографию, хотя сломался наш движок. Обе функции файла теперь читают один разбор, и
  * «виноват файл» звучит ровно там, где [readerFailureIsFatal] отвечает «да».
  */
-const val READ_NOT_NOW = "Прочитать сейчас не вышло — попробуйте ещё раз"
+val READ_NOT_NOW: String get() = tr("Прочитать сейчас не вышло — попробуйте ещё раз")
 
 /**
  * Технический сигнал ридера: страниц в документе нет вовсе (#570). Человеку его переводит
@@ -112,12 +113,12 @@ private fun troubleOf(reason: String?): ReaderTrouble {
  * должен был быть.
  */
 private fun brokenFile(kind: ObjectKind): String = when (kind) {
-    ObjectKind.PDF -> "Файл не открылся — он повреждён или это не PDF"
-    ObjectKind.IMAGE -> "Файл не открылся — он повреждён или это не изображение"
-    else -> "Файл не открылся — он повреждён"
+    ObjectKind.PDF -> tr("Файл не открылся — он повреждён или это не PDF")
+    ObjectKind.IMAGE -> tr("Файл не открылся — он повреждён или это не изображение")
+    else -> tr("Файл не открылся — он повреждён")
 }
 
-private const val EMPTY_DOCUMENT = "В документе нет ни одной страницы"
+private val EMPTY_DOCUMENT: String get() = tr("В документе нет ни одной страницы")
 
 private val NOT_AN_IMAGE = listOf("decode", "not an image", "unsupported", "corrupt", "malformed")
 

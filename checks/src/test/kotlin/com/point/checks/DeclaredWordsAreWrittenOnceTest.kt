@@ -32,8 +32,15 @@ class DeclaredWordsAreWrittenOnceTest {
         "executors/src/main",
     )
 
-    private val declaration =
-        Regex("""^\s*(?:internal )?const val [A-Z][A-Z0-9_]*(?:: String)? = "([^"]*)"\s*$""", RegexOption.MULTILINE)
+    /**
+     * Слово объявлено константой — или, с тех пор как у Point три языка (#1473), свойством,
+     * которое каждый раз отдаёт перевод: `val X: String get() = tr("…")`. Ключ перевода — то же
+     * русское слово, и копия его литералом расходится с ним так же молча.
+     */
+    private val declaration = Regex(
+        """^\s*(?:internal )?(?:const val [A-Z][A-Z0-9_]*(?:: String)? = |val [A-Z][A-Z0-9_]*: String get\(\) = tr\()"([^"]*)"\)?\s*$""",
+        RegexOption.MULTILINE,
+    )
 
     /** Слова человеку → файл, где они объявлены. */
     private fun declaredWords(): Map<String, String> = dictionary.walkTopDown()

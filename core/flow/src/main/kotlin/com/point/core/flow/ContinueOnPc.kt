@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import java.nio.ByteBuffer
 
 data class LinkedPc(
@@ -111,7 +112,7 @@ fun encodePcReceiveReply(outcome: PcActionOutcome?): String = when (outcome) {
     is PcActionOutcome.Done ->
         PC_RECEIVE_OK + "\n" + PC_ACTION_LINE + "done" + (outcome.detail?.let { " " + oneLine(it) } ?: "")
     is PcActionOutcome.Failed ->
-        PC_RECEIVE_OK + "\n" + PC_ACTION_LINE + "failed " + oneLine(outcome.reason).ifBlank { "причина не названа" }
+        PC_RECEIVE_OK + "\n" + PC_ACTION_LINE + "failed " + oneLine(outcome.reason).ifBlank { tr("причина не названа") }
 }
 
 fun decodePcReceiveReply(body: String): PcActionOutcome? {
@@ -138,7 +139,7 @@ fun decodePcReceiveReply(body: String): PcActionOutcome? {
  * ([PcResultFields.AWAITING]). Иначе устройство, попросившее сделать, показывало галочку
  * либо провал, хотя работа ещё не начиналась.
  */
-const val AWAITS_CONSENT_TEXT = "Ждёт вашего ответа на телефоне: отправлять ли наружу"
+val AWAITS_CONSENT_TEXT: String get() = tr("Ждёт вашего ответа на телефоне: отправлять ли наружу")
 
 /**
  * Сказанное «нет» — тоже ответ, и просивший его ждёт (#1269).
@@ -147,7 +148,7 @@ const val AWAITS_CONSENT_TEXT = "Ждёт вашего ответа на тел�
  * [AWAITS_CONSENT_TEXT]: человек ждал ответа, которого уже не будет. Исход у отказа
  * терминальный — работа не пошла, и это окончательно, пока не попросят снова.
  */
-const val CONSENT_DECLINED_TEXT = "Отказано на телефоне: наружу объект не отправлен"
+val CONSENT_DECLINED_TEXT: String get() = tr("Отказано на телефоне: наружу объект не отправлен")
 
 fun pcActionOutcomeOf(result: com.point.core.model.ActionResult?): PcActionOutcome? = when (result) {
     null -> null
@@ -155,7 +156,7 @@ fun pcActionOutcomeOf(result: com.point.core.model.ActionResult?): PcActionOutco
     is com.point.core.model.ActionResult.Success -> PcActionOutcome.Done(null)
     is com.point.core.model.ActionResult.Failure -> PcActionOutcome.Failed(result.reason)
     is com.point.core.model.ActionResult.NeedsInput, is com.point.core.model.ActionResult.NeedsImage ->
-        PcActionOutcome.Failed("действие спрашивает на компьютере — ответить отсюда нечем")
+        PcActionOutcome.Failed(tr("действие спрашивает на компьютере — ответить отсюда нечем"))
 }
 
 private const val PC_RECEIVE_OK = "ok"
@@ -163,7 +164,7 @@ private const val PC_RECEIVE_OK = "ok"
 const val PC_ACTION_LINE = "action: "
 
 /** Отказ, у которого не нашлось слов, всё равно называется отказом. */
-private const val PC_REASON_UNNAMED = "причина не названа"
+private val PC_REASON_UNNAMED: String get() = tr("причина не названа")
 
 private fun oneLine(s: String) = s.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
 

@@ -9,6 +9,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -28,7 +29,7 @@ import java.io.File
  * каждая сторона сама, как у чтения снимка (#1021).
  */
 class ReadDocumentCapability(
-    private val promise: String = "текст всех страниц",
+    private val promise: String = tr("текст всех страниц"),
     private val cost: Cost = Cost.FREE,
     private val network: Boolean = false,
 ) : Capability {
@@ -45,7 +46,7 @@ class ReadDocumentCapability(
         answers = KnownCapabilities.IMAGE_TEXT,
     )
 
-    override fun label(state: ObjectState) = "Прочитать документ"
+    override fun label(state: ObjectState) = tr("Прочитать документ")
 
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF && state.has(Feature.IS_IMAGE_PDF) && !state.has(Feature.HAS_TEXT)
@@ -80,7 +81,7 @@ class ReadDocumentRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Разбираю PDF на страницы")
+                reportStage(tr("Разбираю PDF на страницы"))
                 val dir = rasterizer.rasterize(input)
                 val pages = File(dir.value).walkTopDown().filter { it.isFile }.sortedBy { it.name }.toList()
                 if (pages.isEmpty()) {
@@ -95,7 +96,7 @@ class ReadDocumentRealizer(
                 var broken = 0
                 var brokenSaid: String? = null
                 pages.forEachIndexed { index, page ->
-                    reportStage("Читаю страницу ${index + 1} из ${pages.size}")
+                    reportStage(tr("Читаю страницу {0} из {1}", index + 1, pages.size))
                     val text = runCatching {
                         recognizer.recognize(input.copy(mime = "image/png", uri = ScratchRef(page.absolutePath)))
                     }.getOrElse { trouble ->

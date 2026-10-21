@@ -13,6 +13,7 @@ import com.point.core.model.Provenance
 import com.point.core.model.Relation
 import com.point.core.model.RelationType
 import com.point.core.model.ValueRef
+import com.point.core.model.tr
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,7 +29,7 @@ class UnderstandCapability(
         priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true,
         judgesKnowledge = true,
     )
-    override fun label(state: ObjectState) = labelNeedingKey("Понять", keys.keySet())
+    override fun label(state: ObjectState) = labelNeedingKey(tr("Понять"), keys.keySet())
 
     // «Понять» может бесконечно обогащать граф (решение владельца, #1010): после витка
     // действие зовётся дальше — следующий заход идёт другой моделью и улучшает результат
@@ -38,7 +39,7 @@ class UnderstandCapability(
         if (com.point.core.flow.investigationStateOf(graph.obj.metadata, ID) !=
             com.point.core.flow.InvestigationState.NOT_INVESTIGATED
         ) {
-            labelNeedingKey("Понять сильнее", keys.keySet())
+            labelNeedingKey(tr("Понять сильнее"), keys.keySet())
         } else {
             label(graph.state)
         }
@@ -55,7 +56,7 @@ class UnderstandCapability(
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
     companion object {
-        const val UNDERSTAND_NOTE = "найдёт суть, суммы, даты и контакты"
+        val UNDERSTAND_NOTE: String get() = tr("найдёт суть, суммы, даты и контакты")
 
         val ID = CapabilityId("understand") }
 }
@@ -93,7 +94,7 @@ class UnderstandRealizer(
                             ),
                         )
                         input.state.kind == ObjectKind.IMAGE -> readWithEyes(input)
-                        else -> ActionResult.Failure("Нет текста для понимания", recoverable = true)
+                        else -> ActionResult.Failure(tr("Нет текста для понимания"), recoverable = true)
                     }
                 }
                 val readSoFar = already + window.length
@@ -124,13 +125,13 @@ class UnderstandRealizer(
                 // контрольной суммой. Модель, которая ВИДИТ кадр и при этом ссылается на
                 // слова страницы, даёт и то, и другое.
                 val eyes = input.state.kind == ObjectKind.IMAGE && llm.canHandle(input)
-                reportStage(if (eyes) "Смотрю на снимок" else "Читаю страницу")
+                reportStage(if (eyes) tr("Смотрю на снимок") else tr("Читаю страницу"))
                 val (answer, answeredBy) = ask(
                     input,
                     withBrief(input.metadata, understandPrompt(laidOut, index = index)),
                     eyes = eyes,
                 )
-                reportStage("Проверяю прочитанное по странице")
+                reportStage(tr("Проверяю прочитанное по странице"))
                 // Сверять есть с чем всегда, когда Point читал сам: слой слов снимка или
                 // окно текста объекта (#809, «нет в тексте — нет знания»; #1032 — по нему же
                 // видно, стоит ли у числа слово-подпись накладной).
@@ -152,7 +153,7 @@ class UnderstandRealizer(
                 val judged = judgeFields(parsed.fields, layer, readText, belongings)
 
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
-                    reportStage("Контрольная цифра не сошлась — перечитываю")
+                    reportStage(tr("Контрольная цифра не сошлась — перечитываю"))
                     val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes).text
 
                     // Перечитанное — другие прочтения, и стороны у них свои (#1176): связь
@@ -268,11 +269,11 @@ class UnderstandRealizer(
                         ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось понять документ", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось понять документ"), recoverable = true) }
         }
 
     private suspend fun readWithEyes(input: PointObject): ActionResult {
-        reportStage("Смотрю на снимок")
+        reportStage(tr("Смотрю на снимок"))
         val (answer, answeredBy) = ask(input, withBrief(input.metadata, VISUAL_PROMPT), eyes = true)
 
         // Слово-подпись накладной ищется в том, что Point прочитал глазами модели (#1305).
@@ -289,7 +290,7 @@ class UnderstandRealizer(
         val judged = judgeFields(parsed.fields, layer = null)
         val fields = judged.won
         if (fields.isEmpty() && parsed.single.isEmpty()) {
-            return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
+            return ActionResult.Failure(tr("На снимке ничего не разобрать"), recoverable = true)
         }
         val (answered, _) = roleReadings(answer, elements = emptyList(), layer = null)
 
@@ -432,9 +433,9 @@ class UnderstandRealizer(
         // квота бесплатных сервисов конечна.
         const val MAX_CHARS = 24_000
 
-        const val NOTHING_NEW = "Point уже прочитал всё, что здесь есть"
+        val NOTHING_NEW: String get() = tr("Point уже прочитал всё, что здесь есть")
 
-        const val UNDERSTOOD = "Стало понятнее"
+        val UNDERSTOOD: String get() = tr("Стало понятнее")
 
         val VISUAL_PROMPT =
             "Прочитай, что написано на снимке. Это может быть табло счётчика, рукописная " +

@@ -14,11 +14,12 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 
+import com.point.core.model.tr
 class QrCapability  : Capability {
     override val id = ID
     override val icon = "qr"
     override val meta = CapabilityMeta(priority = 45)
-    override fun label(state: ObjectState) = "QR-код"
+    override fun label(state: ObjectState) = tr("QR-код")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT || state.kind == ObjectKind.URL
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
@@ -31,7 +32,7 @@ class ArchiveCapability  : Capability {
     override val icon = "unzip"
 
     override val meta = CapabilityMeta(latency = Latency.FAST, revealsInside = true)
-    override fun label(state: ObjectState) = "Распаковать"
+    override fun label(state: ObjectState) = tr("Распаковать")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.ZIP
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)
 
@@ -50,7 +51,7 @@ class OfficeCapability  : Capability {
     override val icon = "office"
 
     override val meta = CapabilityMeta(latency = Latency.FAST, revealsInside = true)
-    override fun label(state: ObjectState) = "Извлечь текст"
+    override fun label(state: ObjectState) = tr("Извлечь текст")
 
     // Текст уже у документа — извлекать нечего (#997, DSK-040): дверь оставалась на месте, и
     // три нажатия подряд ничего не меняли в объекте. Так же уходит вниз «Прочитать документ».
@@ -67,10 +68,10 @@ class OfficeCapability  : Capability {
 }
 
 /** Что обещает «Извлечь текст» на обеих поверхностях: текст остаётся у самого документа. */
-const val TEXT_OF_DOCUMENT_NOTE = "текст документа · без сети"
+val TEXT_OF_DOCUMENT_NOTE: String get() = tr("текст документа · без сети")
 
 /** И чем оно заканчивается — тоже одинаково на обеих поверхностях (#995). */
-const val TEXT_IS_WITH_DOCUMENT = "Текст прочитан — он у самого документа"
+val TEXT_IS_WITH_DOCUMENT: String get() = tr("Текст прочитан — он у самого документа")
 
 /**
  * Из файла текст не достаётся — читать надо страницы (#933, #995, #1257).
@@ -80,9 +81,9 @@ const val TEXT_IS_WITH_DOCUMENT = "Текст прочитан — он у са�
  * одна на обе поверхности: телефон и компьютер отказывают одному и тому же документу по
  * одной причине, и слышать он должен одно и то же.
  */
-const val NO_READABLE_PDF_LAYER =
-    "Из файла этот текст не достаётся — страницы сняты картинкой или у документа своя " +
-        "раскладка шрифта. Прочитайте его действием «Прочитать документ»"
+val NO_READABLE_PDF_LAYER: String get() =
+    tr("Из файла этот текст не достаётся — страницы сняты картинкой или у документа своя " +
+        "раскладка шрифта. Прочитайте его действием «Прочитать документ»")
 
 class ImageCapability  : Capability {
     override val id = ID
@@ -90,7 +91,7 @@ class ImageCapability  : Capability {
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
 
-    override fun label(state: ObjectState) = "Сжать"
+    override fun label(state: ObjectState) = tr("Сжать")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
 
@@ -120,7 +121,7 @@ class DropLinkCapability(
         resultStaysHere = true,
     )
 
-    override fun label(state: ObjectState) = "Дать ссылку"
+    override fun label(state: ObjectState) = tr("Дать ссылку")
 
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL
@@ -134,7 +135,7 @@ class DropLinkCapability(
     // Предел назван числом и назван ДО отправки (#1284): человек читает его в обещании
     // действия, а не узнаёт после того, как пятьдесят пять мегабайт уже уехали на сервер.
     override fun yields(state: ObjectState) = com.point.core.model.ActionYield.Same(
-        "ссылка на сутки · файл уйдёт на сервер Point · до " +
+        tr("ссылка на сутки · файл уйдёт на сервер Point · до ") +
             com.point.core.flow.megabytes(com.point.core.flow.MAX_DROP_BYTES),
     )
 
@@ -145,7 +146,7 @@ class DropLinkCapability(
 }
 
 /** Ссылку выдаёт сервер Point — без аккаунта её выдавать некому (#1022, решение владельца). */
-const val NEEDS_ACCOUNT_FOR_LINK = "Войдите в аккаунт — ссылка выдаётся через сервер Point"
+val NEEDS_ACCOUNT_FOR_LINK: String get() = tr("Войдите в аккаунт — ссылка выдаётся через сервер Point")
 
 /**
  * «В PDF» — и для офисного документа тоже, но только настоящим конвертером (#403).
@@ -159,7 +160,7 @@ class PdfCapability(private val office: OfficeOrgan = OfficeAlwaysHere) : Capabi
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) =
-        if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
+        if (state.kind == ObjectKind.PDF) tr("Извлечь текст") else tr("В PDF")
 
     /**
      * На PDF действие достаёт текст из самого файла — и только его (#995).

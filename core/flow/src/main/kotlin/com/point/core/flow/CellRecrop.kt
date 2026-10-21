@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -28,7 +30,7 @@ suspend fun recropDisputed(
 ): Consensus {
     val questions = recropQuestions(voted, layer)
     if (questions.isEmpty()) return voted
-    reportStage("Переспрашиваю ${questions.size} ${disputedCellsWord(questions.size)}")
+    reportStage(tr("Переспрашиваю {0} {1}", questions.size, disputedCellsWord(questions.size)))
     val answers = ConcurrentHashMap<Pair<Int, Int>, String>()
     withTimeoutOrNull(timeoutMs) {
         questions.forEach { question ->
@@ -90,13 +92,4 @@ private fun usableRecropReading(raw: String): String? {
     return single
 }
 
-private fun disputedCellsWord(n: Int): String {
-    val tens = n % 100
-    val ones = n % 10
-    return when {
-        tens in 11..14 -> "спорных ячеек"
-        ones == 1 -> "спорную ячейку"
-        ones in 2..4 -> "спорные ячейки"
-        else -> "спорных ячеек"
-    }
-}
+private fun disputedCellsWord(n: Int): String = trPlural(n, "спорную ячейку", "спорные ячейки", "спорных ячеек")

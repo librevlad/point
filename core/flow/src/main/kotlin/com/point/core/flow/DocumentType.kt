@@ -1,9 +1,11 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 const val TYPE_PARCEL = "parcel"
 
 val DOCUMENT_TYPES: Map<String, String> = mapOf(
-    TYPE_PARCEL to "Посылка",
+    TYPE_PARCEL to tr("Посылка"),
 )
 
 val KNOWN_SEMANTIC_TAGS: Set<String> = SEMANTIC_TYPES.keys + DOCUMENT_TYPES.keys

@@ -2,14 +2,15 @@ package com.point.core.flow
 
 import com.point.core.model.Provenance
 
+import com.point.core.model.tr
 fun provenanceOf(metadata: Map<String, String>, key: String): Provenance =
     com.point.core.model.provenanceOf(metadata[key + META_SOURCE_SUFFIX])
 
 fun provenanceLabel(provenance: Provenance): String? = when (provenance) {
-    Provenance.OCR -> "прочитано"
-    Provenance.RULE -> "выведено правилом"
-    Provenance.MODEL -> "понято по смыслу"
-    Provenance.HUMAN -> "подтверждено вами"
+    Provenance.OCR -> tr("прочитано")
+    Provenance.RULE -> tr("выведено правилом")
+    Provenance.MODEL -> tr("понято по смыслу")
+    Provenance.HUMAN -> tr("подтверждено вами")
     Provenance.GIVEN -> null
     Provenance.UNKNOWN -> null
 }

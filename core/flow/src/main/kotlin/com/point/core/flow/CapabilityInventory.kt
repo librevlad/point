@@ -7,6 +7,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 
+import com.point.core.model.tr
 fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
     val next = capability.produces(state)
     return when {
@@ -56,12 +57,12 @@ fun yieldLabel(
 
 
 
-const val KEY_NOTE: String = "нужен ключ"
+val KEY_NOTE: String get() = tr("нужен ключ")
 
 fun labelNeedingKey(label: String, keySet: Boolean): String =
     if (keySet) label else "$label · $KEY_NOTE"
 
-private const val KEY_NOTE_SUFFIX = " · $KEY_NOTE"
+private val KEY_NOTE_SUFFIX: String get() = " · $KEY_NOTE"
 
 fun labelNeedsKey(label: String): Boolean = label.endsWith(KEY_NOTE_SUFFIX)
 
@@ -70,30 +71,30 @@ fun labelWithoutKeyNote(label: String): String = label.removeSuffix(KEY_NOTE_SUF
 // «Три шага ниже» обещали шаги, которых на экране не было: ниже стоял список из двенадцати
 // сервисов. Теперь сказано то, что человек и сделает: возьмёт ключ, вставит, вернётся.
 fun keyErrandWhy(action: String): String =
-    "«$action» ждёт ключа: это действие делает модель, а она работает на вашем ключе. У " +
+    tr("«{0}» ждёт ключа: это действие делает модель, а она работает на вашем ключе. У " +
         "большинства сервисов ключ бесплатный — возьмите его на сайте и вставьте сюда. После " +
-        "проверки вы вернётесь к своему объекту."
+        "проверки вы вернётесь к своему объекту.", action)
 
 fun yieldNoun(kind: ObjectKind): String = when (kind) {
-    ObjectKind.TEXT -> "текст"
-    ObjectKind.IMAGE -> "картинку"
+    ObjectKind.TEXT -> tr("текст")
+    ObjectKind.IMAGE -> tr("картинку")
     ObjectKind.PDF -> "PDF"
-    ObjectKind.OFFICE -> "документ"
-    ObjectKind.URL -> "ссылку"
-    ObjectKind.AUDIO -> "запись"
-    ObjectKind.ZIP -> "архив"
-    ObjectKind.COLLECTION -> "набор файлов"
-    else -> "файл"
+    ObjectKind.OFFICE -> tr("документ")
+    ObjectKind.URL -> tr("ссылку")
+    ObjectKind.AUDIO -> tr("запись")
+    ObjectKind.ZIP -> tr("архив")
+    ObjectKind.COLLECTION -> tr("набор файлов")
+    else -> tr("файл")
 }
 
 const val META_YIELD_NOUN = "yield.noun"
 
 fun yieldSurprise(expected: ActionYield, actual: ObjectKind, actualNoun: String? = null): String? {
     if (expected !is ActionYield.New) return null
-    if (expected.kind != actual) return "Ожидался ${yieldNoun(expected.kind)} — вышел ${yieldNoun(actual)}"
+    if (expected.kind != actual) return tr("Ожидался {0} — вышел {1}", yieldNoun(expected.kind), yieldNoun(actual))
     val promised = substanceOf(expected.noun) ?: return null
     val got = substanceOf(actualNoun) ?: return null
-    return if (promised == got) null else "Обещали $promised — вышло $got"
+    return if (promised == got) null else tr("Обещали {0} — вышло {1}", promised, got)
 }
 
 private fun substanceOf(noun: String?): String? =

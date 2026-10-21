@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.CapabilityId
 import com.point.core.model.Provenance
 
+import com.point.core.model.tr
 /**
  * Строки знания объекта для показа человеку — общая модель поверхностей.
  *
@@ -115,8 +116,8 @@ fun openQuestions(
         }
 
 fun openQuestionLabel(state: InvestigationState): String = when (state) {
-    InvestigationState.NOT_FOUND -> "смотрели — не нашлось"
-    InvestigationState.INSUFFICIENTLY_INVESTIGATED -> "посмотрели, но недостаточно"
-    InvestigationState.CONTRADICTORY -> "прочтения спорят"
+    InvestigationState.NOT_FOUND -> tr("смотрели — не нашлось")
+    InvestigationState.INSUFFICIENTLY_INVESTIGATED -> tr("посмотрели, но недостаточно")
+    InvestigationState.CONTRADICTORY -> tr("прочтения спорят")
     InvestigationState.FOUND, InvestigationState.NOT_INVESTIGATED -> ""
 }

@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Что стук значит для телефона (#1398).
  *
@@ -37,7 +39,7 @@ fun knockMeaning(
     word: String?,
     linked: Boolean,
     waiting: List<PcOutboxEntry>?,
-    somethingToDo: String = "сделать кое-что",
+    somethingToDo: String = tr("сделать кое-что"),
 ): KnockMeaning = when {
     word != KNOCK_ABOUT_OUTBOX -> KnockMeaning.Silent("письмо не про очередь: «${word ?: "пусто"}»")
     !linked -> KnockMeaning.Silent("к телефону не привязан компьютер")

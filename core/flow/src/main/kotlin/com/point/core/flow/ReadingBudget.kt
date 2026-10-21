@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
@@ -101,11 +102,11 @@ suspend fun readWithBudget(
 }
 
 fun orientationProbeStage(index: Int, total: Int): String =
-    "Пробую повернуть страницу — ${index + 1} из $total"
+    tr("Пробую повернуть страницу — {0} из {1}", index + 1, total)
 
-const val FALLBACK_STAGE = "Страница большая — читаю упрощённо"
+val FALLBACK_STAGE: String get() = tr("Страница большая — читаю упрощённо")
 
-const val REREAD_STAGE = "Нашёл, как лежит страница — перечитываю"
+val REREAD_STAGE: String get() = tr("Нашёл, как лежит страница — перечитываю")
 
 private fun AtomLayer.cutShort(): AtomLayer =
     AtomLayer(atoms, readerText = readerText, transform = transform, incomplete = INCOMPLETE_TIMEOUT)

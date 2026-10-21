@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.PointObject
 import com.point.core.model.isFileBacked
+import com.point.core.model.tr
 import java.io.File
 
 class RelayPcTransport(
@@ -18,7 +19,7 @@ class RelayPcTransport(
 
         val bytes = if (obj.state.kind.isFileBacked) {
             runCatching { File(obj.uri.value).readBytes() }.getOrNull()
-                ?: return PcSendOutcome.Unreachable("объект не прочитан")
+                ?: return PcSendOutcome.Unreachable(tr("объект не прочитан"))
         } else {
             obj.uri.value.toByteArray(Charsets.UTF_8)
         }

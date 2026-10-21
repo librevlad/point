@@ -8,6 +8,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -19,12 +20,12 @@ class WordCapability() : Capability {
     override val icon = "office"
 
     override val meta = CapabilityMeta(latency = Latency.SLOW)
-    override fun label(state: ObjectState) = "В Word"
+    override fun label(state: ObjectState) = tr("В Word")
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "документ Word")
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, tr("документ Word"))
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
 
     companion object { val ID = CapabilityId("word") }
@@ -46,20 +47,20 @@ class WordRealizer(
                 // лежало в графе, — с искажёнными цифрами.
                 val text = known.textOf(input) ?: when (input.state.kind) {
                     ObjectKind.IMAGE -> {
-                        reportStage("Распознаю текст на фото")
+                        reportStage(tr("Распознаю текст на фото"))
                         recognizer.recognize(input)
                     }
                     else -> ""
                 }
                 if (text.isBlank()) {
-                    ActionResult.Failure("Нет текста (возможно, это скан — сначала распознайте текст)", recoverable = true)
+                    ActionResult.Failure(tr("Нет текста (возможно, это скан — сначала распознайте текст)"), recoverable = true)
                 } else {
-                    reportStage("Собираю документ")
+                    reportStage(tr("Собираю документ"))
                     ActionResult.Success(
                         ResultObject(ObjectKind.OFFICE, DOCX_MIME, docx.write(toParagraphs(text)), mapOf("op" to "to-word")),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось создать документ", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось создать документ"), recoverable = true) }
         }
 
     private companion object {

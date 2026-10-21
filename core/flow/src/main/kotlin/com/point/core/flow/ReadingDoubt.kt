@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 const val META_READING_DOUBT = "reading.doubt"
 
 data class ReadingDoubt(val what: String, val where: String)
@@ -7,7 +9,7 @@ data class ReadingDoubt(val what: String, val where: String)
 fun readingDoubts(text: String): List<ReadingDoubt> = buildList {
     totalMismatch(text)?.let { add(it) }
     mixedScriptWords(text).take(MAX_MIXED_SHOWN).forEach {
-        add(ReadingDoubt("буквы двух алфавитов в одном слове — обычная подмена при чтении", it))
+        add(ReadingDoubt(tr("буквы двух алфавитов в одном слове — обычная подмена при чтении"), it))
     }
 }
 
@@ -23,7 +25,7 @@ fun totalMismatch(text: String): ReadingDoubt? {
     val sum = rows.sum()
     if (kotlin.math.abs(sum - stated) <= TOLERANCE) return null
     return ReadingDoubt(
-        "итог не сошёлся: строки дают ${money(sum)}, а написано ${money(stated)}",
+        tr("итог не сошёлся: строки дают {0}, а написано {1}", money(sum), money(stated)),
         totalLine,
     )
 }

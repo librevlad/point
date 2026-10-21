@@ -9,6 +9,7 @@ import com.point.core.model.ActionYield
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 
+import com.point.core.model.tr
 /**
  * Чтение снимка — одна способность на телефон и компьютер; исполнители у каждого свои.
  *
@@ -33,7 +34,7 @@ class OcrCapability(
         answers = com.point.core.flow.KnownCapabilities.IMAGE_TEXT,
     )
 
-    override fun label(state: ObjectState) = "Распознать текст"
+    override fun label(state: ObjectState) = tr("Распознать текст")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 

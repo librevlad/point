@@ -1,5 +1,8 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
+
 sealed interface LinkState {
 
     data class Live(val agoMillis: Long) : LinkState
@@ -49,29 +52,19 @@ private fun settledLink(
  * ровно одно — когда его слышали в последний раз, — это и сказано: «был на связи 2 часа назад».
  */
 fun linkLabel(state: LinkState): String = when (state) {
-    is LinkState.Live -> "на связи"
-    is LinkState.Silent -> "был на связи ${minutesWord(state.agoMillis)} назад"
-    LinkState.Checking -> "проверяю связь…"
-    LinkState.Never -> "ещё не связывались"
-    LinkState.Waiting -> "ждёт связи"
+    is LinkState.Live -> tr("на связи")
+    is LinkState.Silent -> tr("был на связи {0} назад", minutesWord(state.agoMillis))
+    LinkState.Checking -> tr("проверяю связь…")
+    LinkState.Never -> tr("ещё не связывались")
+    LinkState.Waiting -> tr("ждёт связи")
 }
 
 private fun minutesWord(agoMillis: Long): String {
     val minutes = (agoMillis / 60_000).toInt()
-    if (minutes < 1) return "меньше минуты"
+    if (minutes < 1) return tr("меньше минуты")
     if (minutes >= 60) {
         val hours = minutes / 60
-        return "$hours ${plural(hours, "час", "часа", "часов")}"
+        return "$hours ${trPlural(hours, "час", "часа", "часов")}"
     }
-    return "$minutes ${plural(minutes, "минуту", "минуты", "минут")}"
-}
-
-private fun plural(n: Int, one: String, few: String, many: String): String {
-    val mod100 = n % 100
-    if (mod100 in 11..14) return many
-    return when (n % 10) {
-        1 -> one
-        2, 3, 4 -> few
-        else -> many
-    }
+    return "$minutes ${trPlural(minutes, "минуту", "минуты", "минут")}"
 }

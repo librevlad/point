@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -97,7 +98,7 @@ class OpenAiCompatibleClient(
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
-            require(provider.apiKey.isNotBlank()) { "${provider.label}: ключ не задан" }
+            require(provider.apiKey.isNotBlank()) { tr("{0}: ключ не задан", provider.label) }
             val res = http.post(
                 "$baseUrl/chat/completions",
                 mapOf("Authorization" to "Bearer ${provider.apiKey}"),
@@ -112,7 +113,7 @@ class OpenAiCompatibleClient(
             // (#1320): думающая модель писала «NO_IMAGE» после хода мысли, и признание не
             // узнавалось — Point брал её сочинение за чтение снимка.
             if (isImage(obj) && answer.startsWith(NO_IMAGE_MARKER)) {
-                error("${provider.label}: модель не увидела изображение")
+                error(tr("{0}: модель не увидела изображение", provider.label))
             }
             val ref = store.newScratchFile("md")
 
@@ -154,19 +155,19 @@ class OpenAiCompatibleClient(
 
     private fun parseAnswer(json: String): String {
         val choices = JSONObject(json).optJSONArray("choices")
-            ?: error("${provider.label}: ответ без choices")
-        if (choices.length() == 0) error("${provider.label}: пустой ответ")
+            ?: error(tr("{0}: ответ без choices", provider.label))
+        if (choices.length() == 0) error(tr("{0}: пустой ответ", provider.label))
         val content = choices.getJSONObject(0).getJSONObject("message").optString("content")
-        return content.ifBlank { error("${provider.label}: пустой текст") }
+        return content.ifBlank { error(tr("{0}: пустой текст", provider.label)) }
     }
 
     private fun refusal(code: Int, body: String = ""): String = when (code) {
-        401, 403 -> "${provider.label}: ${com.point.core.flow.KEY_NOT_ACCEPTED} — $AI_KEY_HINT в настройках"
-        402 -> "${provider.label}: сервис просит оплату — у этого ключа нет бесплатного доступа"
+        401, 403 -> tr("{0}: {1} — {2} в настройках", provider.label, com.point.core.flow.KEY_NOT_ACCEPTED, AI_KEY_HINT)
+        402 -> tr("{0}: сервис просит оплату — у этого ключа нет бесплатного доступа", provider.label)
 
-        404 -> "${provider.label}: сервис не знает модели ${provider.model}"
-        429 -> "${provider.label}: $FREE_LIMIT_SPENT — попробуйте завтра"
-        in 500..599 -> "${provider.label}: сервис сейчас не отвечает"
+        404 -> tr("{0}: сервис не знает модели {1}", provider.label, provider.model)
+        429 -> tr("{0}: {1} — попробуйте завтра", provider.label, FREE_LIMIT_SPENT)
+        in 500..599 -> tr("{0}: сервис сейчас не отвечает", provider.label)
 
         // Безликое «сервис отказал» уже стоило раскопок (живой прогон владельца 01.09.2026):
         // сервис называет причину сам — его слова и выходят человеку.

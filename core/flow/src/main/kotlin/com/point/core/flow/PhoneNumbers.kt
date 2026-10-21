@@ -4,6 +4,7 @@ import com.google.i18n.phonenumbers.NumberParseException
 import com.google.i18n.phonenumbers.PhoneNumberUtil
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType
 
+import com.point.core.model.tr
 /**
  * Телефон судит библиотека, а не самодельное правило (#801).
  *
@@ -229,11 +230,11 @@ object PhoneNumbers {
     fun kind(text: String): String? =
         namedByDocument(text)?.let {
             when (util.getNumberType(it)) {
-                PhoneNumberType.MOBILE -> "мобильный"
-                PhoneNumberType.FIXED_LINE -> "городской"
+                PhoneNumberType.MOBILE -> tr("мобильный")
+                PhoneNumberType.FIXED_LINE -> tr("городской")
                 PhoneNumberType.FIXED_LINE_OR_MOBILE -> null
-                PhoneNumberType.TOLL_FREE -> "бесплатный"
-                PhoneNumberType.PREMIUM_RATE -> "платный"
+                PhoneNumberType.TOLL_FREE -> tr("бесплатный")
+                PhoneNumberType.PREMIUM_RATE -> tr("платный")
                 else -> null
             }
         }

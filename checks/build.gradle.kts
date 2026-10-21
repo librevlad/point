@@ -38,6 +38,11 @@ tasks.test {
         .withPropertyName("sourcesOfAllModules")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 
+    // Каталог переводов (#1473): строка, удалённая из него, обязана ронять проверку сразу.
+    inputs.file(rootProject.layout.projectDirectory.file("core/model/src/main/resources/point/i18n/texts.tsv"))
+        .withPropertyName("translationCatalog")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
     inputs.file(rootProject.layout.projectDirectory.file("tools/cemented-wording.txt"))
         .withPropertyName("cementedWordingList")
         .withPathSensitivity(PathSensitivity.RELATIVE)

@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -50,16 +51,16 @@ private val EC_BLOCKS = intArrayOf(
 val QR_MAX_BYTES: Int = capacityBytes(QR_MAX_VERSION)
 
 /** Одни и те же слова отказа на обеих поверхностях (#1084). */
-const val QR_TOO_LONG = "Этот текст длиннее, чем помещается в QR-код — сократите его"
+val QR_TOO_LONG: String get() = tr("Этот текст длиннее, чем помещается в QR-код — сократите его")
 
 /** Одни и те же слова, когда кодировать нечего (#1084). */
-const val QR_NO_TEXT = "Нет текста для QR-кода"
+val QR_NO_TEXT: String get() = tr("Нет текста для QR-кода")
 
 /**
  * Одни и те же слова, когда сорвалась сама попытка (#1084). Чужой текст сюда не попадает: он
  * остаётся в журнале, человеку достаётся одно понятное предложение (#686).
  */
-const val QR_FAILED = "QR не собрался — попробуйте ещё раз"
+val QR_FAILED: String get() = tr("QR не собрался — попробуйте ещё раз")
 
 fun qrMatrix(text: String): QrMatrix? {
     val data = text.toByteArray(Charsets.UTF_8)

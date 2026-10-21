@@ -7,6 +7,8 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -29,14 +31,14 @@ class ExcelCapability(
     override val id = ID
     override val icon = "excel"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = labelNeedingKey("В Excel", keys.keySet())
+    override fun label(state: ObjectState) = labelNeedingKey(tr("В Excel"), keys.keySet())
     // Набор страниц — тоже источник таблицы (#1207): несколько фото одной накладной сшиваются
     // в один файл по порядку страниц. Страница набора — то же, что читается и поодиночке.
     override fun accepts(state: ObjectState) =
         state.kind in PAGE_KINDS || state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, tr("таблицу"))
 
     companion object { val ID = CapabilityId("excel") }
 }
@@ -68,7 +70,7 @@ class ExcelRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 if (input.state.kind == ObjectKind.COLLECTION) pagesToSheet(input) else pageToSheet(input)
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка разбора в Excel", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка разбора в Excel"), recoverable = true) }
         }
 
     private suspend fun pageToSheet(input: PointObject): ActionResult {
@@ -80,7 +82,7 @@ class ExcelRealizer(
         val plan = read.plan
         val mode = read.mode
 
-        reportStage("Собираю файл")
+        reportStage(tr("Собираю файл"))
         val ref = writer.write(plan)
         val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
         val grid = document.grid?.takeIf { it.rows.isNotEmpty() }
@@ -91,7 +93,7 @@ class ExcelRealizer(
                 ref,
                 buildMap {
                     put("op", "excel")
-                    put("name", "таблица.xlsx")
+                    put("name", tr("таблица.xlsx"))
 
                     grid?.let {
                         put(META_TABLE_GRID, "${it.rows.size}×${it.rows.maxOf { r -> r.size }}")
@@ -145,7 +147,7 @@ class ExcelRealizer(
         ) { it.metadata["name"].orEmpty() }
         if (pages.isEmpty()) {
             return ActionResult.Failure(
-                "В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста",
+                tr("В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста"),
                 recoverable = true,
             )
         }
@@ -178,7 +180,7 @@ class ExcelRealizer(
         // что и у набора, где не прочиталась ни одна.
         if (reads.isEmpty()) {
             return ActionResult.Failure(
-                "Первая страница не прочиталась за ${pagesBudgetMs / 60_000} минут — попробуйте её отдельно",
+                tr("Первая страница не прочиталась за {0} минут — попробуйте её отдельно", pagesBudgetMs / 60_000),
                 recoverable = true,
             )
         }
@@ -186,12 +188,12 @@ class ExcelRealizer(
         if (refused.size == reads.size) {
             val reason = refused.first().reason
             return ActionResult.Failure(
-                if (reads.size == 1) reason else "Ни одна из ${reads.size} страниц не прочиталась — $reason",
+                if (reads.size == 1) reason else tr("Ни одна из {0} страниц не прочиталась — {1}", reads.size, reason),
                 recoverable = true,
             )
         }
 
-        reportStage("Собираю файл")
+        reportStage(tr("Собираю файл"))
         val beyond = pages.size - reads.size
         val plan = stitchSheets(
             reads.mapIndexed { i, page ->
@@ -213,7 +215,7 @@ class ExcelRealizer(
                 ref,
                 buildMap {
                     put("op", "excel")
-                    put("name", "таблица.xlsx")
+                    put("name", tr("таблица.xlsx"))
                     put(META_TABLE_PAGES, pages.size.toString())
                     if (unread > 0) put(META_TABLE_PAGES_UNREAD, unread.toString())
                     put(META_TABLE_FLAGGED, flagged.toString())
@@ -229,7 +231,7 @@ class ExcelRealizer(
      * одиночного снимка.
      */
     private fun pageGap(n: Int, total: Int) = SheetPlan(
-        rows = listOf(listOf("⚠ Страница $n из $total не прочиталась — проверьте её отдельно")),
+        rows = listOf(listOf(tr("⚠ Страница {0} из {1} не прочиталась — проверьте её отдельно", n, total))),
         headerRows = emptySet(),
     )
 
@@ -246,17 +248,17 @@ class ExcelRealizer(
      */
     private fun pagesNotRead(from: Int, total: Int, ranOutOfTime: Boolean): SheetPlan {
         val why = if (ranOutOfTime) {
-            "за один заход чтение идёт не дольше ${pagesBudgetMs / 60_000} минут"
+            tr("за один заход чтение идёт не дольше {0} минут", pagesBudgetMs / 60_000)
         } else {
-            "за один заход читается не больше $MAX_TABLE_PAGES"
+            tr("за один заход читается не больше {0}", MAX_TABLE_PAGES)
         }
         return SheetPlan(
             rows = listOf(
                 listOf(
                     if (from == total) {
-                        "⚠ Страница $total не читалась — $why"
+                        tr("⚠ Страница {0} не читалась — {1}", total, why)
                     } else {
-                        "⚠ Страницы $from–$total не читались — $why"
+                        tr("⚠ Страницы {0}–{1} не читались — {2}", from, total, why)
                     },
                 ),
             ),
@@ -267,7 +269,7 @@ class ExcelRealizer(
     /** Стадии чтения страницы называют её номер: «Страница 2 из 3 · Читаю таблицу». */
     private suspend fun <T> onPage(n: Int, total: Int, read: suspend () -> T): T {
         val outer = coroutineContext[ActionProgress]
-        val page = "Страница $n из $total"
+        val page = tr("Страница {0} из {1}", n, total)
         outer?.report(page)
         return withContext(ActionProgress { stage -> outer?.report("$page · $stage") }) { read() }
     }
@@ -293,7 +295,7 @@ class ExcelRealizer(
             ""
         }
 
-        reportStage(if (input.state.kind == ObjectKind.IMAGE) "Читаю страницу" else "Готовлю текст")
+        reportStage(if (input.state.kind == ObjectKind.IMAGE) tr("Читаю страницу") else tr("Готовлю текст"))
         val layer = atomLayer(input)
         val index = layer?.promptIndex()
         val prompt = if (index != null) PROMPT + ADDRESSED + index + extra else PROMPT + extra
@@ -338,7 +340,7 @@ class ExcelRealizer(
 
                     val cells = gridRows.flatten()
                     if (addressable && cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells) {
-                        errors += "Не вышло показать, где эти слова на странице"
+                        errors += tr("Не вышло показать, где эти слова на странице")
                         continue
                     }
                     layouts += layout
@@ -353,7 +355,7 @@ class ExcelRealizer(
         }
         if (layouts.isEmpty()) return PageRead.Refused(refusalOf(errors, ordered.isEmpty()))
 
-        reportStage(if (tables.size > 1) "Свожу расхождения чтений" else "Собираю таблицу")
+        reportStage(if (tables.size > 1) tr("Свожу расхождения чтений") else tr("Собираю таблицу"))
         val consensus = reconcile(tables)
 
         val candidates = (
@@ -415,7 +417,7 @@ class ExcelRealizer(
         val plan = layoutSheet(document, mode)
 
         if (plan.rows.isEmpty()) {
-            return PageRead.Refused("На странице не нашлось ничего, что можно положить в таблицу")
+            return PageRead.Refused(tr("На странице не нашлось ничего, что можно положить в таблицу"))
         }
 
         return PageRead.Table(plan, document, mode, layouts.size, consensus.sources)
@@ -445,7 +447,7 @@ class ExcelRealizer(
                     val i = cursor.getAndIncrement()
                     if (i >= ordered.size) break
 
-                    if (retry) heard.withLock { reportStage("Не вышло — пробую другим путём") }
+                    if (retry) heard.withLock { reportStage(tr("Не вышло — пробую другим путём")) }
                     val read = try {
                         Result.success(File(ordered[i].run(input, prompt).uri.value).readText())
                     } catch (cancelled: CancellationException) {
@@ -460,7 +462,7 @@ class ExcelRealizer(
                     }
                     heard.withLock {
                         done++
-                        if (done < slots) reportStage("Готово $done из $slots чтений — жду остальные")
+                        if (done < slots) reportStage(tr("Готово {0} из {1} чтений — жду остальные", done, slots))
                     }
                     break
                 }
@@ -470,22 +472,13 @@ class ExcelRealizer(
     }
 
     private fun readingStage(n: Int, firstRound: Boolean): String = when {
-        !firstRound && n > 1 -> "Перечитываю другими путями"
-        !firstRound -> "Перечитываю другим путём"
-        n > 1 -> "Таблицу читают $n ${modelsWord(n)} одновременно"
-        else -> "Читаю таблицу"
+        !firstRound && n > 1 -> tr("Перечитываю другими путями")
+        !firstRound -> tr("Перечитываю другим путём")
+        n > 1 -> tr("Таблицу читают {0} {1} одновременно", n, modelsWord(n))
+        else -> tr("Читаю таблицу")
     }
 
-    private fun modelsWord(n: Int): String {
-        val tens = n % 100
-        val ones = n % 10
-        return when {
-            tens in 11..14 -> "моделей"
-            ones == 1 -> "модель"
-            ones in 2..4 -> "модели"
-            else -> "моделей"
-        }
-    }
+    private fun modelsWord(n: Int): String = trPlural(n, "модель", "модели", "моделей")
 
     private suspend fun atomLayer(input: PointObject): AtomLayer? = known.layerOf(input)
 
@@ -617,15 +610,15 @@ class ExcelRealizer(
 }
 
 /** Глагол этой цепочки для общей сводки отказов (#1237). Своё слово этой дороги — не пакета. */
-private const val WHAT_FAILED = "дочитать таблицу"
+private val WHAT_FAILED: String get() = tr("дочитать таблицу")
 
 /** Ответ был, таблицы в нём не было (#1320): человеку это говорится, а не подменяется файлом. */
-internal const val NOT_A_TABLE = "модель ответила текстом, а не таблицей"
+internal val NOT_A_TABLE: String get() = tr("модель ответила текстом, а не таблицей")
 
 internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
-    if (noReaders) return "Читать таблицу некем — $KEY_SETTINGS_CALL"
+    if (noReaders) return tr("Читать таблицу некем — {0}", KEY_SETTINGS_CALL)
     val substantive = errors.firstOrNull { !refusalNeedsKey(it) }
-    val chosen = substantive ?: errors.firstOrNull() ?: return "Не удалось распознать таблицу"
+    val chosen = substantive ?: errors.firstOrNull() ?: return tr("Не удалось распознать таблицу")
 
     // «Software caused connection abort» уходил исходом на экран (живая находка
     // владельца, 2026-08-09): транспортная ошибка — не слова для человека. Признаки разбирает
@@ -768,9 +761,9 @@ internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
  */
 internal fun pagesAheadStage(reading: Int, total: Int): String =
     if (reading < total) {
-        "Читаю страницы — $reading из $total, дальше за один заход не выйдет"
+        tr("Читаю страницы — {0} из {1}, дальше за один заход не выйдет", reading, total)
     } else {
-        "Читаю страницы — $total"
+        tr("Читаю страницы — {0}", total)
     }
 
 internal fun anchorCandidates(

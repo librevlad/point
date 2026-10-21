@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import java.io.File
 
 /**
@@ -62,7 +63,7 @@ class GraphKnowledge(
 
                     // Единственное место здесь, где работа заметна человеку: текстовый слой PDF
                     // достаётся не мгновенно, и молчать об этом нельзя (#555).
-                    reportStage("Читаю текст PDF")
+                    reportStage(tr("Читаю текст PDF"))
 
                     // Спрашивается ровно столько, сколько уйдёт в вопрос (#1241): прежде
                     // разбирался весь документ, а потом обрезался до этого же числа.

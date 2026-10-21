@@ -2,22 +2,23 @@ package com.point.core.flow
 
 import com.point.core.model.CapabilityId
 
+import com.point.core.model.tr
 fun cloudDestination(
     capabilityId: CapabilityId,
 
     aiService: String? = null,
 ): String = when (capabilityId.value) {
     "drop-link" ->
-        "Файл уедет на сервер Point и сутки будет открыт любому, у кого есть ссылка. " +
-            "Потом ссылка перестанет работать."
+        tr("Файл уедет на сервер Point и сутки будет открыт любому, у кого есть ссылка. " +
+            "Потом ссылка перестанет работать.")
 
     "ocr", "ocr-cloud" ->
-        "Снимок уйдёт на сервер распознавания и вернётся текстом."
+        tr("Снимок уйдёт на сервер распознавания и вернётся текстом.")
 
     else -> if (aiService != null) {
-        "Объект уйдёт на сервер $aiService и вернётся результатом."
+        tr("Объект уйдёт на сервер {0} и вернётся результатом.", aiService)
     } else {
-        "Объект уйдёт на чужой сервер и вернётся результатом."
+        tr("Объект уйдёт на чужой сервер и вернётся результатом.")
     }
 }
 
@@ -27,11 +28,11 @@ fun cloudScopeOf(capabilityId: CapabilityId): CloudScope = when (capabilityId.va
 }
 
 fun cloudAskTitle(scope: CloudScope): String = when (scope) {
-    CloudScope.PUBLIC_LINK -> "Выложить файл по ссылке?"
-    CloudScope.MODELS -> "Отправить в облако?"
+    CloudScope.PUBLIC_LINK -> tr("Выложить файл по ссылке?")
+    CloudScope.MODELS -> tr("Отправить в облако?")
 }
 
 fun cloudAskConfirm(scope: CloudScope): String = when (scope) {
-    CloudScope.PUBLIC_LINK -> "Выложить"
-    CloudScope.MODELS -> "Разрешить"
+    CloudScope.PUBLIC_LINK -> tr("Выложить")
+    CloudScope.MODELS -> tr("Разрешить")
 }

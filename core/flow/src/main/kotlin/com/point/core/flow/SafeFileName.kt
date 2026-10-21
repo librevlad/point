@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Имя, пришедшее снаружи, в путь не годится (#865).
  *
@@ -25,7 +27,7 @@ package com.point.core.flow
  * Пустое имя — не ошибка человека, а отсутствие имени: объект получает своё слово, а не
  * падение.
  */
-fun safeFileName(raw: String, ifBlank: String = "объект"): String {
+fun safeFileName(raw: String, ifBlank: String = tr("объект")): String {
     val cleaned = raw
         .replace('\\', '/')
         .substringAfterLast('/')

@@ -9,6 +9,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.Relation
 import com.point.core.model.RelationType
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import java.io.File
 
 /** Знание «объект выложен по ссылке»: адрес и срок — на самом объекте (#1071). */
@@ -38,10 +39,10 @@ class DropLinkRealizer(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val file = File(input.uri.value).takeIf(File::isFile)
-            ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
+            ?: return ActionResult.Failure(tr("Файла объекта нет на диске"), recoverable = false)
         val name = outboundFileName(input.metadata["name"], input.mime)
 
-        reportStage("Загружаю файл")
+        reportStage(tr("Загружаю файл"))
         val link = when (val outcome = drop.give(file.absolutePath, name, input.mime)) {
             is DropOutcome.Given -> outcome.link
             // Отказ называет то, что произошло, и ровно одно (#1284): причину знает тот, кто
@@ -50,7 +51,7 @@ class DropLinkRealizer(
         }
 
         val ref = runCatching { keeper.keep(input, link) }.getOrNull()
-            ?: return ActionResult.Failure("Ссылка получена, но не сохранилась на устройстве", recoverable = true)
+            ?: return ActionResult.Failure(tr("Ссылка получена, но не сохранилась на устройстве"), recoverable = true)
         onLink(link)
 
         val until = untilTomorrow()
@@ -60,15 +61,15 @@ class DropLinkRealizer(
             uri = ScratchRef(ref),
             state = ObjectState(ObjectKind.URL),
             metadata = mapOf(
-                "name" to "ссылка на $name",
+                "name" to tr("ссылка на {0}", name),
                 "entity.url" to link,
-                "drop.expires" to "сутки",
+                "drop.expires" to tr("сутки"),
             ),
             sourceObjects = listOf(input.id),
             creatorAction = DropLinkCapability.ID.value,
         )
         return ActionResult.Done(
-            "Выложено до $until — ссылка у объекта, живёт сутки",
+            tr("Выложено до {0} — ссылка у объекта, живёт сутки", until),
             Findings(
                 metadata = mapOf(
                     META_DROP_LINK to link,

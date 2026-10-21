@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -111,7 +112,7 @@ private fun columnName(rows: List<List<String>>, firstDayRow: Int, column: Int):
         val header = rows[r].getOrNull(column)?.let { styleCell(it).value.trim() }
         if (!header.isNullOrEmpty()) return header.take(MAX_COLUMN_NAME)
     }
-    return "столбец ${column + 1}"
+    return tr("столбец {0}", column + 1)
 }
 
 private fun dateOf(m: MatchResult): LocalDate? {

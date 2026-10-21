@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -38,7 +39,7 @@ class GeminiLlmClient(
 
             // Имя ключа сборки человеку не адресовано (#1236): он не заводил ни
             // `GEMINI_API_KEY`, ни `local.properties`.
-            require(apiKey.isNotBlank()) { "AI не настроен — $AI_KEY_HINT" }
+            require(apiKey.isNotBlank()) { tr("AI не настроен — {0}", AI_KEY_HINT) }
             var refused: Exception? = null
             for (model in models) {
                 try {

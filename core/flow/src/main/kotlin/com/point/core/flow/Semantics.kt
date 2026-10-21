@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.Feature
+import com.point.core.model.Lang
 
 const val META_SEMANTIC_PREFIX = "semantic."
 
@@ -23,7 +24,23 @@ const val META_SEMANTIC_SUMMARY = META_SEMANTIC_PREFIX + "summary"
  * Дословное правило не трогает: номера, имена, адреса и слова записи читаются как есть.
  */
 fun answerLanguageRule(what: String, source: String): String =
-    "$what пиши по-русски, даже если $source на другом языке."
+    "$what пиши ${userLanguageAdverb()}, даже если $source на другом языке."
+
+/**
+ * На каком языке модель отвечает человеку — на его собственном (#1473).
+ *
+ * Промпты остаются русскими: модель их понимает одинаково, а переводить инструкции значило бы
+ * держать три копии каждой. Меняется только слово о языке ответа: украинцу Point отвечает
+ * по-украински, англичанину — по-английски.
+ */
+fun userLanguageAdverb(lang: Lang = Lang.current()): String = when (lang) {
+    Lang.RU -> "по-русски"
+    Lang.UK -> "по-украински"
+    Lang.EN -> "по-английски"
+}
+
+/** Фраза для промпта, ответ которого человек прочтёт как есть. */
+fun answerInUserLanguage(): String = "Отвечай ${userLanguageAdverb()}."
 
 val SEMANTIC_TYPES: Map<String, Feature> = mapOf(
     "meeting" to Feature.IS_MEETING,

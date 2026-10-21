@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.Because
 import com.point.core.model.Feature
 
+import com.point.core.model.tr
 /**
  * Какое найденное значение продолжает действие — его «потому что».
  *
@@ -55,20 +56,20 @@ fun becauseOf(
  * «Перевести» остаётся при вещи. Визитка-файл тоже: `.vcf` — это и есть контакт.
  */
 private val VALUE_SOURCES: List<ValueSource> = listOf(
-    Meaning(Feature.IS_MEETING, "Встреча"),
-    Meaning(Feature.IS_PURCHASE, "Покупка"),
-    Meaning(Feature.IS_RECIPE, "Рецепт"),
-    Meaning(Feature.IS_JOB, "Вакансия"),
+    Meaning(Feature.IS_MEETING, tr("Встреча")),
+    Meaning(Feature.IS_PURCHASE, tr("Покупка")),
+    Meaning(Feature.IS_RECIPE, tr("Рецепт")),
+    Meaning(Feature.IS_JOB, tr("Вакансия")),
     Value(Feature.HAS_PHONE, META_ENTITY_PHONE),
     Value(Feature.HAS_EMAIL, META_ENTITY_PREFIX + "email"),
     Value(Feature.HAS_ADDRESS, META_ENTITY_ADDRESS),
     Value(Feature.HAS_GEO, META_ENTITY_GEO),
     Value(Feature.HAS_URL, META_ENTITY_URL),
     Value(Feature.HAS_QR, META_ENTITY_PREFIX + "qr"),
-    Value(Feature.HAS_BARCODE, META_ENTITY_PREFIX + "barcode", name = "Штрихкод"),
+    Value(Feature.HAS_BARCODE, META_ENTITY_PREFIX + "barcode", name = tr("Штрихкод")),
     Value(Feature.HAS_CARD, META_ENTITY_PREFIX + "card"),
     Value(Feature.HAS_DATE, META_ENTITY_PREFIX + "date"),
-    Value(Feature.HAS_SHOT_AT, META_SHOT_AT, name = "Снято"),
+    Value(Feature.HAS_SHOT_AT, META_SHOT_AT, name = tr("Снято")),
 )
 
 private val VALUE_FEATURES: Set<Feature> = VALUE_SOURCES.map { it.feature }.toSet()
