@@ -463,10 +463,9 @@ class DesktopState(
                     // Вещь не легла в очередь — телефону отказ словами (#1414): иначе он
                     // ждал бы готового, которого уже не будет, а сказано было бы одному
                     // компьютеру.
-                    queued.onFailure {
-                        outbox?.addOutcome(
-                            lateOutcomeMeta(id, item, ActionResult.Failure(RESULT_NOT_QUEUED, recoverable = true)),
-                        )
+                    queued.onFailure { failed ->
+                        val why = (failed as? TooBigForPhone)?.message ?: RESULT_NOT_QUEUED
+                        outbox?.addOutcome(lateOutcomeMeta(id, item, ActionResult.Failure(why, recoverable = true)))
                     }.getOrThrow()
 
                     // Готовое ждёт телефона — и телефону об этом стучат (#1416). Сторож на
@@ -480,8 +479,8 @@ class DesktopState(
                     // записал в журнал, а сказать о ней соседу было нечем.
                     outbox?.addOutcome(lateOutcomeMeta(id, item, late))
                 }
-            }.onFailure {
-                val why = RESULT_NOT_QUEUED
+            }.onFailure { failed ->
+                val why = (failed as? TooBigForPhone)?.message ?: RESULT_NOT_QUEUED
                 _message.value = why
                 note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
             }

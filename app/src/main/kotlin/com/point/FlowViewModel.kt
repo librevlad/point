@@ -608,16 +608,22 @@ class FlowViewModel @Inject constructor(
                 Triple(entry, path, ok)
             }
             if (!owns(voice)) return@trackWork
-            if (pulled.any { !it.third }) {
+
+            // Одна несъехавшая вещь не держит остальные (#1456). Прежде любой срыв отменял
+            // весь забор: скачанное не открывалось и не подтверждалось, и при следующем
+            // заходе телефон тянул те же вещи снова — а очередь только росла.
+            val (got, missed) = pulled.partition { it.third }
+            if (got.isEmpty()) {
                 // Причина называется настоящая (#1018): письмо тянется с сервера, и
                 // выключенный компьютер тут ни при чём.
-                _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.PC_PULL_FAILED_TEXT, messageOutcome = Outcome.FAILED) }
+                val said = com.point.core.flow.pcPullFailedText(missed.map { it.first.meta["name"].orEmpty() })
+                _ui.update { it.copy(busy = null, busyStage = null, message = said, messageOutcome = Outcome.FAILED) }
                 return@trackWork
             }
             // Просьба исполнить — не переезд объекта (ADR-0001 §7). Дом такого объекта
             // остался на компьютере: телефон делает работу и отсылает результат домой, а
             // не открывает вещь у себя и не оставляет сделанное на своей стороне.
-            val (asked, arrived) = pulled.partition {
+            val (asked, arrived) = got.partition {
                 !it.first.meta[com.point.core.flow.PcExecFields.REQUEST].isNullOrBlank()
             }
             // Просьба, которую сейчас не разобрать (вопрос человеку уже стоит на экране, и
@@ -659,7 +665,13 @@ class FlowViewModel @Inject constructor(
                     taken += plain
                     onSharedMultiple(plain.map { "file://${it.second}" })
                 }
-                else -> _ui.update { it.copy(busy = null, busyStage = null) }
+                else -> _ui.update {
+                    it.copy(
+                        busy = null, busyStage = null,
+                        message = if (missed.isEmpty()) it.message else com.point.core.flow.pcPullFailedText(missed.map { m -> m.first.meta["name"].orEmpty() }),
+                        messageOutcome = if (missed.isEmpty()) it.messageOutcome else Outcome.FAILED,
+                    )
+                }
             }
 
             // Подтверждается только то, что и правда разобрано: неподтверждённое остаётся
@@ -2545,7 +2557,9 @@ class FlowViewModel @Inject constructor(
             runCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
                 .recoverCatching { pcFlow.transport.ackOutbox(pc, entry.id) }
         }
-        return things - landed.toSet()
+        // Вещь, которую сейчас сажает домой другой заход, — уже не «с компьютера»: иначе
+        // список считал её, пока она садилась, и предлагал забрать уже забранное.
+        return things.filterNot { it in landed || it.id in resultsLanding }
     }
 
     /** Записи, которые сейчас скачиваются домой: сторож и вход в объект не тянут одну дважды. */

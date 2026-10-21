@@ -75,8 +75,15 @@ class RelayPcTransport(
         }.getOrDefault(false)
     }
 
+    /**
+     * «Забрал» без ответа — тоже срыв (#1456): компьютер, не ответивший вовремя, запись не
+     * убрал, и телефон предлагал её снова. Повтор здесь, а не у зовущего: он повторял только
+     * брошенное исключение, а молчание исключением не бывает.
+     */
     override suspend fun ackOutbox(pc: LinkedPc, id: Int) {
-        answer(pc, RelayRpc.ACK, mapOf("id" to id.toString()))
+        if (answer(pc, RelayRpc.ACK, mapOf("id" to id.toString())) == null) {
+            answer(pc, RelayRpc.ACK, mapOf("id" to id.toString()))
+        }
     }
 
     override suspend fun pushPhoneCaps(pc: LinkedPc, caps: List<PcRemoteAction>): Boolean =
