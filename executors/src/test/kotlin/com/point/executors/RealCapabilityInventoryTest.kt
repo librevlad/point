@@ -64,7 +64,7 @@ class RealCapabilityInventoryTest {
         ShootMoreCapability(),
         ShoppingListCapabilityOnPhone(aiKeysReady), SmsCapability(), TranscribeCapabilityOnPhone(keysReady),
         TranslateCapabilityOnPhone(aiKeysReady), UnderstandCapabilityOnPhone(aiKeysReady), VCardCapability(), WordCapabilityOnPhone(),
-        WordPlusCapabilityOnPhone(aiKeysReady), CleanMetadataCapability(),
+        WordPlusCapabilityOnPhone(aiKeysReady), CleanMetadataCapabilityOnPhone(),
     )
 
     private val sharedNames: Set<String> = shared.map { it.javaClass.simpleName }.toSet()

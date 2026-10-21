@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.tr
 
 /**
  * «Объединить в PDF» — одна способность на телефон и компьютер (#1379, волна 2).
@@ -16,7 +17,7 @@ class MergePdfCapability : Capability {
     override val icon = "pdf"
 
     override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Объединить в PDF"
+    override fun label(state: ObjectState) = tr("Объединить в PDF")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)
 

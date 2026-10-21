@@ -52,7 +52,7 @@ class ExifInvestigation @Inject constructor() : Capability {
 
     companion object {
 
-        val ID = com.point.core.model.CapabilityId("exif")
+        val ID = com.point.core.flow.KnownCapabilities.PHOTO_HEAD
     }
 }
 

@@ -1,17 +1,12 @@
 package com.point.executors
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
-import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -23,47 +18,36 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Убрать из снимка то, что он рассказывает о себе (#547).
- *
- * Владелец 05.08.2026: «не надо перезапись, это в следующий объект просто». Point не правит
- * принесённое — он рождает новое: исходный объект остаётся как был, а очищенный снимок
- * становится самостоятельным объектом со своими действиями.
- *
- * Предупреждений и уговоров нет: Point показывает, что есть, и даёт инструмент; решает человек.
+ * Способность живёт в `:core:flow` — одна на телефон и компьютер (#1379). Здесь только дверь
+ * Hilt; члены переписаны руками, а не `by`-делегатом: kotlin-делегирование в `@Inject`-классе
+ * роняет KSP всего модуля.
  */
-class CleanMetadataCapability @Inject constructor() : Capability {
-
-    override val id = ID
-
-    override val icon = "cutout"
-
-    override val meta = CapabilityMeta(priority = 46, latency = Latency.FAST)
-
-    override fun label(state: ObjectState) = "Очистить метаданные"
-
-    override fun accepts(state: ObjectState) =
-        state.kind == ObjectKind.IMAGE && (state.has(Feature.HAS_SHOT_AT) || state.has(Feature.HAS_GEO))
-
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
-
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.IMAGE, "тот же снимок без служебных записей")
-
-    override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
-
-    companion object { val ID = CapabilityId("clean-metadata") }
+class CleanMetadataCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.CleanMetadataCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
 }
 
 class CleanMetadataRealizer @Inject constructor(
     private val store: ObjectStore,
 ) : Realizer {
 
-    override val capabilityId = CleanMetadataCapability.ID
+    override val capabilityId = com.point.core.flow.CleanMetadataCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
                 reportStage("Читаю снимок")
-                val source = BitmapFactory.decodeFile(input.uri.value)
+                // Кадр ставится, как его сняли: метка поворота уходит вместе с остальными
+                // записями, и без разворота портретный снимок выходил лежащим на боку.
+                // Ужимать при этом нечего — очищены записи, а не содержимое.
+                val source = Bitmaps.uprightFrame(input.uri.value, maxPx = Int.MAX_VALUE)?.bitmap
                     ?: return@withContext ActionResult.Failure(
                         // Байты не разобрались в снимок — сигнал назван, а не передан
                         // молчанием: словарь и годность объекта читают один разбор (#1258).
@@ -86,18 +70,13 @@ class CleanMetadataRealizer @Inject constructor(
                         ObjectKind.IMAGE,
                         "image/jpeg",
                         ref,
-                        mapOf("op" to "clean-metadata", "name" to cleanName(input.metadata["name"])),
+                        mapOf("op" to "clean-metadata", "name" to com.point.core.flow.cleanedPhotoName(input.metadata["name"])),
                     ),
                 )
             }.getOrElse {
                 ActionResult.Failure(it.message ?: "Очистить не вышло", recoverable = true)
             }
         }
-
-    private fun cleanName(name: String?): String {
-        val base = name?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Снимок"
-        return "$base · без метаданных.jpg"
-    }
 
     private companion object { const val QUALITY = 95 }
 }

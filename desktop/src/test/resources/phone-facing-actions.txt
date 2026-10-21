@@ -16,6 +16,7 @@ drop-link=Дать ссылку	IMAGE,TEXT,PDF,ZIP,OFFICE,AUDIO,UNKNOWN				35
 find=Найти в документе				HAS_WORD_LAYER	40
 pc-download=Скачать видео на компьютер	URL				40
 qr=QR-код	TEXT,URL				45
+clean-metadata=Очистить метаданные	IMAGE			HAS_GEO,HAS_SHOT_AT	46
 archive=Распаковать	ZIP				50
 excel=В Excel	IMAGE,TEXT,PDF,COLLECTION				50
 image=Сжать	IMAGE				50

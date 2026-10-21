@@ -20,6 +20,7 @@ Whisper не настроен — нужен ключ Groq. {0}	Whisper не н�
 Whisper слушает по ключу Groq	Whisper слухає за ключем Groq	Whisper listens with a Groq key
 {0} {1} в {2}	{0} {1} о {2}	{1} {0} at {2}
 {0} {1} назад	{0} {1} тому	{0} {1} ago
+{0} · без метаданных	{0} · без метаданих	{0} · no metadata
 {0} · проверено {1}	{0} · перевірено {1}	{0} · checked {1}
 {0} Б	{0} Б	{0} B
 {0} ГБ	{0} ГБ	{0} GB
@@ -211,6 +212,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 О чём эта ссылка?	Про що це посилання?	What is this link about?
 Обещали {0} — вышло {1}	Обіцяли {0} — вийшло {1}	Promised {0}, got {1}
 Обрабатываю…	Обробляю…	Working…
+Объединить в PDF	Об’єднати в PDF	Combine into PDF
 Объект больше 50 МБ — столько за раз между устройствами не переслать.	Об’єкт більший за 50 МБ — стільки за раз між пристроями не переслати.	The item is over 50 MB, more than can travel between devices at once.
 Объект уйдёт на сервер {0} и вернётся результатом.	Об’єкт піде на сервер {0} і повернеться результатом.	The item goes to the {0} server and comes back as a result.
 Объект уйдёт на чужой сервер и вернётся результатом.	Об’єкт піде на сторонній сервер і повернеться результатом.	The item goes to another company's server and comes back as a result.
@@ -231,6 +233,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Отправка и приватность	Надсилання й приватність	Sending and privacy
 Отправка наружу закрыта настройками	Надсилання назовні закрите налаштуваннями	Sending out is turned off in settings
 Отправлено — компьютер заберёт, когда включится	Надіслано — комп’ютер забере, коли ввімкнеться	Sent. The computer will pick it up when it's on
+Очистить метаданные	Очистити метадані	Remove metadata
 Ошибка AI	Помилка AI	AI error
 Ошибка записи результата	Помилка запису результату	Couldn't save the result
 Ошибка перевода	Помилка перекладу	Translation failed
@@ -347,6 +350,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Слишком много попыток подряд. Повторите через минуту.	Забагато спроб поспіль. Повторіть за хвилину.	Too many tries in a row. Try again in a minute.
 Слушаю запись	Слухаю запис	Listening to the recording
 Смотрю на снимок	Дивлюся на знімок	Looking at the picture
+Снимок	Знімок	Picture
 Снимок слишком большой, чтобы его прочитать	Знімок завеликий, щоб його прочитати	The picture is too big to read
 Снимок уйдёт на сервер распознавания и вернётся текстом.	Знімок піде на сервер розпізнавання й повернеться текстом.	The picture goes to a recognition server and comes back as text.
 Снято	Знято	Taken
@@ -640,6 +644,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 тема	тема	subject
 только то, что в кадре	лише те, що в кадрі	only what's in the frame
 только что	щойно	just now
+тот же снимок без служебных записей	той самий знімок без службових записів	the same picture without its hidden records
 трек-номер	трек-номер	tracking number
 у вас это уже есть — 	у вас це вже є — 	you already have this: 
 уйдёт в сервис	піде в сервіс	goes to a service
