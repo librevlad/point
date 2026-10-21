@@ -71,7 +71,7 @@ class SettingsAreAListTest {
     fun `звук действий можно выключить и на компьютере`() {
         assertTrue(
             "выключателя звука нет — настройку меняет только телефон",
-            screen.contains("title = \"Звук действий\""),
+            screen.contains("title = tr(\"Звук действий\")"),
         )
     }
 
