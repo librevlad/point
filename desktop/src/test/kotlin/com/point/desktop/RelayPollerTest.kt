@@ -39,6 +39,7 @@ class RelayPollerTest {
 
         var waiting: ByteArray? = letter
         var acked = false
+        var posted = 0
 
         fun base(): String = "http://127.0.0.1:" + server.address.port
 
@@ -60,7 +61,10 @@ class RelayPollerTest {
                     ex.sendResponseHeaders(200, -1)
                 }
 
-                ex.requestMethod == "POST" -> ex.sendResponseHeaders(200, -1)
+                ex.requestMethod == "POST" -> {
+                    posted++
+                    ex.sendResponseHeaders(200, -1)
+                }
                 letter == null -> ex.sendResponseHeaders(204, -1)
                 else -> {
                     ex.responseHeaders.add("X-Blob-Id", letterId)
@@ -85,6 +89,8 @@ class RelayPollerTest {
         ),
     )
 
+    private val told = mutableListOf<String>()
+
     private fun poller(box: Box, onContact: (String) -> Unit): RelayPoller = RelayPoller(
         serverUrl = box.base(),
         account = { me },
@@ -105,6 +111,7 @@ class RelayPollerTest {
         // Новый разбор поверх той же папки — это и есть следующий запуск приложения.
         letters = KeptLetters(lettersDir),
         onContact = onContact,
+        onLost = { told += it },
     )
 
     @Test
@@ -161,5 +168,41 @@ class RelayPollerTest {
         } finally {
             box.stop()
         }
+    }
+
+    @Test
+    fun `письмо, так и не принятое, называется обеим сторонам`() {
+
+        // #1409: после последней попытки письмо молча лежало шифртекстом, а в консоль, которой
+        // у установленного Point нет, уходило «дальше оно просто полежит».
+        lettersDir = tmp.newFolder()
+        val box = Box(sealedObject())
+        box.start()
+        try {
+            repeat(KeptLetters(lettersDir).tries) {
+                runCatching { poller(box) { error("приложение упало на разборе") }.once() }
+            }
+            assertEquals(emptyList<String>(), told)
+
+            poller(box) { }.once()
+
+            assertEquals("объект принят повтором того, что валило приложение", emptyList<String>(), received)
+            assertEquals("человеку у компьютера не сказано", 1, told.size)
+            assertTrue(told.single(), told.single().contains("чек.txt"))
+            assertTrue("телефону не ушёл отказ", box.posted >= 1)
+            assertEquals("письмо осталось лежать", emptyList<String>(), KeptLetters(lettersDir).exhausted())
+        } finally {
+            box.stop()
+        }
+    }
+
+    @Test
+    fun `слово о непринятом называет объект и время`() {
+        val words = lostLetterWords("чек.txt", 0L, java.time.ZoneOffset.UTC)
+
+        assertTrue(words, words.contains("«чек.txt»"))
+        assertTrue(words, words.contains("01.01 00:00"))
+        assertTrue(words, words.contains("ещё раз"))
+        assertTrue(lostLetterWords(null, null).startsWith("Объект с телефона"))
     }
 }

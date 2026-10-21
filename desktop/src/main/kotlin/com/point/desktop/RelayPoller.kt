@@ -30,6 +30,12 @@ class RelayPoller(
     private val onContact: (String) -> Unit = {},
     private val log: (String) -> Unit = {},
 
+    /**
+     * Слово человеку о письме, которое так и не удалось принять (#1409). Консоль установленного
+     * Point никуда не пишется, и строка в ней человеку не слышна.
+     */
+    private val onLost: (String) -> Unit = {},
+
     private val pollMillis: Long = 2_000,
 ) {
     @Volatile private var running = false
@@ -91,6 +97,10 @@ class RelayPoller(
      */
     private fun sortOut(mailbox: Mailbox, serverNowMs: Long?): Boolean {
         var any = false
+        letters.exhausted().forEach { id ->
+            giveUp(mailbox, id)
+            any = true
+        }
         letters.waiting().forEach { id ->
             val blob = letters.blob(id)
             if (blob == null) {
@@ -98,7 +108,7 @@ class RelayPoller(
                 return@forEach
             }
             if (letters.tried(id) >= letters.tries) {
-                log("письмо не удаётся разобрать — эта попытка последняя, дальше оно просто полежит")
+                log("письмо не удаётся разобрать — эта попытка последняя, сорвётся и она — будет сказано человеку")
             }
             handle(mailbox, blob, com.point.core.flow.letterAgeMs(id, serverNowMs))
             letters.done(id)
@@ -150,6 +160,38 @@ class RelayPoller(
         send(mailbox, peer, key, requestId, reply)
     }
 
+    /**
+     * Письмо, которое разбирали [KeptLetters.tries] раз и ни разу не довели до конца (#1409).
+     *
+     * Прежде оно оставалось лежать шифртекстом, а в консоль уходило «дальше оно просто
+     * полежит»: ни телефон, ни человек у компьютера об этом не узнавали. Теперь обе стороны
+     * слышат, что объект не принят и что делать — отправить ещё раз; телефону уходит отказ,
+     * а не молчание. Сам разбор при этом не повторяется: он и валил приложение. Письмо
+     * только открывается — узнать, кому и о чём отвечать, — и убирается.
+     */
+    private fun giveUp(mailbox: Mailbox, id: String) {
+        runCatching {
+            val opened = letters.blob(id)?.let { blob -> runCatching { tryOpen(blob) }.getOrNull() }
+            val name = opened?.third?.meta?.get("name")?.takeIf { it.isNotBlank() }
+            if (opened != null && opened.third.meta[RelayRpc.KIND] == RelayRpc.OBJECT) {
+                val (peer, key, frame) = opened
+                val refusal = RelayRequests.Reply(
+                    body = com.point.core.flow.encodePcReceiveReply(com.point.core.flow.PcActionOutcome.Failed(GAVE_UP_PHONE))
+                        .toByteArray(Charsets.UTF_8),
+                )
+                runCatching { send(mailbox, peer, key, frame.meta[RelayRpc.ID].orEmpty(), refusal) }
+            }
+            log("письмо $id не разобрано за ${letters.tries} попытки — письмо убрано")
+
+            // Человеку — только об объекте: просьба о буфере или о списке умений своя
+            // работа Point, и слово «объект не принят» о ней было бы неправдой. Не открылось
+            // вовсе — что внутри, не знаем, и молчать об этом нельзя.
+            val aboutObject = opened == null || opened.third.meta[RelayRpc.KIND] == RelayRpc.OBJECT
+            if (aboutObject) runCatching { onLost(lostLetterWords(name, com.point.core.flow.letterPostedAtMs(id))) }
+        }
+        letters.done(id)
+    }
+
     private fun tryOpen(blob: ByteArray): Triple<LinkedPc, ByteArray, com.point.core.flow.PcFrame>? =
         peers().firstNotNullOfOrNull { peer ->
             secrets.sharedWith(peer)?.let { key ->
@@ -166,4 +208,24 @@ class RelayPoller(
         val code = mailbox.post(peer.deviceId, sealed)
         if (code != 200) log("ответ телефону не доставлен: сервер ответил $code")
     }
+}
+
+/** Телефону — что не вышло и что делать (#1409). */
+internal const val GAVE_UP_PHONE = "компьютер не смог принять объект — отправьте его ещё раз"
+
+/**
+ * Человеку у компьютера — о письме, которое так и не удалось принять (#1409): что за объект,
+ * когда пришёл и что делать. Без имени и времени — всё равно словами, а не молчанием.
+ */
+internal fun lostLetterWords(
+    name: String?,
+    postedAtMs: Long?,
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+): String {
+    val what = name?.let { "«$it»" } ?: "Объект"
+    val time = postedAtMs?.let {
+        java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm").format(java.time.Instant.ofEpochMilli(it).atZone(zone))
+    }
+    val sent = time?.let { " от $it" }.orEmpty()
+    return "$what с телефона$sent не принят — отправьте его с телефона ещё раз"
 }

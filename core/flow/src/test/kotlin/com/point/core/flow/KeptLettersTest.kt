@@ -100,4 +100,24 @@ class KeptLettersTest {
             dir.parentFile.listFiles().orEmpty().none { it.name.contains("чужое") },
         )
     }
+
+    @Test
+    fun `письмо, исчерпавшее попытки, не прячется`() {
+
+        // #1409: такое письмо переставало ждать и лежало шифртекстом вечно, молча.
+        val letters = KeptLetters(tmp.newFolder(), tries = 2)
+        letters.keep(first, "запечатанное".toByteArray())
+        letters.tried(first)
+
+        assertEquals(emptyList<String>(), letters.exhausted())
+
+        letters.tried(first)
+
+        assertEquals(emptyList<String>(), letters.waiting())
+        assertEquals(listOf(first), letters.exhausted())
+
+        letters.done(first)
+
+        assertEquals(emptyList<String>(), letters.exhausted())
+    }
 }
