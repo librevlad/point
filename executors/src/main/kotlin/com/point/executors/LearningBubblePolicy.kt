@@ -93,7 +93,7 @@ class LearningBubblePolicy @Inject constructor(
 
                 // Отвеченный вопрос не предлагается заново (#1010, ADR-0001 §9): успешно
                 // выполненное исследование уходит вниз, а не остаётся главным действием.
-                { if (graph != null && alreadyAnswered(it, graph)) 1 else 0 },
+                { if (graph != null && com.point.core.flow.alreadyAnswered(it, graph)) 1 else 0 },
 
                 // Действию, которому нечем работать, не быть первым (#996): оно само
                 // говорит, чего ему не хватает, — и уступает тому, кто это даёт.
@@ -108,16 +108,6 @@ class LearningBubblePolicy @Inject constructor(
             ),
         )
     }
-
-    /**
-     * Вопрос этого действия уже закрыт находкой для этого объекта.
-     *
-     * Вопрос — заявленный действием (meta.answers), когда он не совпадает с id: «Считать QR»
-     * отвечает на qr-content, и при уже показанном содержимом уходит вниз (#1119).
-     */
-    private fun alreadyAnswered(c: Capability, graph: com.point.core.flow.GraphState): Boolean =
-        com.point.core.flow.investigationStateOf(graph.obj.metadata, c.meta.answers ?: c.id) ==
-            com.point.core.flow.InvestigationState.FOUND
 
     private fun cloudReadOfAlreadyRead(c: Capability, state: ObjectState): Boolean =
         state.kind == com.point.core.model.ObjectKind.IMAGE &&

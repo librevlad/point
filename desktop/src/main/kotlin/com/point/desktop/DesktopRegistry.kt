@@ -37,11 +37,18 @@ class DesktopRegistry(
         // Негодному объекту читать себя не предлагается — то же правило, что на телефоне
         // (#994): компьютер сам помечает пустой файл при приёме (`Inbox.kt`).
         return com.point.core.flow.offeredWhenUnfit(state, graph.facts, applicable)
-            .sortedWith(com.point.core.flow.byIntentThenPriority(state, intent))
+            // Отвеченный вопрос уступает следующему шагу — то же правило, что на телефоне
+            // (#1411): расшифрованная запись не зовёт «Расшифровать» первым.
+            .sortedWith(
+                compareBy<Capability> { if (com.point.core.flow.alreadyAnswered(it, graph)) 1 else 0 }
+                    .then(com.point.core.flow.byIntentThenPriority(state, intent)),
+            )
             .map {
                 Bubble(
                     it.icon,
-                    it.label(state),
+
+                    // Имя видит знание (#1010): отработавший виток зовётся дальше.
+                    it.label(graph),
                     it.id,
                     it.produces(state) ?: state,
 

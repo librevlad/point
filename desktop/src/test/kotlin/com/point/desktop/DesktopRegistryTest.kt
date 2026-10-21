@@ -164,4 +164,24 @@ class DesktopRegistryTest {
             (thrown as NoWayHere).why,
         )
     }
+
+    @Test
+    fun `отвеченный вопрос уступает следующему шагу`() {
+
+        // #1411: после расшифровки «Расшифровать» оставалось первым своим приоритетом.
+        val transcribe = Declared("transcribe", priority = 10, serves = setOf(com.point.core.model.Intent.UNDERSTAND))
+        val understand = Declared("understand", priority = 31, serves = setOf(com.point.core.model.Intent.UNDERSTAND))
+        val both = DesktopRegistry(setOf(transcribe, understand))
+        val heard = com.point.core.flow.GraphState(
+            com.point.core.model.PointObject(
+                "rec", "audio/ogg", com.point.core.model.ScratchRef("/tmp/x.ogg"), ObjectState(ObjectKind.AUDIO),
+                metadata = mapOf(
+                    com.point.core.flow.investigationKey(transcribe.id) to com.point.core.flow.InvestigationState.FOUND.wire,
+                ),
+            ),
+        )
+
+        assertEquals(listOf("transcribe", "understand"), both.bubblesFor(ObjectState(ObjectKind.AUDIO)).map { it.title })
+        assertEquals(listOf("understand", "transcribe"), both.bubblesFor(heard).map { it.title })
+    }
 }
