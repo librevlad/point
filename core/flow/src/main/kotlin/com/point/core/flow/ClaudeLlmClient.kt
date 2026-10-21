@@ -30,6 +30,8 @@ class ClaudeLlmClient(
 
     override fun canHandle(obj: PointObject): Boolean = !isAudio(obj)
 
+    override fun strongAt(obj: PointObject, prompt: String): Boolean = claudeStrongAt(obj, prompt)
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
             val key = apiKey
@@ -115,3 +117,15 @@ class ClaudeLlmClient(
         const val MAX_TOKENS = 8192
     }
 }
+
+/**
+ * Где Claude сильнее остальных в цепочке: PDF он читает сам, целым документом, и длинный
+ * текст держит без потерь. Снимки сюда не входят — их порядок решает [LlmClient.strongVision].
+ */
+fun claudeStrongAt(obj: PointObject, prompt: String): Boolean =
+    obj.mime == "application/pdf" || prompt.length >= CLAUDE_LONG_TEXT_CHARS
+
+/** С какой длины просьба — «длинный документ»: страниц пять обычного текста. */
+const val CLAUDE_LONG_TEXT_CHARS = 8_000
+
+const val ANTHROPIC_PROVIDER_ID = "anthropic"

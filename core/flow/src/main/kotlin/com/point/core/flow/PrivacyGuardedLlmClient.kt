@@ -40,6 +40,8 @@ class PrivacyGuardedLlmClient(
 
     override fun canHandle(obj: PointObject) = inner.canHandle(obj)
 
+    override fun strongAt(obj: PointObject, prompt: String) = inner.strongAt(obj, prompt)
+
     override val strongVision: Boolean get() = inner.strongVision
 
     // Ключ на месте — действие остаётся видимым и объясняет отказ по тапу, а не

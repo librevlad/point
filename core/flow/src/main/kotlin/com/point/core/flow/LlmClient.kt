@@ -21,6 +21,12 @@ interface LlmClient {
 
     val strongVision: Boolean get() = false
 
+    /**
+     * Эта работа — то, в чём исполнитель сильнее остальных: цепочка ставит его первым (просьба
+     * владельца 21.10.2026 — Claude вперёд там, где он силён). Порядок, не фильтр.
+     */
+    fun strongAt(obj: PointObject, prompt: String): Boolean = false
+
     val configured: Boolean get() = true
 
     /**
