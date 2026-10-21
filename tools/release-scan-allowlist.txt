@@ -31,3 +31,12 @@ sk-or-v1-0123456789abcdef0123
 # Исключение из «живой ключ не вносится»: клиентский ключ Firebase ший­ется в приложение штатно.
 # Решение владельца 07.09.2026 при подготовке 0.3.7.
 AIzaSyB6TpPoNvNxQhj1AEeuajfGnBWR0r44lys
+
+# Выдуманные ключи из тестов распознавания ключа по началу (AiProvidersTest, KeyOnboardingTest,
+# KeysOnPcTest, #1451) и порядка Claude (ClaudeFirstWhereStrongTest, #1462): цифры по порядку,
+# живыми не были никогда. В артефакт не попадают: тесты не компилируются в релиз.
+gsk_0123456789abcdefghij
+sk-0123456789abcdef0123456789
+sk-ant-0123456789abcdef
+sk-ant-api03-0123456789
+sk-or-v1-0123456789abcdef
