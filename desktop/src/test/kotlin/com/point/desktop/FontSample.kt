@@ -24,12 +24,12 @@ import com.point.desktop.ui.PointType
 
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 private val VARIANTS = listOf(
-    "1 · как сейчас (умолчание библиотеки)" to null,
+    "1 · как сейчас (лёгкий хинтинг, дробное положение)" to null,
     "2 · субпиксельное + лёгкий хинтинг" to
         FontRasterizationSettings(FontSmoothing.SubpixelAntiAlias, FontHinting.Slight, true, false),
-    "3 · субпиксельное + полный хинтинг" to
-        FontRasterizationSettings(FontSmoothing.SubpixelAntiAlias, FontHinting.Full, false, true),
-    "4 · обычное сглаживание + полный хинтинг" to
+    "3 · без хинтинга" to
+        FontRasterizationSettings(FontSmoothing.AntiAlias, FontHinting.None, true, false),
+    "4 · прежнее «квадратное»: полный хинтинг, автохинтер (#590)" to
         FontRasterizationSettings(FontSmoothing.AntiAlias, FontHinting.Full, false, true),
     "5 · без сглаживания" to
         FontRasterizationSettings(FontSmoothing.None, FontHinting.Full, false, false),
