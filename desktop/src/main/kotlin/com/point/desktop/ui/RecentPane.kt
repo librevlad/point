@@ -131,7 +131,14 @@ class NewObjectWays(
     val clipboardNote: () -> String? = { null },
 )
 
-/** Раздельная кнопка «Новый объект» с меню остальных способов. */
+/**
+ * Раздельная кнопка «Новый объект» с меню остальных способов.
+ *
+ * Вход один: файл выбирает сама кнопка, и в меню его второй раз нет — там только то, чего кнопка
+ * не делает. Подсказка «бросьте файл» тоже живёт в одном месте, под кнопкой ([RecentPane]):
+ * повторённая в меню, в пустом списке и в пустой правой панели, она читалась как четыре
+ * разных входа в одно и то же действие.
+ */
 @Composable
 internal fun NewObjectButton(ways: NewObjectWays, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
@@ -142,16 +149,17 @@ internal fun NewObjectButton(ways: NewObjectWays, modifier: Modifier = Modifier)
         onMain = ways.pickFile,
         menuOpen = open,
         onMenu = { open = it },
-        items = listOf(
-            MenuItem("Выбрать файл…", GlassIcons.Folder, ways.pickFile, keys = "Ctrl+O"),
-            MenuItem("Из буфера", GlassIcons.Clipboard, ways.takeClipboard, note = clip, keys = "Ctrl+V"),
-            MenuItem("Снимок экрана", GlassIcons.Screen, ways.grabScreen, keys = "Ctrl+Shift+S"),
-            MenuItem("Принять по ссылке", GlassIcons.Link, ways.receiveFile),
-        ),
-        hint = "Файл можно просто бросить в это окно",
+        items = newObjectMenu(ways, clip),
         modifier = modifier,
     )
 }
+
+/** Меню «Нового объекта» — только то, чего не делает сама кнопка; [clip] — что лежит в буфере. */
+internal fun newObjectMenu(ways: NewObjectWays, clip: String?): List<MenuItem> = listOf(
+    MenuItem("Из буфера", GlassIcons.Clipboard, ways.takeClipboard, note = clip, keys = "Ctrl+V"),
+    MenuItem("Снимок экрана", GlassIcons.Screen, ways.grabScreen, keys = "Ctrl+Shift+S"),
+    MenuItem("Принять по ссылке", GlassIcons.Link, ways.receiveFile),
+)
 
 /**
  * Левая панель окна: «Новый объект», идущая работа, ожидание файла по ссылке и «Недавнее».
@@ -173,7 +181,7 @@ internal fun RecentPane(
 ) = Column(modifier) {
     NewObjectButton(ways)
     Text(
-        "Файл можно бросить в окно, Ctrl+V вставляет из буфера",
+        howToBring(linked),
         style = PointType.note,
         modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp),
     )
@@ -300,7 +308,8 @@ internal fun RecentList(
         }
 
         when {
-            lines.isEmpty() -> EmptyNote("Пока пусто. " + howToBring(linked))
+            // Как принести объект, сказано под «Новым объектом» прямо над списком.
+            lines.isEmpty() -> EmptyNote("Пока пусто")
             found.isEmpty() -> EmptyNote("В «Недавнем» такого нет")
         }
     }
@@ -313,7 +322,7 @@ private fun EmptyNote(text: String) {
 }
 
 /**
- * Как принести сюда объект — словами, которые правда сработают: поделиться с телефона можно,
+ * Как принести сюда объект — одна строка под «Новым объектом», словами, которые правда сработают: поделиться с телефона можно,
  * только когда устройства связаны (решение владельца 20.10.2026 — вход для этого и нужен).
  */
 internal fun howToBring(linked: Boolean): String =

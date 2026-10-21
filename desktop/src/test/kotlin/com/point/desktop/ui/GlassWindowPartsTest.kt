@@ -1,5 +1,6 @@
 package com.point.desktop.ui
 
+import androidx.compose.ui.unit.dp
 import com.point.core.flow.ClipboardPayload
 import com.point.core.ui.ObjectVerdict
 import com.point.desktop.JournalEntry
@@ -114,6 +115,28 @@ class GlassWindowPartsTest {
 
         assertTrue("скрытые шаги не сосчитаны: ${segments[2].text}", "2" in segments[2].text && segments[2].faded)
         assertTrue("в полосе не последние шаги: ${segments.drop(3).map { it.text }}", segments.drop(3).map { it.text.substringBefore(" ·") } == listOf("Шаг 3", "Шаг 4", "Шаг 5"))
+    }
+
+    @Test
+    fun `узкая полоса истории стягивает шаги в счёт, а не обрезает их за краем`() {
+        val entry = entry(*(1..5).map { step("Шаг $it", at(10, it), StepOutcome.DONE) }.toTypedArray())
+
+        assertEquals("широкой полосе не хватило шагов", HISTORY_STEPS, historyStepsFit(900.dp))
+        assertEquals("узкая полоса держит шаги, которые в неё не влезут", 0, historyStepsFit(320.dp))
+
+        val narrow = historySegments(entry, HEADLINE, zone, historyStepsFit(320.dp))
+        assertEquals("в узкой полосе не откуда, вещь и счёт: ${narrow.map { it.text }}", 3, narrow.size)
+        assertTrue("скрытые шаги не сосчитаны все: ${narrow.last().text}", "5" in narrow.last().text && narrow.last().faded)
+    }
+
+    @Test
+    fun `меню нового объекта не повторяет то, что делает сама кнопка`() {
+        val ways = NewObjectWays(pickFile = {}, takeClipboard = {}, grabScreen = {}, receiveFile = {})
+
+        val menu = newObjectMenu(ways, clip = null)
+
+        assertTrue("выбор файла и в кнопке, и в меню: ${menu.map { it.title }}", menu.none { it.onClick === ways.pickFile })
+        assertFalse("в меню снова «Выбрать файл»", menu.any { "файл" in it.title.lowercase() && "Выбрать" in it.title })
     }
 
     @Test

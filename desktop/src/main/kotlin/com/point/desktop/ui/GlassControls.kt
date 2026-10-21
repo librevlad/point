@@ -70,7 +70,6 @@ fun SplitButton(
     menuOpen: Boolean,
     onMenu: (Boolean) -> Unit,
     items: List<MenuItem>,
-    hint: String?,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(18.dp)
@@ -104,7 +103,7 @@ fun SplitButton(
             }
         }
         if (menuOpen) {
-            GlassMenu(items = items, hint = hint, onDismiss = { onMenu(false) })
+            GlassMenu(items = items, onDismiss = { onMenu(false) })
         }
     }
 }
@@ -123,7 +122,7 @@ private object BelowRight : PopupPositionProvider {
 }
 
 @Composable
-private fun GlassMenu(items: List<MenuItem>, hint: String?, onDismiss: () -> Unit) {
+private fun GlassMenu(items: List<MenuItem>, onDismiss: () -> Unit) {
     Popup(popupPositionProvider = BelowRight, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         val shape = RoundedCornerShape(16.dp)
         Column(
@@ -138,10 +137,6 @@ private fun GlassMenu(items: List<MenuItem>, hint: String?, onDismiss: () -> Uni
                     onDismiss()
                     item.onClick()
                 }
-            }
-            if (hint != null) {
-                Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp).fillMaxWidth().height(1.dp).background(PointColors.hairline))
-                Text(hint, style = PointType.note, modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 6.dp))
             }
         }
     }

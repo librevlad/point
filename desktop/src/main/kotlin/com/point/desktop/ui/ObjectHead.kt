@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -144,8 +145,10 @@ private fun objectBytes(item: InboxItem): Long? =
 /**
  * «История» — путь вещи полосой (макет 19.10.2026): откуда пришла, она сама, что с ней делали.
  *
- * Щелчок раскрывает тот же путь строками — с пояснением у каждого шага: сорвавшийся шаг обязан
- * быть виден со своей причиной, а не только словом «не вышло» в полосе.
+ * Полоса не листается вбок, как пилюли на телефоне: на компьютере ни колеса, ни пальца для этого
+ * нет, и обрезанный шаг просто пропадал за краем. Она стягивается по ширине — средние шаги
+ * уходят в «ещё N», — а щелчок раскрывает тот же путь строками, с пояснением у каждого шага:
+ * сорвавшийся шаг обязан быть виден со своей причиной, а не только словом «не вышло» в полосе.
  */
 @Composable
 internal fun History(entry: JournalEntry, current: String, now: Long, zone: ZoneId) {
@@ -153,7 +156,9 @@ internal fun History(entry: JournalEntry, current: String, now: Long, zone: Zone
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("ИСТОРИЯ", style = PointType.label.copy(color = PointColors.muted))
-            SegmentBar(historySegments(entry, current, zone), onClick = { open = !open })
+            BoxWithConstraints(Modifier.weight(1f)) {
+                SegmentBar(historySegments(entry, current, zone, historyStepsFit(maxWidth)), onClick = { open = !open })
+            }
         }
         if (open) {
             Column(
@@ -182,13 +187,28 @@ internal fun History(entry: JournalEntry, current: String, now: Long, zone: Zone
 /** Сколько последних шагов видно в полосе; раньше них — счёт скрытых. */
 internal const val HISTORY_STEPS = 3
 
-/** Сегменты полосы «История»: откуда, сама вещь, последние шаги. */
-internal fun historySegments(entry: JournalEntry, current: String, zone: ZoneId): List<Segment> = buildList {
+/** Примерная ширина одного шага в полосе: по ней решается, сколько шагов в неё влезает. */
+private val HISTORY_STEP_WIDTH = 150.dp
+
+/** Место под «откуда», саму вещь и счёт скрытых — оно у полосы есть всегда. */
+private val HISTORY_FIXED_WIDTH = 300.dp
+
+/** Сколько последних шагов помещается в полосу шириной [width]; остальные уходят в «ещё N». */
+internal fun historyStepsFit(width: Dp): Int =
+    ((width - HISTORY_FIXED_WIDTH) / HISTORY_STEP_WIDTH).toInt().coerceIn(0, HISTORY_STEPS)
+
+/** Сегменты полосы «История»: откуда, сама вещь, последние [steps] шагов и счёт остальных. */
+internal fun historySegments(
+    entry: JournalEntry,
+    current: String,
+    zone: ZoneId,
+    steps: Int = HISTORY_STEPS,
+): List<Segment> = buildList {
     add(Segment(sourceShort(entry.source), icon = sourceIcon(entry.source)))
     add(Segment(current, current = true))
-    val hidden = entry.steps.size - HISTORY_STEPS
+    val hidden = entry.steps.size - steps
     if (hidden > 0) add(Segment("ещё $hidden", faded = true))
-    entry.steps.takeLast(HISTORY_STEPS).forEach { step ->
+    entry.steps.takeLast(steps).forEach { step ->
         add(Segment(stepLabel(step, zone), faded = step.outcome == StepOutcome.FAILED))
     }
 }
