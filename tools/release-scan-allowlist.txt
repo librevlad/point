@@ -39,4 +39,5 @@ gsk_0123456789abcdefghij
 sk-0123456789abcdef0123456789
 sk-ant-0123456789abcdef
 sk-ant-api03-0123456789
+sk-proj-0123456789abcdef
 sk-or-v1-0123456789abcdef
