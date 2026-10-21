@@ -39,7 +39,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, google as google_mod, ids, mailbox, pages, push as push_mod, store, upload_page
+from . import db, google as google_mod, i18n, ids, mailbox, pages, push as push_mod, store, upload_page
+from .i18n import t
 from .config import Settings, settings_from_env
 
 DEVICE_KINDS = ("PHONE", "PC")
@@ -149,13 +150,13 @@ def _vcard_fields(text: str) -> tuple[str, list[tuple[str, str]]]:
         if key == "FN" and not name:
             name = value
         elif key == "TEL":
-            fields.append(("Телефон", value))
+            fields.append((t("Телефон"), value))
         elif key == "EMAIL":
-            fields.append(("Почта", value))
+            fields.append((t("Почта"), value))
         elif key == "ORG":
-            fields.append(("Организация", value))
+            fields.append((t("Организация"), value))
         elif key == "ADR":
-            fields.append(("Адрес", value.replace(";", " ").strip()))
+            fields.append((t("Адрес"), value.replace(";", " ").strip()))
     return name, fields
 
 
@@ -170,10 +171,12 @@ def _geo_point(text: str) -> str | None:
 def _weight(size: int) -> str:
     """Вес человеческими словами: «4,2 МБ» вместо 4404019."""
     if size < 1024:
-        return "%d Б" % size
+        return t("%d Б") % size
     if size < 1024 * 1024:
-        return "%d КБ" % round(size / 1024)
-    return ("%.1f МБ" % (size / (1024 * 1024))).replace(".", ",")
+        return t("%d КБ") % round(size / 1024)
+    text = t("%.1f МБ") % (size / (1024 * 1024))
+    # Десятичная запятая — у украинского и русского; английский пишет точку.
+    return text if i18n.current() == "en" else text.replace(".", ",")
 
 
 def _kind_word(mime: str, name: str) -> str:
@@ -183,12 +186,12 @@ def _kind_word(mime: str, name: str) -> str:
     if base == "application/pdf" or tail == "pdf":
         return "PDF"
     if base in ("application/zip", "application/x-7z-compressed", "application/vnd.rar") or tail in ("zip", "rar", "7z"):
-        return "Архив"
+        return t("Архив")
     if tail in ("doc", "docx", "xls", "xlsx", "ppt", "pptx"):
-        return "Документ"
+        return t("Документ")
     if base.startswith("video/"):
-        return "Видео"
-    return "Файл"
+        return t("Видео")
+    return t("Файл")
 
 
 def _readable_text(mime: str, data: bytes) -> bool:
@@ -297,7 +300,7 @@ def create_app(
             raise fail(
                 401,
                 "no_pass",
-                "Устройство не в аккаунте. Войдите заново.",
+                t("Устройство не в аккаунте. Войдите заново."),
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return who
@@ -322,14 +325,20 @@ def create_app(
         """
         unreadable = any(e.get("type") == "json_invalid" for e in exc.errors())
         if unreadable:
-            body = {"error": "bad_json", "message": "Запрос не читается — проверьте данные и попробуйте ещё раз."}
+            body = {"error": "bad_json", "message": t("Запрос не читается — проверьте данные и попробуйте ещё раз.")}
         else:
-            body = {"error": "bad_request", "message": "Запрос не подходит по форме — проверьте данные и попробуйте ещё раз."}
+            body = {"error": "bad_request", "message": t("Запрос не подходит по форме — проверьте данные и попробуйте ещё раз.")}
         return JSONResponse(body, status_code=422)
 
     @app.middleware("http")
     async def _hygiene(request: Request, call_next):
-        response = await call_next(request)
+        # Язык человека — на весь запрос (#1473): страницы и отказы читают его через `t`.
+        token = i18n.use(i18n.lang_from(request.headers.get("accept-language")))
+        try:
+            response = await call_next(request)
+        finally:
+            i18n.reset(token)
+        response.headers.setdefault("Vary", "Accept-Language")
         # `no-referrer` — не украшение: без него адрес страницы входа (в нём `login_id`)
         # уехал бы в Google заголовком Referer.
         response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -390,7 +399,7 @@ def create_app(
     ):
         kind = one_line(body.kind).upper()
         if kind not in DEVICE_KINDS:
-            raise fail(400, "bad_kind", "Устройство бывает PHONE или PC.")
+            raise fail(400, "bad_kind", t("Устройство бывает PHONE или PC."))
         now = d.now()
         store.sweep_logins(conn, now)  # просроченные входы уходят сами, отдельного сторожа нет
         login_id, claim_token, code = ids.opaque(32), ids.opaque(32), ids.user_code()
@@ -440,7 +449,7 @@ def create_app(
         try:
             url = dep.google.authorize_url(state=state, challenge=challenge)
         except google_mod.GoogleError as e:
-            return HTMLResponse(pages.failed_page(str(e)), status_code=503)
+            return HTMLResponse(pages.failed_page(i18n.t_reason(str(e))), status_code=503)
         return RedirectResponse(url, status_code=303)
 
     @app.get("/login", response_class=HTMLResponse)
@@ -482,11 +491,11 @@ def create_app(
         if not row or row["done_at"] or row["claimed_at"]:
             return HTMLResponse(pages.gone_page(), status_code=404)
         if error or not code:
-            return HTMLResponse(pages.failed_page("Google не подтвердил вход."), status_code=400)
+            return HTMLResponse(pages.failed_page(t("Google не подтвердил вход.")), status_code=400)
         try:
             person = d.google.exchange(code=code, verifier=row["verifier"])
         except google_mod.GoogleError as e:
-            return HTMLResponse(pages.failed_page(str(e)), status_code=502)
+            return HTMLResponse(pages.failed_page(i18n.t_reason(str(e))), status_code=502)
         user_id = store.upsert_user(
             conn,
             google_sub=person.sub,
@@ -519,14 +528,14 @@ def create_app(
             or row["claimed_at"]
             or not hmac.compare_digest(row["claim_sha256"], ids.sha256_hex(bearer(request)))
         ):
-            raise fail(404, "no_login", "Вход не найден или уже завершён. Начните заново.")
+            raise fail(404, "no_login", t("Вход не найден или уже завершён. Начните заново."))
         if not row["done_at"] or not row["user_id"]:
             return JSONResponse(
                 {"status": "pending", "user_code": row["user_code"], "interval": d.settings.poll_interval},
                 status_code=202,
             )
         if not store.claim_login(conn, login_id, now):
-            raise fail(404, "no_login", "Вход уже забран.")
+            raise fail(404, "no_login", t("Вход уже забран."))
         device_id = store.add_device(
             conn,
             user_id=row["user_id"],
@@ -586,7 +595,7 @@ def create_app(
         )
         row = store.device(conn, me.user_id, me.device_id)
         if not row:  # pragma: no cover - устройство отозвали между двумя запросами
-            raise fail(401, "no_pass", "Устройство отключено.")
+            raise fail(401, "no_pass", t("Устройство отключено."))
         return device_json(row, me, d.now(), d.settings.online_window)
 
     @app.get("/circle")
@@ -633,7 +642,7 @@ def create_app(
     ):
         sealed = (body.sealed or "").strip()
         if not sealed:
-            raise fail(400, "no_settings", "Настройки приехали пустыми.")
+            raise fail(400, "no_settings", t("Настройки приехали пустыми."))
 
         # Число «когда запечатано» сервер достаёт из конверта, не заглядывая в содержимое:
         # оно и есть единственное, что ему нужно знать, чтобы не положить старое поверх нового.
@@ -643,7 +652,7 @@ def create_app(
                 at = int(line[3:]) if line[3:].isdigit() else 0
                 break
         if not store.put_settings(conn, user_id=me.user_id, sealed=sealed, at=at, now=d.now()):
-            raise fail(409, "stale_settings", "На сервере лежат более новые настройки.")
+            raise fail(409, "stale_settings", t("На сервере лежат более новые настройки."))
         return {"ok": True, "at": at}
 
     @app.post("/devices/{device_id}/revoke")
@@ -658,7 +667,7 @@ def create_app(
         Отключить себя — это «Выйти»: отдельной ручки для выхода не заводим.
         """
         if not store.revoke_device(conn, user_id=me.user_id, device_id=device_id, now=d.now()):
-            raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
+            raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         # Пропуск отозван — но письма, лежащие в ящике этого устройства, остались бы на диске
         # навсегда. «Выйти» означает «меня здесь больше нет», а не «я больше не захожу».
         mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
@@ -676,7 +685,7 @@ def create_app(
         Только про себя: чужой адрес здесь означал бы возможность дёргать чужой телефон.
         """
         if device_id != me.device_id:
-            raise fail(403, "not_yours", "Адрес для стука устройство сообщает только про себя.")
+            raise fail(403, "not_yours", t("Адрес для стука устройство сообщает только про себя."))
         address = one_line((await request.body()).decode("utf-8", "replace"))
         store.set_push_address(conn, user_id=me.user_id, device_id=device_id, address=address)
         return {"heard": bool(address)}
@@ -704,7 +713,7 @@ def create_app(
         или так и не пришли.
         """
         if not store.device(conn, me.user_id, device_id):
-            raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
+            raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         address = store.push_address(conn, me.user_id, device_id)
         if d.knocker is None or not address:
             return {"knocked": False, "why": "no_key" if d.knocker is None else "no_address"}
@@ -766,12 +775,12 @@ def create_app(
         """Положить письмо в ящик СВОЕГО устройства: чужому в него не написать."""
         _sweep_blobs(d)
         if not store.device(conn, me.user_id, device_id):
-            raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
+            raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         data = await request.body()
         try:
             bid = mailbox.push(_blobs_root(d), me.user_id, device_id, data)
         except mailbox.Full as e:
-            raise fail(507, "full", str(e))
+            raise fail(507, "full", t(str(e)))
         return PlainTextResponse(bid, headers={"X-Blob-Id": bid})
 
     @app.get("/mbx/{device_id}")
@@ -800,7 +809,7 @@ def create_app(
             did = mailbox.drop_put(_blobs_root(d), me.user_id, data, name,
                                    request.headers.get("X-Drop-Mime", "application/octet-stream"))
         except mailbox.Full as e:
-            raise fail(507, "full", str(e))
+            raise fail(507, "full", t(str(e)))
         return PlainTextResponse(did, headers={"X-Drop-Id": did})
 
     @app.get("/d/{drop_id}")
@@ -860,7 +869,7 @@ def create_app(
         try:
             box = mailbox.inbox_open(_blobs_root(d), me.user_id)
         except mailbox.Full as e:
-            raise fail(507, "full", str(e))
+            raise fail(507, "full", t(str(e)))
         return {"box": box, "url": d.settings.public_url.rstrip("/") + "/u/" + box}
 
     @app.post("/u/{box_id}/close")
@@ -874,7 +883,7 @@ def create_app(
         if not mailbox.inbox_find(_blobs_root(d), box_id):
             return HTMLResponse(pages.link_gone_page(), status_code=404)
         return HTMLResponse(
-            pages.page("Отправить в Point", _upload_form(box_id), head=upload_page.UPLOAD_HEAD)
+            pages.page(t("Отправить в Point"), _upload_form(box_id), head=upload_page.UPLOAD_HEAD)
         )
 
     @app.post("/u/{box_id}")
@@ -897,10 +906,10 @@ def create_app(
             given = form.get("name")
             given = given.strip() if isinstance(given, str) else ""
             if "BEGIN:VCARD" in typed.upper():
-                name = given or "Контакт.vcf"
+                name = given or t("Контакт") + ".vcf"
                 mime = "text/vcard; charset=utf-8"
             else:
-                name = given or "Текст"
+                name = given or t("Текст")
                 mime = "text/plain; charset=utf-8"
             data = typed.encode("utf-8")
         else:
@@ -910,7 +919,7 @@ def create_app(
         try:
             mailbox.inbox_accept(box, data, name, mime)
         except mailbox.Full as e:
-            return HTMLResponse(pages.too_big_page(str(e)), status_code=507)
+            return HTMLResponse(pages.too_big_page(t(str(e))), status_code=507)
         return HTMLResponse(pages.sent_page())
 
     @app.get("/u/{box_id}/take")

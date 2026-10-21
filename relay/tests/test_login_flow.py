@@ -155,7 +155,7 @@ def test_вход_не_настроен_говорит_об_этом_прямо(
         google_client_id="",
         google_client_secret="",
     )
-    with TestClient(app_mod.create_app(settings=settings)) as client:
+    with TestClient(app_mod.create_app(settings=settings), headers={"Accept-Language": "ru"}) as client:
         started = client.post("/auth/start", json={"kind": "PC"}).json()
         response = client.post(
             "/login",
