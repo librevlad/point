@@ -135,4 +135,25 @@ class OutboxTest {
         assertTrue(box.entries().isEmpty())
         assertTrue("пустышка осталась в папке очереди", File(tmp.root, "outbox").listFiles().orEmpty().isEmpty())
     }
+
+    /**
+     * Вещь больше письма не встаёт в очередь (#1456): APK на 230 МБ стоял в ней сутки,
+     * забор с телефона срывался на нём раз за разом и не доходил до соседних записей.
+     */
+    @Test
+    fun `вещь больше письма телефону не встаёт в очередь и называет размер`() {
+        val box = outbox()
+        val huge = File(tmp.root, "app-debug.apk")
+        java.io.RandomAccessFile(huge, "rw").use { it.setLength(PHONE_ROAD_BYTES + 1) }
+        val apk = PointObject("apk", "application/octet-stream", ScratchRef(huge.absolutePath), ObjectState(ObjectKind.UNKNOWN))
+
+        val refused = runCatching { box.add(apk) }.exceptionOrNull()
+
+        assertTrue("слишком большое встало в очередь", refused is TooBigForPhone)
+        assertTrue(box.entries().isEmpty())
+        assertTrue("байты остались в папке очереди", File(tmp.root, "outbox").listFiles().orEmpty().isEmpty())
+
+        val said = kotlinx.coroutines.runBlocking { PcToPhoneRealizer(box).perform(apk, null) }
+        assertTrue("отказ не назвал размер: $said", (said as com.point.core.model.ActionResult.Failure).reason.contains("МБ"))
+    }
 }

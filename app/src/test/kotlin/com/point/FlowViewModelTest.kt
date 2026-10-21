@@ -1466,6 +1466,45 @@ class FlowViewModelTest {
         assertEquals("исход без объекта — не вещь для списка «с компьютера»", 0, vm.fromPcCount.value)
     }
 
+    /**
+     * Одна несъехавшая вещь держала весь забор (#1456, живой прогон 21.10): в очереди
+     * компьютера лежал APK на 230 МБ, письмо с ним не доезжало, и забор отменялся целиком —
+     * скачанное не открывалось и не подтверждалось, телефон раз за разом тянул те же вещи,
+     * а очередь только росла. Теперь доехавшее открывается и уходит из очереди, а
+     * несъехавшее остаётся и называется по имени.
+     */
+    @Test fun `несъехавшая вещь не держит забор остальных`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")),
+            com.point.core.flow.PcOutboxEntry(5, mapOf("name" to "app-debug.apk", "mime" to "application/octet-stream")),
+        )
+        pcTransport.failingDownloads = setOf(5)
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals("доехавшая вещь не открылась", ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+        assertEquals("доехавшая вещь не ушла из очереди — её привезут снова", listOf(1), pcTransport.acked)
+        assertEquals("несъехавшая вещь потерялась из списка", 1, vm.fromPcCount.value)
+    }
+
+    /** Если не доехало ничего, срыв называет вещь, а не безликий «объект». */
+    @Test fun `срыв забора называет несъехавшую вещь`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(5, mapOf("name" to "app-debug.apk", "mime" to "application/octet-stream")),
+        )
+        pcTransport.failingDownloads = setOf(5)
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue("срыв не назвал вещь: ${vm.ui.value.message}", vm.ui.value.message.orEmpty().contains("app-debug.apk"))
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertTrue(pcTransport.acked.isEmpty())
+    }
+
     /** Готовая вещь долгой просьбы, какой её кладёт компьютер (#1416): дом, название, родословная. */
     private fun resultEntry(id: Int, home: String = "in", name: String = "slides.pdf") = com.point.core.flow.PcOutboxEntry(
         id,
@@ -6555,6 +6594,9 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     var outboxFetches = 0
     var downloadOk = true
 
+    /** Вещи, которые не скачиваются никогда — как письмо больше предела дороги. */
+    var failingDownloads: Set<Int> = emptySet()
+
     var capsDelayMs = 0L
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
@@ -6603,7 +6645,7 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     }
     override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String): Boolean {
         atDownload?.invoke(id)
-        if (!downloadOk) return false
+        if (!downloadOk || id in failingDownloads) return false
         java.io.File(targetPath).apply { parentFile?.mkdirs(); writeText("pulled-$id") }
         return true
     }

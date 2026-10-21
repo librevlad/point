@@ -43,6 +43,14 @@ class Outbox(
             source.copyTo(File(dir, "$id.bin"), overwrite = false)
             packedForTravel(obj.metadata) + mapOf("name" to name, "mime" to obj.mime)
         }
+        // Письмо больше предела не доедет никогда (#1456): забор с телефона срывался на нём
+        // раз за разом, а запись так и стояла в очереди — и вместе с ней всё, что легло после.
+        val bin = File(dir, "$id.bin")
+        if (bin.length() > PHONE_ROAD_BYTES) {
+            val bytes = bin.length()
+            bin.delete()
+            throw TooBigForPhone(bytes)
+        }
         File(dir, "$id.meta").writeText(encodePcMeta(meta))
         return id
     }
@@ -134,6 +142,21 @@ class Outbox(
         else -> null
     }
 }
+
+/**
+ * Сколько байт вещи помещается в письмо телефону (#1456).
+ *
+ * Предел письма общий для дороги (`PC_MAX_LETTER_BYTES`), а в письме кроме байтов едут
+ * ещё и слова записи — понятое компьютером бывает десятками килобайт. Запас берётся с
+ * избытком: вещь на границе всё равно лучше отправить ссылкой, чем письмом.
+ */
+internal const val PHONE_ROAD_BYTES: Long = com.point.core.flow.PC_MAX_LETTER_BYTES - 1024L * 1024
+
+/** Вещь не помещается в письмо телефону — отказ называет размер и предел (#1456). */
+class TooBigForPhone(val bytes: Long) : IllegalStateException(
+    "Файл ${com.point.core.flow.megabytes(bytes)} — на телефон за раз уходит до " +
+        com.point.core.flow.megabytes(com.point.core.flow.PC_MAX_LETTER_BYTES.toLong()),
+)
 
 /** Набор едет телефону архивом (#1414): так его байты целиком помещаются в одно письмо. */
 internal const val SET_ARCHIVE_MIME = "application/zip"

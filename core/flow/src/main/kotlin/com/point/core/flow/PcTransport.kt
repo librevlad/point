@@ -133,6 +133,14 @@ const val PC_MAX_LETTER_BYTES = 50 * 1024 * 1024
  */
 const val PC_PULL_FAILED_TEXT = "Не удалось забрать объект — проверьте интернет и попробуйте ещё раз"
 
+/** Тот же срыв, названный вещью (#1456): из нескольких не доехала эта, а не «объект». */
+fun pcPullFailedText(names: List<String>): String {
+    val named = names.filter { it.isNotBlank() }
+    if (named.isEmpty()) return PC_PULL_FAILED_TEXT
+    return "Не удалось забрать " + named.joinToString(", ") { "«$it»" } +
+        " — проверьте интернет и попробуйте ещё раз"
+}
+
 fun pcUnreachableText(why: PcUnreachable): String = when (why) {
     PcUnreachable.NOT_IN_CIRCLE ->
         "Компьютера нет в вашем круге. Запустите «Point для ПК» и войдите в тот же аккаунт."
