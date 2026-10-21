@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 enum class DeviceKind { PHONE, PC }
 
 data class PointAccount(
@@ -67,18 +69,18 @@ data class PendingLogin(
     val startedAtMillis: Long,
 )
 
-const val SIGN_IN_TITLE = "Ваши устройства увидят друг друга"
+val SIGN_IN_TITLE: String get() = tr("Ваши устройства увидят друг друга")
 
-const val SIGN_IN_ACTION = "Войти через Google"
+val SIGN_IN_ACTION: String get() = tr("Войти через Google")
 
 fun signInWaitingLine(code: String): String =
-    if (code.isBlank()) "Подтвердите вход в браузере" else "Подтвердите вход в браузере · код $code"
+    if (code.isBlank()) tr("Подтвердите вход в браузере") else tr("Подтвердите вход в браузере · код {0}", code)
 
-const val MY_DEVICES_TITLE = "Мои устройства"
+val MY_DEVICES_TITLE: String get() = tr("Мои устройства")
 
 fun deviceKindLabel(kind: DeviceKind): String = when (kind) {
-    DeviceKind.PHONE -> "Телефон"
-    DeviceKind.PC -> "Компьютер"
+    DeviceKind.PHONE -> tr("Телефон")
+    DeviceKind.PC -> tr("Компьютер")
 }
 
 /**
@@ -87,14 +89,14 @@ fun deviceKindLabel(kind: DeviceKind): String = when (kind) {
  * «Меньше часа назад» при этом остаётся правдой — последняя связь и впрямь была тогда.
  */
 fun lastSeenLabel(lastSeenMillis: Long?, now: Long, checkedNow: Boolean = true): String {
-    if (lastSeenMillis == null) return "ещё ни разу не выходило на связь"
+    if (lastSeenMillis == null) return tr("ещё ни разу не выходило на связь")
     val ago = now - lastSeenMillis
     return when {
-        ago < LIVE_MS -> if (checkedNow) "на связи" else "меньше часа назад"
-        ago < 60 * 60_000L -> "меньше часа назад"
-        ago < 24 * 60 * 60_000L -> "сегодня"
-        ago < 48 * 60 * 60_000L -> "вчера"
-        else -> "${ago / (24 * 60 * 60_000L)} дн. назад"
+        ago < LIVE_MS -> if (checkedNow) tr("на связи") else tr("меньше часа назад")
+        ago < 60 * 60_000L -> tr("меньше часа назад")
+        ago < 24 * 60 * 60_000L -> tr("сегодня")
+        ago < 48 * 60 * 60_000L -> tr("вчера")
+        else -> tr("{0} дн. назад", ago / (24 * 60 * 60_000L))
     }
 }
 
@@ -102,30 +104,30 @@ private const val LIVE_MS = 2 * 60_000L
 
 fun accountRefusal(status: Int?): SignIn.Refused = when (status) {
     null -> SignIn.Refused(
-        what = "До сервера Point не дозвониться",
-        fix = "Проверьте интернет и попробуйте ещё раз — ничего не потеряно.",
+        what = tr("До сервера Point не дозвониться"),
+        fix = tr("Проверьте интернет и попробуйте ещё раз — ничего не потеряно."),
     )
     401, 403 -> SignIn.Refused(
-        what = "Вход не подтверждён",
-        fix = "Откройте страницу входа заново и завершите вход в браузере.",
+        what = tr("Вход не подтверждён"),
+        fix = tr("Откройте страницу входа заново и завершите вход в браузере."),
     )
     404, 410 -> SignIn.Refused(
-        what = "Вход просрочен",
-        fix = "Страница входа живёт пять минут. Нажмите «Войти через Google» ещё раз.",
+        what = tr("Вход просрочен"),
+        fix = tr("Страница входа живёт пять минут. Нажмите «Войти через Google» ещё раз."),
     )
     429 -> SignIn.Refused(
-        what = "Сервер Point просит подождать",
-        fix = "Слишком много попыток подряд. Повторите через минуту.",
+        what = tr("Сервер Point просит подождать"),
+        fix = tr("Слишком много попыток подряд. Повторите через минуту."),
     )
     else -> SignIn.Refused(
-        what = "Сервер Point ответил отказом ($status)",
-        fix = "Попробуйте ещё раз; если повторится — сервер сейчас не в порядке.",
+        what = tr("Сервер Point ответил отказом ({0})", status),
+        fix = tr("Попробуйте ещё раз; если повторится — сервер сейчас не в порядке."),
     )
 }
 
 val ACCOUNT_REVOKED: SignIn.Refused = SignIn.Refused(
-    what = "Это устройство отключили от аккаунта",
-    fix = "Войдите снова, чтобы вернуть его в круг.",
+    what = tr("Это устройство отключили от аккаунта"),
+    fix = tr("Войдите снова, чтобы вернуть его в круг."),
 )
 
 /**
@@ -136,7 +138,7 @@ val ACCOUNT_REVOKED: SignIn.Refused = SignIn.Refused(
  * переносилась на три строки ради факта, который не нужен.
  */
 fun deviceLine(device: CircleDevice, now: Long, checkedNow: Boolean = true): String = if (device.self) {
-    "это устройство · " + deviceKindLabel(device.kind)
+    tr("это устройство · ") + deviceKindLabel(device.kind)
 } else {
     deviceKindLabel(device.kind) + " · " + lastSeenLabel(device.lastSeenMillis, now, checkedNow)
 }
@@ -148,9 +150,9 @@ fun deviceIconKey(kind: DeviceKind): String = when (kind) {
 }
 
 /** Зачем вообще вход: без этой строки экран просил действие, не назвав причины. */
-const val SIGN_IN_WHY: String =
-    "Войдите в один аккаунт на телефоне и на компьютере — и объект сможет переехать с одного " +
-        "на другой. Для работы на одном устройстве вход не нужен."
+val SIGN_IN_WHY: String get() =
+    tr("Войдите в один аккаунт на телефоне и на компьютере — и объект сможет переехать с одного " +
+        "на другой. Для работы на одном устройстве вход не нужен.")
 
 /**
  * Порядок источников на экране «с чего начать» (#895).

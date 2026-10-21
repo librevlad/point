@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Как называется этот вид знания человеку.
  *
@@ -9,26 +11,26 @@ package com.point.core.flow
  * настоящего.
  */
 fun understoodName(key: String): String? {
-    cellAddress(key)?.let { (row, col) -> return "Ячейка $row×$col" }
+    cellAddress(key)?.let { (row, col) -> return tr("Ячейка {0}×{1}", row, col) }
     return understoodEntityName(key)
 }
 
 private fun understoodEntityName(key: String): String? = when (key.removePrefix(META_ENTITY_PREFIX)) {
-    "phone" -> "Телефон"
-    "email" -> "Почта"
-    "url" -> "Ссылка"
-    "address" -> "Адрес"
-    "date" -> "Дата"
-    "card" -> "Карта"
-    "amount" -> "Сумма"
-    "track" -> "Накладная"
-    "meter" -> "Показание"
-    "qr" -> "QR-код"
-    "geo" -> "Координаты"
-    "place" -> "Место"
-    "receipt" -> "Квитанция"
-    "serial" -> "Номер"
-    "subject" -> "Тема"
+    "phone" -> tr("Телефон")
+    "email" -> tr("Почта")
+    "url" -> tr("Ссылка")
+    "address" -> tr("Адрес")
+    "date" -> tr("Дата")
+    "card" -> tr("Карта")
+    "amount" -> tr("Сумма")
+    "track" -> tr("Накладная")
+    "meter" -> tr("Показание")
+    "qr" -> tr("QR-код")
+    "geo" -> tr("Координаты")
+    "place" -> tr("Место")
+    "receipt" -> tr("Квитанция")
+    "serial" -> tr("Номер")
+    "subject" -> tr("Тема")
     else -> null
 }
 
@@ -49,7 +51,7 @@ fun spiralDelta(before: Map<String, String>, after: Map<String, String>): String
         ?: key.takeIf { it.startsWith(META_CELL_ANCHOR_PREFIX) }?.let {
             val row = after[it + META_ANCHOR_ROW_SUFFIX] ?: before[it + META_ANCHOR_ROW_SUFFIX]
             val col = after[it + META_ANCHOR_COL_SUFFIX] ?: before[it + META_ANCHOR_COL_SUFFIX]
-            if (row.isNullOrBlank() || col.isNullOrBlank()) null else "Ячейка «${row.take(24)}» × «${col.take(24)}»"
+            if (row.isNullOrBlank() || col.isNullOrBlank()) null else tr("Ячейка «{0}» × «{1}»", row.take(24), col.take(24))
         }
     val fresh = mutableListOf<String>()
     val refined = mutableListOf<String>()
@@ -79,10 +81,10 @@ fun spiralDelta(before: Map<String, String>, after: Map<String, String>): String
     }
 
     val parts = buildList {
-        if (fresh.isNotEmpty()) add("нашлось: " + fresh.distinct().joinToString(", "))
-        if (refined.isNotEmpty()) add("уточнено: " + refined.distinct().joinToString(", "))
-        if (confirmed.isNotEmpty()) add("подтверждено: " + confirmed.distinct().joinToString(", "))
-        if (disputed.isNotEmpty()) add("прочтения спорят: " + disputed.distinct().joinToString(", "))
+        if (fresh.isNotEmpty()) add(tr("нашлось: ") + fresh.distinct().joinToString(", "))
+        if (refined.isNotEmpty()) add(tr("уточнено: ") + refined.distinct().joinToString(", "))
+        if (confirmed.isNotEmpty()) add(tr("подтверждено: ") + confirmed.distinct().joinToString(", "))
+        if (disputed.isNotEmpty()) add(tr("прочтения спорят: ") + disputed.distinct().joinToString(", "))
     }
     if (parts.isEmpty()) return null
     return parts.joinToString(" · ").replaceFirstChar { it.uppercaseChar() }

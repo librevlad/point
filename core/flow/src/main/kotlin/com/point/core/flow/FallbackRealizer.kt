@@ -5,6 +5,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.Findings
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 class FallbackRealizer(
     override val capabilityId: CapabilityId,
     private val chain: List<Realizer>,
@@ -55,6 +56,6 @@ class FallbackRealizer(
 
     companion object {
 
-        const val NOBODY_TO_DO_IT = "Это действие сейчас выполнить нечем — вернитесь к объекту и выберите другое"
+        val NOBODY_TO_DO_IT: String get() = tr("Это действие сейчас выполнить нечем — вернитесь к объекту и выберите другое")
     }
 }

@@ -8,6 +8,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.Provenance
 
+import com.point.core.model.tr
 /**
  * Явное исправление или подтверждение значения человеком — единственный путь, которым
  * знание получает `Provenance.HUMAN` (ADR-0001 §8).
@@ -23,7 +24,7 @@ class CorrectValueCapability : Capability {
 
     override val meta = CapabilityMeta(priority = 82, localOnly = true)
 
-    override fun label(state: ObjectState) = "Исправить значение"
+    override fun label(state: ObjectState) = tr("Исправить значение")
 
     override fun accepts(state: ObjectState) = state.kind in EXTRACTED_KINDS
 
@@ -43,18 +44,18 @@ class CorrectValueRealizer : Realizer {
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val key = correctableKey(input.metadata)
-            ?: return ActionResult.Failure("Здесь нечего исправлять", recoverable = true)
+            ?: return ActionResult.Failure(tr("Здесь нечего исправлять"), recoverable = true)
         val current = input.metadata[key].orEmpty()
 
         if (amendment == null) {
             return ActionResult.NeedsInput(
-                "Как правильно?",
+                tr("Как правильно?"),
                 suggestions = listOfNotNull(current.takeIf(String::isNotBlank)),
             )
         }
         val value = amendment.trim()
         if (value.isEmpty()) {
-            return ActionResult.Failure("Пустое значение — исправление отменено", recoverable = true)
+            return ActionResult.Failure(tr("Пустое значение — исправление отменено"), recoverable = true)
         }
 
         // Знание, а не новый объект: правка уходит исходом «выполнено» (ADR-0001 §18)
@@ -67,7 +68,7 @@ class CorrectValueRealizer : Realizer {
         )
         val confirmed = normConsensus(value) == normConsensus(current)
         return ActionResult.Done(
-            if (confirmed) "Подтверждено вами" else "Исправлено: $value",
+            if (confirmed) tr("Подтверждено вами") else tr("Исправлено: {0}", value),
             findings,
         )
     }

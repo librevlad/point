@@ -1,5 +1,8 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
+
 /**
  * Что Point помнит о вещах человека — одним местом (#1026).
  *
@@ -33,14 +36,14 @@ interface PointMemory {
  * сказано ровно то, что произошло, — и «забывать было нечего» тоже исход, а не пустота.
  */
 fun forgottenText(gone: HistoryFootprint?): String {
-    if (gone == null) return "Забыть не вышло — попробуйте ещё раз"
+    if (gone == null) return tr("Забыть не вышло — попробуйте ещё раз")
     val weight = humanWeight(gone.bytes)
-    if (gone.count == 0 && weight == null) return "Забывать было нечего"
+    if (gone.count == 0 && weight == null) return tr("Забывать было нечего")
     val things = gone.count.toLong()
     val what = if (things == 0L) {
-        "всё, что оставалось"
+        tr("всё, что оставалось")
     } else {
-        "$things " + plural(things, "объект", "объекта", "объектов")
+        "$things " + trPlural(things, "объект", "объекта", "объектов")
     }
-    return "Забыто: " + what + (weight?.let { " · $it" } ?: "")
+    return tr("Забыто: ") + what + (weight?.let { " · $it" } ?: "")
 }

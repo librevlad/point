@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -94,7 +95,7 @@ class HttpDropInbox(
 
     override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait {
         if (!network.isAvailable()) return DropWait.Failed(NO_NETWORK_TEXT)
-        val base = base() ?: return DropWait.Failed("Сервер Point не настроен")
+        val base = base() ?: return DropWait.Failed(tr("Сервер Point не настроен"))
         return io {
             runCatching {
                 connect("$base/u/${box.id}/take", "GET").callClosingOnCancel {
@@ -195,10 +196,10 @@ class HttpDropInbox(
     }.getOrDefault("")
 
     private fun refusal(code: Int): String = when (code) {
-        401, 403 -> "Это устройство больше не в вашем круге — войдите заново"
-        404 -> "Ссылка больше не работает — выдайте новую"
-        in 500..599 -> "Сервер Point не отвечает — попробуйте позже"
-        else -> "Сервер Point не принял запрос"
+        401, 403 -> tr("Это устройство больше не в вашем круге — войдите заново")
+        404 -> tr("Ссылка больше не работает — выдайте новую")
+        in 500..599 -> tr("Сервер Point не отвечает — попробуйте позже")
+        else -> tr("Сервер Point не принял запрос")
     }
 
     private fun base(): String? =
@@ -218,10 +219,10 @@ class HttpDropInbox(
 
     /** Какой шаг приёма сорвался — это в журнал, человеку от названия шага пользы нет (#1077). */
     private companion object {
-        const val OPEN_STEP = "приём файла — открыть ящик"
-        const val AWAIT_STEP = "приём файла — дождаться файла"
-        const val SAVE_STEP = "приём файла — положить файл на устройство"
-        const val ACK_STEP = "приём файла — подтвердить приём"
-        const val CLOSE_STEP = "приём файла — закрыть ящик"
+        val OPEN_STEP: String get() = tr("приём файла — открыть ящик")
+        val AWAIT_STEP: String get() = tr("приём файла — дождаться файла")
+        val SAVE_STEP: String get() = tr("приём файла — положить файл на устройство")
+        val ACK_STEP: String get() = tr("приём файла — подтвердить приём")
+        val CLOSE_STEP: String get() = tr("приём файла — закрыть ящик")
     }
 }

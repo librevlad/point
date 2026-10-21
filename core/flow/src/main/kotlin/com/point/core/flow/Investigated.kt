@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.ActionResult
 import com.point.core.model.Findings
 
+import com.point.core.model.tr
 /**
  * Исследование либо принесло знание, либо честно не вышло (#863).
  *
@@ -36,10 +37,10 @@ suspend fun investigated(whenFailed: String? = null, findings: suspend () -> Fin
     )
 
 /** Исследование сорвалось, а своей причины у него не нашлось. */
-const val INVESTIGATION_FAILED = "исследование не удалось"
+val INVESTIGATION_FAILED: String get() = tr("исследование не удалось")
 
 /** Текста, за которым шли, у объекта не оказалось. */
-const val NO_TEXT_PAYLOAD = "текст объекта недоступен"
+val NO_TEXT_PAYLOAD: String get() = tr("текст объекта недоступен")
 
 /**
  * Сколько текста берётся за один заход разведки.

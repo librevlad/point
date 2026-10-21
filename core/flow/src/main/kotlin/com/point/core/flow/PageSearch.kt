@@ -1,5 +1,8 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
+
 data class PageMatch(
 
     val atoms: List<Atom>,
@@ -79,15 +82,6 @@ internal fun foldForSearch(raw: CharSequence): String =
 private const val SEARCH_NOISE = "-–—«»„“”\"'‘’⚠"
 
 fun foundOnPageLabel(matches: Int): String =
-    if (matches == 0) "Ничего не нашлось" else "Нашлось $matches ${placesWord(matches)}"
+    if (matches == 0) tr("Ничего не нашлось") else tr("Нашлось {0} {1}", matches, placesWord(matches))
 
-private fun placesWord(n: Int): String {
-    val hundred = n % 100
-    val ten = n % 10
-    return when {
-        hundred in 11..14 -> "мест"
-        ten == 1 -> "место"
-        ten in 2..4 -> "места"
-        else -> "мест"
-    }
-}
+private fun placesWord(n: Int): String = trPlural(n, "место", "места", "мест")

@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.ObjectKind
 import com.point.core.model.RelationType
 
+import com.point.core.model.tr
 /**
  * Обратное преобразование того, что Point только что сделал (#925).
  *
@@ -38,12 +39,12 @@ fun givesBackTheSource(capability: Capability, graph: GraphState, sourceKind: Ob
 }
 
 /** Вторая строка такого действия: исходник никуда не делся. */
-fun sourceIsHere(kind: ObjectKind): String = "у вас это уже есть — " + wasCalled(kind)
+fun sourceIsHere(kind: ObjectKind): String = tr("у вас это уже есть — ") + wasCalled(kind)
 
 private fun wasCalled(kind: ObjectKind): String = when (kind) {
-    ObjectKind.TEXT -> "исходный текст рядом"
-    ObjectKind.IMAGE -> "исходный снимок рядом"
-    ObjectKind.PDF -> "исходный документ рядом"
-    ObjectKind.AUDIO -> "исходная запись рядом"
-    else -> "исходник рядом"
+    ObjectKind.TEXT -> tr("исходный текст рядом")
+    ObjectKind.IMAGE -> tr("исходный снимок рядом")
+    ObjectKind.PDF -> tr("исходный документ рядом")
+    ObjectKind.AUDIO -> tr("исходная запись рядом")
+    else -> tr("исходник рядом")
 }

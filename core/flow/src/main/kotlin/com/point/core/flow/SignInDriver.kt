@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlinx.coroutines.delay
 
 fun interface BrowserOpener {
@@ -104,8 +105,8 @@ class SignInDriver(
         pending.clear()
         onState(
             SignIn.Refused(
-                what = "Вход не подтвердили за пять минут",
-                fix = "Нажмите «Войти через Google» ещё раз — страница входа откроется заново.",
+                what = tr("Вход не подтвердили за пять минут"),
+                fix = tr("Нажмите «Войти через Google» ещё раз — страница входа откроется заново."),
             ),
         )
         return null

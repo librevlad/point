@@ -1,8 +1,10 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 private const val NAME_LIMIT = 40
 
-private const val UNNAMED_TEXT = "Текст"
+private val UNNAMED_TEXT: String get() = tr("Текст")
 
 fun textObjectName(text: String, limit: Int = NAME_LIMIT): String {
 
@@ -67,8 +69,8 @@ private val TRAILING = charArrayOf(' ', ',', '.', ';', '!', '?', '-', '–', '�
  */
 fun outboundFileName(name: String?, mime: String): String {
     val ext = extensionForMime(mime)
-    val fallback = if (ext.isBlank()) "объект" else "объект.$ext"
-    val base = safeFileName(name?.takeIf { it.isNotBlank() } ?: return fallback, ifBlank = "объект")
+    val fallback = if (ext.isBlank()) tr("объект") else tr("объект.{0}", ext)
+    val base = safeFileName(name?.takeIf { it.isNotBlank() } ?: return fallback, ifBlank = tr("объект"))
     if (base.contains('.') && base.substringAfterLast('.').length in 1..5) return base
     return if (ext.isBlank()) base else "$base.$ext"
 }

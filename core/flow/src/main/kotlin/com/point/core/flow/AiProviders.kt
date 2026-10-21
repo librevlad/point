@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 data class AiProvider(
     val id: String,
 
@@ -95,11 +97,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "openrouter",
         name = "OpenRouter",
-        what = "один ключ — десятки моделей разом",
+        what = tr("один ключ — десятки моделей разом"),
         keyUrl = "https://openrouter.ai/keys",
         baseUrl = "https://openrouter.ai/api/v1",
         models = "google/gemma-4-31b-it:free,openai/gpt-oss-20b:free",
-        freeNote = "бесплатные модели есть",
+        freeNote = tr("бесплатные модели есть"),
         checkedAt = "08.2026",
 
         // Маршрутизатор, а не сервис: присланное уходит тому, к кому он направил, и часть
@@ -113,13 +115,13 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = GROQ_PROVIDER_ID,
         name = "Groq",
-        what = "самый быстрый ответ из бесплатных; им же Point расшифровывает голосовые",
+        what = tr("самый быстрый ответ из бесплатных; им же Point расшифровывает голосовые"),
         keyUrl = "https://console.groq.com/keys",
         baseUrl = "https://api.groq.com/openai/v1",
         // Живой список спрошен у самого сервиса (GET /models, 01.09.2026): все llama
         // сняты, глаз (vision) у Groq не осталось вовсе — он читает текст и речь.
         models = "openai/gpt-oss-120b,qwen/qwen3.6-27b",
-        freeNote = "бесплатный уровень с лимитом в минуту",
+        freeNote = tr("бесплатный уровень с лимитом в минуту"),
         checkedAt = "09.2026",
 
         // «Groq is not permitted to use Inputs or Outputs for training or fine-tuning»:
@@ -133,11 +135,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         id = MISTRAL_PROVIDER_ID,
         name = "Mistral",
 
-        what = "лучше всех бесплатных читает фото документа — им Point разбирает страницу",
+        what = tr("лучше всех бесплатных читает фото документа — им Point разбирает страницу"),
         keyUrl = "https://console.mistral.ai/api-keys",
         baseUrl = "https://api.mistral.ai/v1",
         models = "pixtral-12b-2409,mistral-medium-latest",
-        freeNote = "бесплатный уровень после подтверждения телефона",
+        freeNote = tr("бесплатный уровень после подтверждения телефона"),
         checkedAt = "08.2026",
 
         // На бесплатном уровне присланное идёт на улучшение моделей, пока человек не
@@ -149,11 +151,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "sambanova",
         name = "SambaNova",
-        what = "понимает фотографии, отвечает стабильно",
+        what = tr("понимает фотографии, отвечает стабильно"),
         keyUrl = "https://cloud.sambanova.ai/apis",
         baseUrl = "https://api.sambanova.ai/v1",
         models = "gemma-4-31B-it",
-        freeNote = "бесплатный уровень",
+        freeNote = tr("бесплатный уровень"),
         checkedAt = "08.2026",
 
         // На витрине сказано «не видим и не собираем», в самом соглашении об обучении
@@ -165,12 +167,12 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "gemini",
         name = "Google Gemini",
-        what = "хорошо понимает фотографии",
+        what = tr("хорошо понимает фотографии"),
         keyUrl = "https://aistudio.google.com/apikey",
 
         baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
         models = "gemini-flash-latest,gemini-pro-latest",
-        freeNote = "бесплатная квота в сутки",
+        freeNote = tr("бесплатная квота в сутки"),
         checkedAt = "08.2026",
 
         // Google прямо делит: бесплатный уровень идёт на улучшение продуктов Google,
@@ -183,11 +185,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "cerebras",
         name = "Cerebras",
-        what = "быстрый текст, картинки не понимает",
+        what = tr("быстрый текст, картинки не понимает"),
         keyUrl = "https://cloud.cerebras.ai",
         baseUrl = "https://api.cerebras.ai/v1",
         models = "gpt-oss-120b",
-        freeNote = "бесплатный уровень",
+        freeNote = tr("бесплатный уровень"),
         checkedAt = "08.2026",
 
         // В условиях об обучении на присланном не сказано ничего.
@@ -200,11 +202,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         id = "zhipu",
         name = "Z.ai (Zhipu)",
 
-        what = "видит картинки, но часто отвечает «занят»",
+        what = tr("видит картинки, но часто отвечает «занят»"),
         keyUrl = "https://z.ai/manage-apikey/apikey-list",
         baseUrl = "https://api.z.ai/api/paas/v4",
         models = "glm-4.6v-flash",
-        freeNote = "бесплатная модель, лимит не назван",
+        freeNote = tr("бесплатная модель, лимит не назван"),
         checkedAt = "08.2026",
 
         // У международной службы обещание есть, у материковой — свои правила и свой
@@ -216,11 +218,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "nvidia",
         name = "NVIDIA NIM",
-        what = "каталог чужих моделей на своих карточках: мелкие отвечают сразу, крупные ждут запуска",
+        what = tr("каталог чужих моделей на своих карточках: мелкие отвечают сразу, крупные ждут запуска"),
         keyUrl = "https://build.nvidia.com/settings/api-keys",
         baseUrl = "https://integrate.api.nvidia.com/v1",
         models = "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct",
-        freeNote = "бесплатные вызовы после регистрации, предел не назван",
+        freeNote = tr("бесплатные вызовы после регистрации, предел не назван"),
         checkedAt = "18.08.2026",
 
         // В условиях NVIDIA про обучение на присланном прямо не сказано; молчим, пока не проверено.
@@ -232,11 +234,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "modelscope",
         name = "ModelScope",
-        what = "большие Qwen3-VL даром — читает фото документа целиком",
+        what = tr("большие Qwen3-VL даром — читает фото документа целиком"),
         keyUrl = "https://modelscope.cn/my/myaccesstoken",
         baseUrl = "https://api-inference.modelscope.ai/v1",
         models = "Qwen/Qwen3-VL-235B-A22B-Instruct,Qwen/Qwen3-VL-8B-Instruct",
-        freeNote = "бесплатно после регистрации, суточный предел вызовов",
+        freeNote = tr("бесплатно после регистрации, суточный предел вызовов"),
         checkedAt = "08.2026",
 
         // Условия про обучение на присланном не опубликованы.
@@ -252,11 +254,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "cloudflare",
         name = "Cloudflare Workers AI",
-        what = "бесплатная дневная норма у сети, которая рядом с человеком",
+        what = tr("бесплатная дневная норма у сети, которая рядом с человеком"),
         keyUrl = "https://dash.cloudflare.com/profile/api-tokens",
         baseUrl = "https://api.cloudflare.com/client/v4/accounts",
         models = "@cf/mistralai/mistral-small-3.1-24b-instruct,@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-        freeNote = "бесплатная дневная норма",
+        freeNote = tr("бесплатная дневная норма"),
         checkedAt = "08.2026",
 
         // «Cloudflare does not use customer content to train any AI models made available
@@ -268,15 +270,15 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         // Со своим ключом Workers AI молчал вовсе: адрес без номера аккаунта ведёт в никуда,
         // а поля под номер не было — ключ «не подходил», хотя был верным.
         account = AiAccount(
-            label = "Номер аккаунта (Account ID)",
-            where = "Он стоит в адресе страницы после входа: dash.cloudflare.com/<номер>/…",
+            label = tr("Номер аккаунта (Account ID)"),
+            where = tr("Он стоит в адресе страницы после входа: dash.cloudflare.com/<номер>/…"),
             tail = "/ai/v1",
         ),
     ),
     AiProvider(
         id = "openai",
         name = "OpenAI",
-        what = "платно, зато предсказуемо",
+        what = tr("платно, зато предсказуемо"),
         keyUrl = "https://platform.openai.com/api-keys",
         baseUrl = "https://api.openai.com/v1",
         models = "gpt-4o-mini",
@@ -290,7 +292,7 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
     AiProvider(
         id = "anthropic",
         name = "Anthropic Claude",
-        what = "платно, сильна в длинных документах",
+        what = tr("платно, сильна в длинных документах"),
         keyUrl = "https://console.anthropic.com/settings/keys",
 
         baseUrl = "https://api.anthropic.com/v1",
@@ -342,4 +344,4 @@ fun keyErrandService(
 }
 
 // Объяснение про ключ живёт в одном месте — AI_CHAIN_MORE за «Как это работает» (#1262).
-const val AI_KEY_WHY_SHORT: String = "Чтение с фото и распаковка работают и без ключа"
+val AI_KEY_WHY_SHORT: String get() = tr("Чтение с фото и распаковка работают и без ключа")

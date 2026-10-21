@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 sealed interface PcSendOutcome {
 
     data class Sent(
@@ -29,7 +30,7 @@ sealed interface PcSendOutcome {
 }
 
 /** Судьба письма, а не статус RPC: доставлено и ждёт получателя (#672). */
-const val PC_PARKED_TEXT = "Отправлено — компьютер заберёт, когда включится"
+val PC_PARKED_TEXT: String get() = tr("Отправлено — компьютер заберёт, когда включится")
 
 /** Дорога ответа обратно: положить в ящик и дождаться, пока его оттуда спросят (#1321). */
 private const val ANSWER_TRIP_MS: Long = 3_000
@@ -81,7 +82,7 @@ fun PcSendOutcome?.delivered(): Boolean =
  * признаку исполнителя — и он целую минуту стучался в очередь даже после «Скопировано в
  * буфер компьютера», то есть после законченной работы.
  */
-const val PC_STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+val PC_STILL_WORKING: String get() = tr("Компьютер ещё работает — готовое появится в списке «с компьютера»")
 
 /**
  * Чем сменяется слово соседа, когда телефон перестаёт стеречь очередь (#1073).
@@ -94,7 +95,7 @@ const val PC_STILL_WORKING = "Компьютер ещё работает — г�
  *
  * Живёт рядом с обещанием, которое сменяет: переписать одно, не увидев другого, нельзя.
  */
-const val PC_NO_ANSWER_YET = "Компьютер пока не ответил — что вышло, будет видно здесь"
+val PC_NO_ANSWER_YET: String get() = tr("Компьютер пока не ответил — что вышло, будет видно здесь")
 
 /**
  * Отмена человека у соседа — одно объявленное слово на оба устройства (#1073).
@@ -107,7 +108,7 @@ const val PC_NO_ANSWER_YET = "Компьютер пока не ответил �
  * `failureIsWaiting` (#859): иначе переписать его у компьютера значило бы молча вернуть на
  * телефон вечное «ещё работает».
  */
-const val PC_CANCELLED = "Отменено"
+val PC_CANCELLED: String get() = tr("Отменено")
 
 enum class PcUnreachable {
 
@@ -131,29 +132,29 @@ const val PC_MAX_LETTER_BYTES = 50 * 1024 * 1024
  * Письмо лежит на сервере, и его скачивание не зависит от того, включён ли компьютер:
  * объяснять срыв словами «компьютер не отвечает» значило посылать человека проверять не то.
  */
-const val PC_PULL_FAILED_TEXT = "Не удалось забрать объект — проверьте интернет и попробуйте ещё раз"
+val PC_PULL_FAILED_TEXT: String get() = tr("Не удалось забрать объект — проверьте интернет и попробуйте ещё раз")
 
 /** Тот же срыв, названный вещью (#1456): из нескольких не доехала эта, а не «объект». */
 fun pcPullFailedText(names: List<String>): String {
     val named = names.filter { it.isNotBlank() }
     if (named.isEmpty()) return PC_PULL_FAILED_TEXT
-    return "Не удалось забрать " + named.joinToString(", ") { "«$it»" } +
-        " — проверьте интернет и попробуйте ещё раз"
+    return tr("Не удалось забрать ") + named.joinToString(", ") { "«$it»" } +
+        tr(" — проверьте интернет и попробуйте ещё раз")
 }
 
 fun pcUnreachableText(why: PcUnreachable): String = when (why) {
     PcUnreachable.NOT_IN_CIRCLE ->
-        "Компьютера нет в вашем круге. Запустите «Point для ПК» и войдите в тот же аккаунт."
+        tr("Компьютера нет в вашем круге. Запустите «Point для ПК» и войдите в тот же аккаунт.")
     PcUnreachable.PC_ASLEEP ->
-        "Компьютер не отвечает. Проверьте, что «Point для ПК» на нём запущен."
+        tr("Компьютер не отвечает. Проверьте, что «Point для ПК» на нём запущен.")
     PcUnreachable.SERVER_SILENT ->
-        "До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз."
+        tr("До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз.")
     PcUnreachable.TOO_BIG ->
-        "Объект больше 50 МБ — столько за раз между устройствами не переслать."
+        tr("Объект больше 50 МБ — столько за раз между устройствами не переслать.")
     PcUnreachable.NO_NETWORK -> NO_NETWORK_TEXT
 }
 
-const val PC_DEVICE_REVOKED = "Это устройство отключили от аккаунта. Войдите заново."
+val PC_DEVICE_REVOKED: String get() = tr("Это устройство отключили от аккаунта. Войдите заново.")
 
 sealed interface PcActionOutcome {
 

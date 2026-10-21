@@ -4,6 +4,7 @@ import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectState
 
+import com.point.core.model.tr
 /**
  * Кого Resolver позовёт первым для этого действия и этого объекта — или `null`, если некого
  * или устройство об этом не спрашивает (#1413).
@@ -17,7 +18,7 @@ fun interface ChosenExecutor {
 }
 
 /** Части обещания, которые называют здешнего исполнителя, — правду они говорят только о нём. */
-private val SAYS_HERE = setOf("на телефоне", "без сети")
+private val SAYS_HERE = setOf(tr("на телефоне"), tr("без сети"))
 
 private const val PROMISE_SEPARATOR = " · "
 
@@ -39,9 +40,9 @@ fun promiseOfChosen(yields: ActionYield, chosen: RealizerMeta?): ActionYield {
     if (chosen == null || chosen.kind == RealizerKind.LOCAL) return yields
     val promise = promiseOf(yields) ?: return yields
     val there = when {
-        chosen.kind == RealizerKind.REMOTE && chosen.leavesCircle -> "через компьютер в сервис"
-        chosen.kind == RealizerKind.REMOTE -> "на компьютере"
-        else -> "уйдёт в сервис"
+        chosen.kind == RealizerKind.REMOTE && chosen.leavesCircle -> tr("через компьютер в сервис")
+        chosen.kind == RealizerKind.REMOTE -> tr("на компьютере")
+        else -> tr("уйдёт в сервис")
     }
     val parts = promise.split(PROMISE_SEPARATOR)
     if (parts.none { it.trim() in SAYS_HERE }) return yields

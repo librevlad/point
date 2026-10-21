@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -200,9 +201,9 @@ fun isModernOffice(fileName: String?, mime: String): Boolean {
 
 private val MODERN_OFFICE_EXTS = setOf("docx", "xlsx", "pptx")
 
-const val NO_TEXT_IN_OFFICE =
-    "В этом документе текста нет — внутри только оформление и картинки. Откройте его целиком, " +
-        "чтобы посмотреть глазами"
+val NO_TEXT_IN_OFFICE: String get() =
+    tr("В этом документе текста нет — внутри только оформление и картинки. Откройте его целиком, " +
+        "чтобы посмотреть глазами")
 
-const val OLD_OFFICE_FORMAT =
-    "Это старый формат Office — Point читает .docx, .xlsx и .pptx. Пересохраните документ в одном из них"
+val OLD_OFFICE_FORMAT: String get() =
+    tr("Это старый формат Office — Point читает .docx, .xlsx и .pptx. Пересохраните документ в одном из них")

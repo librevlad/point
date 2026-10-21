@@ -1,0 +1,663 @@
+ (был 	 (був 	 (was 
+ · лист «	 · аркуш «	 · sheet “
+ · не прочиталось страниц: {0}	 · не прочиталося сторінок: {0}	 · pages not read: {0}
+ · оставлено: 	 · залишено: 	 · kept: 
+ · очищено, у каждой даты своё: 	 · очищено, у кожної дати своє: 	 · cleared, each date has its own: 
+ и ещё {0}	 і ще {0}	 and {0} more
+ или 	 або 	 or 
+ применить не удалось	 застосувати не вдалося	 more could not be applied
+ — проверьте интернет и попробуйте ещё раз	 — перевірте інтернет і спробуйте ще раз	. Check your internet and try again
+%d мин %02d сек	%d хв %02d с	%d min %02d sec
+; ещё 	; ще 	; 
+AI не настроен — {0}	AI не налаштовано — {0}	AI isn't set up: {0}
+Point не знает, к какому серверу идти	Point не знає, до якого сервера йти	Point doesn't know which server to use
+Point не смог отправить запрос серверу — сбой на этом устройстве	Point не зміг надіслати запит серверу — збій на цьому пристрої	Point couldn't send the request to the server: something failed on this device
+Point обращается к сервисам по очереди — отвечает первый доступный. Свой ключ не обязателен: он снимает общий лимит и пускает Point работать на вашей квоте.	Point звертається до сервісів по черзі — відповідає перший доступний. Свій ключ не обов’язковий: він знімає спільний ліміт і дає Point працювати на вашій квоті.	Point asks the services in turn, and the first one available answers. Your own key is optional: it lifts the shared limit and lets Point work on your quota.
+Point уже прочитал всё, что здесь есть	Point уже прочитав усе, що тут є	Point has already read everything here
+QR не собрался — попробуйте ещё раз	QR не склався — спробуйте ще раз	The QR code didn't come out. Try again
+QR-код	QR-код	QR code
+Whisper не настроен — нужен ключ Groq. {0}	Whisper не налаштовано — потрібен ключ Groq. {0}	Whisper isn't set up: it needs a Groq key. {0}
+Whisper слушает по ключу Groq	Whisper слухає за ключем Groq	Whisper listens with a Groq key
+{0} {1} в {2}	{0} {1} о {2}	{1} {0} at {2}
+{0} {1} назад	{0} {1} тому	{0} {1} ago
+{0} · проверено {1}	{0} · перевірено {1}	{0} · checked {1}
+{0} Б	{0} Б	{0} B
+{0} ГБ	{0} ГБ	{0} GB
+{0} КБ	{0} КБ	{0} KB
+{0} Ключ сохранён.	{0} Ключ збережено.	{0} Key saved.
+{0} МБ	{0} МБ	{0} MB
+{0} дн. назад	{0} дн. тому	{0} days ago
+{0} сек	{0} с	{0} sec
+{0} — Point работает на своих	{0} — Point працює на своїх	{0}. Point runs on its own
+{0} — {1}, это займёт время	{0} — {1}, це займе час	{0}: {1}, this will take a while
+{0} — откройте «{1}» на домашнем экране	{0} — відкрийте «{1}» на домашньому екрані	{0}: open “{1}” on the home screen
+{0}: {1} — {2} в настройках	{0}: {1} — {2} у налаштуваннях	{0}: {1}. {2} in settings
+{0}: {1} — попробуйте завтра	{0}: {1} — спробуйте завтра	{0}: {1}. Try tomorrow
+{0}: ключ не задан	{0}: ключ не задано	{0}: no key set
+{0}: модель не увидела изображение	{0}: модель не побачила зображення	{0}: the model didn't see the picture
+{0}: ответ без choices	{0}: відповідь без choices	{0}: answer without choices
+{0}: пустой ответ	{0}: порожня відповідь	{0}: empty answer
+{0}: пустой текст	{0}: порожній текст	{0}: empty text
+{0}: сервис не знает модели {1}	{0}: сервіс не знає моделі {1}	{0}: the service doesn't know the model {1}
+{0}: сервис просит оплату — у этого ключа нет бесплатного доступа	{0}: сервіс просить оплату — у цього ключа немає безкоштовного доступу	{0}: the service wants payment; this key has no free access
+{0}: сервис сейчас не отвечает	{0}: сервіс зараз не відповідає	{0}: the service isn't answering right now
+«{0}» ждёт ключа: это действие делает модель, а она работает на вашем ключе. У большинства сервисов ключ бесплатный — возьмите его на сайте и вставьте сюда. После проверки вы вернётесь к своему объекту.	«{0}» чекає на ключ: цю дію виконує модель, а вона працює на вашому ключі. У більшості сервісів ключ безкоштовний — візьміть його на сайті й вставте сюди. Після перевірки ви повернетеся до свого об’єкта.	“{0}” needs a key: a model does this, and it runs on your key. Most services give keys for free. Get one on the website and paste it here. After the check you'll go back to your item.
+«Понять», «Перевести», «AI» и расшифровку записи делает модель. У большинства сервисов ключ бесплатный. Ключ живёт только на этом устройстве. Проверка сервисов идёт только по вашему нажатию — сам Point ничего не проверяет.	«Зрозуміти», «Перекласти», «AI» і розшифровку запису робить модель. У більшості сервісів ключ безкоштовний. Ключ живе лише на цьому пристрої. Перевірка сервісів іде лише за вашим натисканням — сам Point нічого не перевіряє.	“Understand”, “Translate”, “AI” and transcribing recordings are done by a model. Most services give keys for free. The key lives only on this device. Services are checked only when you press; Point checks nothing on its own.
+Адрес	Адреса	Address
+Адреса	Адреси	Addresses
+Архив не открылся — он повреждён или обрезан	Архів не відкрився — він пошкоджений або обрізаний	The archive didn't open: it's damaged or cut short
+Бесплатный лимит кончился. Подождите несколько минут и нажмите «Проверить и включить» ещё раз — или возьмите ключ у другого сервиса из списка выше и впишите его сюда вместо этого.	Безкоштовний ліміт скінчився. Зачекайте кілька хвилин і натисніть «Перевірити й увімкнути» ще раз — або візьміть ключ в іншого сервісу зі списку вище й впишіть його сюди замість цього.	The free limit is used up. Wait a few minutes and press “Check and turn on” again, or get a key from another service in the list above and enter it here instead.
+Бланк на 	Бланк на 	Form for 
+В Excel	У Excel	To Excel
+В PDF	У PDF	To PDF
+В Word	У Word	To Word
+В Word+	У Word+	To Word+
+В буфере нет ключа — скопируйте его на странице сервиса и вернитесь.	У буфері немає ключа — скопіюйте його на сторінці сервісу й поверніться.	There's no key on the clipboard. Copy it on the service's page and come back.
+В документе не нашлось текста	У документі не знайшлося тексту	No text found in the document
+В документе нет ни одной страницы	У документі немає жодної сторінки	The document has no pages
+В записи не слышно речи	У записі не чути мовлення	No speech can be heard in the recording
+В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста	У наборі немає сторінок для таблиці — ні знімка, ні PDF, ні тексту	The set has no pages for a table: no picture, PDF or text
+В проверенной части ошибок не нашлось ({0}) — текст оставлен как был	У перевіреній частині помилок не знайшлося ({0}) — текст лишився як був	No mistakes in the checked part ({0}). The text is left as it was
+В таблице нет столбца с датами подряд — продлевать нечего	У таблиці немає стовпця з датами поспіль — продовжувати нічого	The table has no column of consecutive dates, so there's nothing to extend
+В этом документе текста нет — внутри только оформление и картинки. Откройте его целиком, чтобы посмотреть глазами	У цьому документі немає тексту — всередині лише оформлення й картинки. Відкрийте його цілком, щоб подивитися	This document has no text, only layout and pictures. Open the whole document to look at it
+Вакансия	Вакансія	Job opening
+Ваши ключи	Ваші ключі	Your keys
+Ваши ключи сохраняют свои места в общей очереди.	Ваші ключі зберігають свої місця в спільній черзі.	Your keys keep their places in the shared queue.
+Ваши устройства увидят друг друга	Ваші пристрої побачать одне одного	Your devices will see each other
+Войдите в аккаунт — ссылка выдаётся через сервер Point	Увійдіть в акаунт — посилання видається через сервер Point	Sign in to your account. Links are given out through the Point server
+Войдите в один аккаунт на телефоне и на компьютере — и объект сможет переехать с одного на другой. Для работы на одном устройстве вход не нужен.	Увійдіть в один акаунт на телефоні й на комп’ютері — і об’єкт зможе переїхати з одного на інший. Для роботи на одному пристрої вхід не потрібен.	Sign in to the same account on your phone and computer, and things can move from one to the other. You don't need to sign in to use one device.
+Войдите снова, чтобы вернуть его в круг.	Увійдіть знову, щоб повернути його в коло.	Sign in again to bring it back into the circle.
+Войти через Google	Увійти через Google	Sign in with Google
+Вставить ключ из буфера	Вставити ключ із буфера	Paste key from clipboard
+Встреча	Зустріч	Meeting
+Вход не подтвердили за пять минут	Вхід не підтвердили за п’ять хвилин	The sign-in wasn't confirmed within five minutes
+Вход не подтверждён	Вхід не підтверджено	Sign-in not confirmed
+Вход просрочен	Вхід прострочено	Sign-in expired
+Вчера	Вчора	Yesterday
+Выберите сервис в списке выше — адрес и имя модели подставятся сами.	Виберіть сервіс у списку вище — адреса й назва моделі підставляться самі.	Choose a service in the list above, and the address and model name will fill themselves in.
+Выложено до {0} — ссылка у объекта, живёт сутки	Викладено до {0} — посилання в об’єкта, живе добу	Shared until {0}. The link is with the item and lasts a day
+Выложить	Викласти	Share
+Выложить файл по ссылке?	Викласти файл за посиланням?	Share the file by link?
+Главные тезисы	Головні тези	Key points
+Голос для языка «{0}» на этом устройстве читает через интернет, а режим приватности сейчас наружу не пускает. Офлайновый голос ставят в настройках системы, в разделе синтеза речи.	Голос для мови «{0}» на цьому пристрої читає через інтернет, а режим приватності зараз назовні не пускає. Офлайновий голос встановлюють у налаштуваннях системи, в розділі синтезу мовлення.	The voice for “{0}” on this device reads over the internet, and privacy mode doesn't allow that right now. You can add an offline voice in the system settings, under text-to-speech.
+Готовлю движок — попробуйте через минуту	Готую рушій — спробуйте за хвилину	Preparing the engine. Try in a minute
+Готовлю текст	Готую текст	Preparing the text
+Готово {0} из {1} чтений — жду остальные	Готово {0} з {1} прочитань — чекаю решту	{0} of {1} readings done. Waiting for the rest
+Готово: 	Готово: 	Done: 
+Дата	Дата	Date
+Даты	Дати	Dates
+Дать ссылку	Дати посилання	Share a link
+До сервера Point не дозвониться	До сервера Point не додзвонитися	Can't reach the Point server
+До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз.	До сервера Point не додзвонитися. Перевірте інтернет і спробуйте ще раз.	Can't reach the Point server. Check your internet and try again.
+Ещё не проверяли	Ще не перевіряли	Not checked yet
+Ждём файл…	Чекаємо на файл…	Waiting for the file…
+Ждёт вашего ответа на телефоне: отправлять ли наружу	Чекає на вашу відповідь на телефоні: чи надсилати назовні	Waiting for your answer on the phone: whether to send it out
+Жёлтым отмечено то, что стоит проверить в первую очередь.	Жовтим позначено те, що варто перевірити насамперед.	Yellow marks what to check first.
+Забывать было нечего	Забувати не було чого	There was nothing to forget
+Забыто: 	Забуто: 	Forgotten: 
+Забыть не вышло — попробуйте ещё раз	Забути не вийшло — спробуйте ще раз	Couldn't forget. Try again
+Загружаю файл	Завантажую файл	Uploading the file
+Задайте ключ в настройках	Задайте ключ у налаштуваннях	Add a key in settings
+Запись не дошла — расшифровывать нечего	Запис не дійшов — розшифровувати нічого	The recording didn't arrive, so there's nothing to transcribe
+Запись слишком большая ({0} МБ) — Whisper принимает до 25 МБ	Запис завеликий ({0} МБ) — Whisper приймає до 25 МБ	The recording is too big ({0} MB). Whisper takes up to 25 MB
+Здесь нечего исправлять	Тут нічого виправляти	There's nothing to correct here
+Идёт {0} с	Триває {0} с	{0} s so far
+Идёт {0} с · долгое ожидание	Триває {0} с · довге очікування	{0} s so far · a long wait
+Идёт {0} с · долгое ожидание, можно отменить	Триває {0} с · довге очікування, можна скасувати	{0} s so far · a long wait, you can cancel
+Из {0} {1} открыл{2} {3}	Відкрилося {3} з {0}	{3} of {0} opened
+Из файла этот текст не достаётся — страницы сняты картинкой или у документа своя раскладка шрифта. Прочитайте его действием «Прочитать документ»	З файлу цей текст не дістається — сторінки зняті картинкою або в документа своя розкладка шрифту. Прочитайте його дією «Прочитати документ»	This text can't be taken from the file: the pages are pictures or the document uses its own font mapping. Read it with “Read the document”
+Извлеки весь текст	Витягни весь текст	Pull out all the text
+Извлеки ключевые данные	Витягни ключові дані	Pull out the key data
+Извлечь текст	Витягти текст	Extract text
+Исправить значение	Виправити значення	Correct the value
+Исправить ошибки	Виправити помилки	Fix mistakes
+Исправить сильнее	Виправити ретельніше	Fix more thoroughly
+Исправлено: 	Виправлено: 	Fixed: 
+Исправлено: {0}	Виправлено: {0}	Fixed: {0}
+Исправлено: {0}; ещё {1} применить не удалось	Виправлено: {0}; ще {1} застосувати не вдалося	Fixed: {0}; {1} more could not be applied
+Исправлять нечего — знания об объекте пока нет	Виправляти нічого — знань про об’єкт поки немає	Nothing to fix. Point doesn't know anything about the item yet
+Исправлять нечего — текста у объекта нет	Виправляти нічого — тексту в об’єкта немає	Nothing to fix. The item has no text
+Исправь ошибки и стиль	Виправ помилки й стиль	Fix mistakes and style
+Кадр не подготовлен — нечего отправлять	Кадр не підготовлено — нічого надсилати	The frame isn't ready, so there's nothing to send
+Как правильно?	Як правильно?	What is correct?
+Карта	Картка	Card
+Карты	Картки	Cards
+Квитанция	Квитанція	Receipt
+Ключ верный, но квота на сейчас исчерпана	Ключ правильний, але квоту на зараз вичерпано	The key is right, but the quota is used up for now
+Ключ встанет к своему сервису и сразу проверится.	Ключ стане до свого сервісу й одразу перевіриться.	The key goes to its service and is checked right away.
+Ключ не подошёл	Ключ не підійшов	The key didn't work
+Ключ приняли, но ответа не прислали	Ключ прийняли, але відповіді не надіслали	The key was accepted, but no answer came
+Ключи AI	Ключі AI	AI keys
+Компьютер	Комп’ютер	Computer
+Компьютер ещё работает — готовое появится в списке «с компьютера»	Комп’ютер ще працює — готове з’явиться в списку «з комп’ютера»	The computer is still working. The result will appear in the “from computer” list
+Компьютер не отвечает. Проверьте, что «Point для ПК» на нём запущен.	Комп’ютер не відповідає. Перевірте, що «Point для ПК» на ньому запущено.	The computer isn't answering. Check that “Point for PC” is running on it.
+Компьютер пока не ответил — что вышло, будет видно здесь	Комп’ютер поки не відповів — що вийшло, буде видно тут	The computer hasn't answered yet. The outcome will show up here
+Компьютера нет в вашем круге. Запустите «Point для ПК» и войдите в тот же аккаунт.	Комп’ютера немає у вашому колі. Запустіть «Point для ПК» і увійдіть у той самий акаунт.	There's no computer in your circle. Start “Point for PC” and sign in to the same account.
+Контрольная цифра не сошлась — перечитываю	Контрольна цифра не зійшлася — перечитую	The check digit didn't match. Reading again
+Координаты	Координати	Coordinates
+Кратко перескажи	Коротко перекажи	Sum it up briefly
+Краткое содержание	Короткий зміст	Short summary
+Краткое содержание страницы	Короткий зміст сторінки	Short summary of the page
+Кто что сказал?	Хто що сказав?	Who said what?
+Куда можно отправлять	Куди можна надсилати	Where things may be sent
+Максимум бесплатного	Максимум безкоштовного	As much free as possible
+Место	Місце	Place
+Мои устройства	Мої пристрої	My devices
+На новый период	На новий період	For the next period
+На сегодня бесплатное чтение закончилось — попробуйте завтра	На сьогодні безкоштовне читання скінчилося — спробуйте завтра	Free reading is used up for today. Try tomorrow
+На снимке ничего не разобрать	На знімку нічого не розібрати	Nothing can be made out in the picture
+На странице не нашлось ничего, что можно положить в таблицу	На сторінці не знайшлося нічого, що можна покласти в таблицю	Nothing on the page fits into a table
+На телефоне нет интернета. Подключитесь и попробуйте ещё раз.	На телефоні немає інтернету. Під’єднайтеся й спробуйте ще раз.	The phone has no internet. Connect and try again.
+На этом устройстве нет браузера — ссылку можно скопировать	На цьому пристрої немає браузера — посилання можна скопіювати	This device has no browser. You can copy the link
+На этом устройстве нет голоса для чтения вслух. Его ставят в настройках системы, в разделе синтеза речи.	На цьому пристрої немає голосу для читання вголос. Його встановлюють у налаштуваннях системи, в розділі синтезу мовлення.	This device has no voice for reading aloud. You can add one in the system settings, under text-to-speech.
+На этом устройстве нет голоса для языка «{0}». Голоса ставят в настройках системы, в разделе синтеза речи.	На цьому пристрої немає голосу для мови «{0}». Голоси встановлюють у налаштуваннях системи, в розділі синтезу мовлення.	This device has no voice for “{0}”. You can add voices in the system settings, under text-to-speech.
+На этом устройстве нет карт — адрес можно скопировать	На цьому пристрої немає карт — адресу можна скопіювати	This device has no maps. You can copy the address
+На этом устройстве нет почты — адрес можно скопировать	На цьому пристрої немає пошти — адресу можна скопіювати	This device has no email app. You can copy the address
+На этом устройстве нет приложения сообщений — номер можно скопировать	На цьому пристрої немає застосунку повідомлень — номер можна скопіювати	This device has no messaging app. You can copy the number
+На этом устройстве нечем звонить — номер можно скопировать	На цьому пристрої нема чим дзвонити — номер можна скопіювати	This device can't make calls. You can copy the number
+На этом устройстве нечем это открыть — значение можно скопировать	На цьому пристрої нема чим це відкрити — значення можна скопіювати	Nothing on this device can open it. You can copy the value
+Нажмите «Войти через Google» ещё раз — страница входа откроется заново.	Натисніть «Увійти через Google» ще раз — сторінка входу відкриється заново.	Press “Sign in with Google” again and the sign-in page will open again.
+Найти в документе	Знайти в документі	Find in document
+Накладная	Накладна	Waybill
+Наружу можно только к тем, кто обещал не учиться на присланном, — такого сейчас нет	Назовні можна лише до тих, хто пообіцяв не вчитися на надісланому, — такого зараз немає	Things may only go to services that promised not to learn from them, and none is available now
+Наружу сейчас не отправляем — это меняется в настройках	Назовні зараз не надсилаємо — це змінюється в налаштуваннях	Nothing goes out right now. You can change this in settings
+Наружу — только к тем, кто письменно обещал не учиться на присланном и не хранить его. Их меньше, и трудную страницу они возьмут не всегда.	Назовні — лише до тих, хто письмово пообіцяв не вчитися на надісланому й не зберігати його. Їх менше, і складну сторінку вони візьмуть не завжди.	Out only to services that promised in writing not to learn from what they get or keep it. There are fewer of them, and they won't always manage a difficult page.
+Настройки	Налаштування	Settings
+Нашлось {0} {1}	Знайшлося {0} {1}	Found {0} {1}
+Нашёл, как лежит страница — перечитываю	Знайшов, як лежить сторінка — перечитую	Found how the page lies. Reading again
+Не вставлять	Не вставляти	Don't paste
+Не вышло показать, где эти слова на странице	Не вийшло показати, де ці слова на сторінці	Couldn't show where these words are on the page
+Не вышло — пробую другим путём	Не вийшло — пробую іншим шляхом	Didn't work. Trying another way
+Не дозвонились до сервиса	Не додзвонилися до сервісу	Couldn't reach the service
+Не разобрал текст на этом снимке	Не розібрав текст на цьому знімку	Couldn't make out the text in this picture
+Не смог прочитать этот снимок — ответ пришёл нечитаемым ({0}). Лучше переснять при ровном свете и поближе.	Не зміг прочитати цей знімок — відповідь прийшла нечитабельною ({0}). Краще перезняти при рівному світлі й ближче.	Couldn't read this picture: the answer came back unreadable ({0}). Try retaking it closer and in even light.
+Не спрашивать разрешения на облако и всегда брать самый сильный путь, даже если он снаружи. Объект уходит на чужой сервер без вопроса.	Не питати дозволу на хмару й завжди брати найсильніший шлях, навіть якщо він назовні. Об’єкт іде на сторонній сервер без питання.	Don't ask before using the cloud and always take the strongest path, even if it's outside. Items go to another company's server without asking.
+Не удалось {0} — 	Не вдалося {0} — 	Couldn't {0}: 
+Не удалось забрать 	Не вдалося забрати 	Couldn't pick up 
+Не удалось забрать объект — проверьте интернет и попробуйте ещё раз	Не вдалося забрати об’єкт — перевірте інтернет і спробуйте ще раз	Couldn't pick up the item. Check your internet and try again
+Не удалось написать отклик	Не вдалося написати відгук	Couldn't write the application
+Не удалось оформить документ	Не вдалося оформити документ	Couldn't format the document
+Не удалось понять документ	Не вдалося зрозуміти документ	Couldn't understand the document
+Не удалось посмотреть	Не вдалося подивитися	Couldn't look
+Не удалось проверить знание	Не вдалося перевірити знання	Couldn't check what Point knows
+Не удалось проверить текст	Не вдалося перевірити текст	Couldn't check the text
+Не удалось продлить таблицу	Не вдалося продовжити таблицю	Couldn't extend the table
+Не удалось прочитать страницу	Не вдалося прочитати сторінку	Couldn't read the page
+Не удалось разметить документ	Не вдалося розмітити документ	Couldn't lay out the document
+Не удалось разобрать PDF на страницы	Не вдалося розібрати PDF на сторінки	Couldn't split the PDF into pages
+Не удалось разобрать презентацию на слайды — откройте её целиком, чтобы посмотреть глазами	Не вдалося розібрати презентацію на слайди — відкрийте її цілком, щоб подивитися	Couldn't split the presentation into slides. Open the whole presentation to look at it
+Не удалось распознать таблицу	Не вдалося розпізнати таблицю	Couldn't recognise the table
+Не удалось расшифровать запись	Не вдалося розшифрувати запис	Couldn't transcribe the recording
+Не удалось собрать данные	Не вдалося зібрати дані	Couldn't collect the data
+Не удалось создать документ	Не вдалося створити документ	Couldn't create the document
+Не удалось составить список	Не вдалося скласти список	Couldn't make the list
+Не учатся на моём	Не вчаться на моєму	No training on my files
+Нет связи с сервером Point. Ссылка не потерялась: файл придёт, когда связь вернётся.	Немає зв’язку із сервером Point. Посилання не загубилося: файл прийде, коли зв’язок повернеться.	No connection to the Point server. The link isn't lost: the file will arrive when the connection is back.
+Нет текста (возможно, это скан — сначала распознайте текст)	Немає тексту (можливо, це скан — спершу розпізнайте текст)	No text (it may be a scan, so recognise the text first)
+Нет текста вакансии	Немає тексту вакансії	There's no job text
+Нет текста для QR-кода	Немає тексту для QR-коду	There's no text for a QR code
+Нет текста для перевода	Немає тексту для перекладу	There's no text to translate
+Нет текста для понимания	Немає тексту, щоб зрозуміти	There's no text to understand
+Нет текста рецепта	Немає тексту рецепта	There's no recipe text
+Ни одна из {0} страниц не прочиталась — {1}	Жодна з {0} сторінок не прочиталася — {1}	None of the {0} pages could be read: {1}
+Ничего не нашлось	Нічого не знайшлося	Nothing found
+Ничего не уходит с устройства. Остаётся то, что Point читает сам, — фото документов ему даются плохо.	Нічого не залишає пристрій. Лишається те, що Point читає сам, — фото документів йому даються погано.	Nothing leaves the device. What remains is what Point reads by itself, and it is weak at photos of documents.
+Номер	Номер	Number
+Номер аккаунта (Account ID)	Номер акаунта (Account ID)	Account ID
+Номер отправления	Номер відправлення	Tracking number
+Нужен ваш ключ	Потрібен ваш ключ	Need your key
+О чём документ?	Про що документ?	What is the document about?
+О чём эта запись?	Про що цей запис?	What is this recording about?
+О чём эта ссылка?	Про що це посилання?	What is this link about?
+Обещали {0} — вышло {1}	Обіцяли {0} — вийшло {1}	Promised {0}, got {1}
+Обрабатываю…	Обробляю…	Working…
+Объект больше 50 МБ — столько за раз между устройствами не переслать.	Об’єкт більший за 50 МБ — стільки за раз між пристроями не переслати.	The item is over 50 MB, more than can travel between devices at once.
+Объект уйдёт на сервер {0} и вернётся результатом.	Об’єкт піде на сервер {0} і повернеться результатом.	The item goes to the {0} server and comes back as a result.
+Объект уйдёт на чужой сервер и вернётся результатом.	Об’єкт піде на сторонній сервер і повернеться результатом.	The item goes to another company's server and comes back as a result.
+Объект уходит только после вашего тапа, и перед отправкой Point говорит, куда именно. Здесь вы выбираете, кому его вообще можно предлагать.	Об’єкт іде лише після вашого дотику, і перед надсиланням Point каже, куди саме. Тут ви обираєте, кому його взагалі можна пропонувати.	Nothing goes out until you tap, and Point says where it goes before sending. Here you choose who it may be offered to at all.
+Обычно дело в имени модели. Откройте «Модель и адрес» и оставьте поля пустыми — имя подставится само.	Зазвичай річ у назві моделі. Відкрийте «Модель і адреса» й залиште поля порожніми — назва підставиться сама.	Usually it's the model name. Open “Model and address” and leave the fields empty; the name will fill itself in.
+Ожидался {0} — вышел {1}	Очікувався {0} — вийшов {1}	Expected {0}, got {1}
+Он стоит в адресе страницы после входа: dash.cloudflare.com/<номер>/…	Він стоїть в адресі сторінки після входу: dash.cloudflare.com/<номер>/…	It's in the page address after you sign in: dash.cloudflare.com/<id>/…
+Ответить	Відповісти	Reply
+Ответь на это	Дай відповідь на це	Reply to this
+Отвечают {0} из {1}	Відповідають {0} з {1}	{0} of {1} answer
+Отвечают все {0}	Відповідають усі {0}	All {0} answer
+Отказано на телефоне: наружу объект не отправлен	Відмовлено на телефоні: назовні об’єкт не надіслано	Declined on the phone: the item wasn't sent out
+Отклик	Відгук	Application
+Откройте страницу входа заново и завершите вход в браузере.	Відкрийте сторінку входу заново й завершіть вхід у браузері.	Open the sign-in page again and finish signing in in the browser.
+Открытых ссылок слишком много. {0}	Відкритих посилань забагато. {0}	Too many open links. {0}
+Отменено	Скасовано	Cancelled
+Отправить в облако?	Надіслати в хмару?	Send to the cloud?
+Отправка и приватность	Надсилання й приватність	Sending and privacy
+Отправка наружу закрыта настройками	Надсилання назовні закрите налаштуваннями	Sending out is turned off in settings
+Отправлено — компьютер заберёт, когда включится	Надіслано — комп’ютер забере, коли ввімкнеться	Sent. The computer will pick it up when it's on
+Ошибка AI	Помилка AI	AI error
+Ошибка записи результата	Помилка запису результату	Couldn't save the result
+Ошибка перевода	Помилка перекладу	Translation failed
+Ошибка разбора в Excel	Помилка розбору в Excel	Couldn't build the Excel file
+Ошибка распознавания в облаке	Помилка розпізнавання в хмарі	Recognition in the cloud failed
+Ошибок не нашлось — знание оставлено как было	Помилок не знайшлося — знання лишилося як було	No mistakes found. What Point knows is left as it was
+Ошибок не нашлось — текст оставлен как был	Помилок не знайшлося — текст лишився як був	No mistakes found. The text is left as it was
+Пара слов о вас — опыт, стек (пусто = универсальный отклик)	Кілька слів про вас — досвід, стек (порожньо = універсальний відгук)	A few words about you: experience, skills (empty = a general application)
+Первая страница не прочиталась за {0} минут — попробуйте её отдельно	Перша сторінка не прочиталася за {0} хв — спробуйте її окремо	The first page wasn't read within {0} min. Try it on its own
+Переведи текст с картинки	Переклади текст із картинки	Translate the text in the picture
+Перевести	Перекласти	Translate
+Перевожу на {0}	Перекладаю: {0}	Translating into {0}
+Переслать квитанцию	Переслати квитанцію	Forward the receipt
+Переспрашиваю {0} {1}	Перепитую {0} {1}	Asking again about {0} {1}
+Перечитываю другим путём	Перечитую іншим шляхом	Reading again another way
+Перечитываю другими путями	Перечитую іншими шляхами	Reading again in other ways
+Пишу отклик	Пишу відгук	Writing the application
+По виду ключа сервис не узнать. Нажмите тот, где вы его взяли, — проверять ключ Point будет только там.	З вигляду ключа сервіс не впізнати. Натисніть той, де ви його взяли, — перевіряти ключ Point буде лише там.	The service can't be told from the key itself. Press the one where you got it, and Point will check the key only there.
+Подтвердите вход в браузере	Підтвердіть вхід у браузері	Confirm the sign-in in your browser
+Подтвердите вход в браузере · код {0}	Підтвердіть вхід у браузері · код {0}	Confirm the sign-in in your browser · code {0}
+Подтверждено вами	Підтверджено вами	Confirmed by you
+Позвонить	Подзвонити	Call
+Показание	Показник	Reading
+Показание счётчика	Показник лічильника	Meter reading
+Покупка	Покупка	Purchase
+Понять	Зрозуміти	Understand
+Понять сильнее	Зрозуміти глибше	Understand deeper
+Попробуйте войти ещё раз.	Спробуйте увійти ще раз.	Try signing in again.
+Попробуйте ещё раз; если повторится — сервер сейчас не в порядке.	Спробуйте ще раз; якщо повториться — із сервером зараз негаразд.	Try again. If it happens again, the server is having trouble.
+Построить маршрут	Прокласти маршрут	Get directions
+Посылка	Посилка	Parcel
+Похоже, нет связи — или адрес сервиса набран с опечаткой. Проверьте интернет и нажмите «Проверить и включить» ещё раз.	Схоже, немає зв’язку — або адресу сервісу набрано з помилкою. Перевірте інтернет і натисніть «Перевірити й увімкнути» ще раз.	It looks like there's no connection, or the service address has a typo. Check your internet and press “Check and turn on” again.
+Похоже, это ключ {0}, а не {1}.	Схоже, це ключ {0}, а не {1}.	This looks like a {0} key, not {1}.
+Почта	Пошта	Email
+Почты	Пошта	Emails
+Прежние ссылки перестают действовать через сутки	Попередні посилання перестають діяти за добу	Earlier links stop working after a day
+Пробую повернуть страницу — {0} из {1}	Пробую повернути сторінку — {0} з {1}	Trying to rotate the page: {0} of {1}
+Проверено {0}	Перевірено {0}	Checked {0}
+Проверил знание, но применить правки не удалось — знание оставлено как было	Перевірив знання, але застосувати правки не вдалося — знання лишилося як було	Checked what Point knows but couldn't apply the fixes. It is left as it was
+Проверил текст, но применить правки не удалось — текст оставлен как был	Перевірив текст, але застосувати правки не вдалося — текст лишився як був	Checked the text but couldn't apply the fixes. It is left as it was
+Проверить как ключ {0}	Перевірити як ключ {0}	Check as a {0} key
+Проверьте интернет и попробуйте ещё раз — ничего не потеряно.	Перевірте інтернет і спробуйте ще раз — нічого не втрачено.	Check your internet and try again. Nothing is lost.
+Проверяю найденное	Перевіряю знайдене	Checking what was found
+Проверяю прочитанное по странице	Звіряю прочитане зі сторінкою	Checking what was read against the page
+Проверяю текст	Перевіряю текст	Checking the text
+Прочитано начало — {0} из {1} символов. Нажмите «Понять» ещё раз — прочитаю дальше.	Прочитано початок — {0} з {1} символів. Натисніть «Зрозуміти» ще раз — прочитаю далі.	Read the beginning: {0} of {1} characters. Press “Understand” again to read on.
+Прочитано сильнее — текст объекта обновлён	Прочитано ретельніше — текст об’єкта оновлено	Read more thoroughly. The item's text is updated
+Прочитано страниц: {0} из {1} — текст у документа	Прочитано сторінок: {0} з {1} — текст у документа	Pages read: {0} of {1}. The text is with the document
+Прочитать документ	Прочитати документ	Read the document
+Прочитать сейчас не вышло — попробуйте ещё раз	Прочитати зараз не вийшло — спробуйте ще раз	Couldn't read it right now. Try again
+Прочитать сильнее	Прочитати ретельніше	Read more thoroughly
+Прочитать снаружи не удалось	Прочитати ззовні не вдалося	Reading outside didn't work
+Прочитать таблицу не удалось: больше трети страницы разобрать не вышло	Прочитати таблицю не вдалося: понад третину сторінки розібрати не вийшло	Couldn't read the table: more than a third of the page couldn't be made out
+Прочитать таблицу не удалось: ни одной части документа со страницы не собралось	Прочитати таблицю не вдалося: жодної частини документа зі сторінки не зібралося	Couldn't read the table: no part of the document came together from the page
+Прочитать таблицу не удалось: чтения разошлись больше чем на трети ячеек	Прочитати таблицю не вдалося: прочитання розійшлися більш ніж на третині клітинок	Couldn't read the table: the readings disagree on more than a third of the cells
+Пустое значение — исправление отменено	Порожнє значення — виправлення скасовано	Empty value, so the correction was cancelled
+Работает — сервис ответил.	Працює — сервіс відповів.	It works. The service answered.
+Работает — сервис ответил: «{0}».	Працює — сервіс відповів: «{0}».	It works. The service answered: “{0}”.
+Работают на ключе Point	Працюють на ключі Point	Run on Point's key
+Разбираю PDF на страницы	Розбираю PDF на сторінки	Splitting the PDF into pages
+Разбираю презентацию на слайды	Розбираю презентацію на слайди	Splitting the presentation into slides
+Размечаю документ	Розмічаю документ	Laying out the document
+Разрешить	Дозволити	Allow
+Раньше	Раніше	Earlier
+Распаковать	Розпакувати	Unpack
+Распознать текст	Розпізнати текст	Recognise text
+Распознаю текст на фото	Розпізнаю текст на фото	Recognising text in the photo
+Расшифровано — слова у записи	Розшифровано — слова в запису	Transcribed. The words are with the recording
+Расшифровать	Розшифрувати	Transcribe
+Расшифровать некому — ни один движок распознавания речи не настроен	Розшифрувати нікому — жоден рушій розпізнавання мовлення не налаштовано	No one to transcribe: no speech recognition engine is set up
+Расшифровать некому: 	Розшифрувати нікому: 	No one to transcribe: 
+Режим YOLO	Режим YOLO	YOLO mode
+Реквизиты перевода	Реквізити переказу	Payment details
+Рецепт	Рецепт	Recipe
+С этим файлом нечего делать	З цим файлом нічого робити	There's nothing to do with this file
+Сверяю со снимком	Звіряю зі знімком	Checking against the picture
+Свожу расхождения чтений	Зводжу розбіжності прочитань	Reconciling the readings
+Свои ключи: {0} из {1}	Свої ключі: {0} з {1}	Your keys: {0} of {1}
+Свой адрес	Своя адреса	Your own address
+Связь пропала — пробую снова…	Зв’язок зник — пробую знову…	Connection lost. Trying again…
+Связь с сервисом оборвалась — проверьте интернет и попробуйте ещё раз	Зв’язок із сервісом обірвався — перевірте інтернет і спробуйте ще раз	The connection to the service dropped. Check your internet and try again
+Сегодня	Сьогодні	Today
+Сейчас	Зараз	Now
+Сервер Point не настроен	Сервер Point не налаштовано	The Point server isn't set up
+Сервер Point не ответил. Попробуйте ещё раз	Сервер Point не відповів. Спробуйте ще раз	The Point server didn't answer. Try again
+Сервер Point не отвечает — попробуйте позже	Сервер Point не відповідає — спробуйте пізніше	The Point server isn't answering. Try later
+Сервер Point не открыл приём файла — попробуйте позже	Сервер Point не відкрив приймання файлу — спробуйте пізніше	The Point server didn't open file receiving. Try later
+Сервер Point не принял запрос	Сервер Point не прийняв запит	The Point server didn't accept the request
+Сервер Point не принял файл	Сервер Point не прийняв файл	The Point server didn't accept the file
+Сервер Point не принял файл: {0}	Сервер Point не прийняв файл: {0}	The Point server didn't accept the file: {0}
+Сервер Point ответил без пропуска устройства	Сервер Point відповів без перепустки пристрою	The Point server answered without a device pass
+Сервер Point ответил непонятно	Сервер Point відповів незрозуміло	The Point server's answer made no sense
+Сервер Point ответил отказом ({0})	Сервер Point відповів відмовою ({0})	The Point server refused ({0})
+Сервер Point просит подождать	Сервер Point просить зачекати	The Point server asks you to wait
+Сервер ответил непонятным — ссылку выдать не вышло	Сервер відповів незрозуміло — видати посилання не вийшло	The server's answer made no sense, so no link could be given
+Сервис не знает такой модели	Сервіс не знає такої моделі	The service doesn't know this model
+Сервис не отвечает по этому адресу	Сервіс не відповідає за цією адресою	The service doesn't answer at this address
+Сервис не понял запрос	Сервіс не зрозумів запит	The service didn't understand the request
+Сервис не принял ключ	Сервіс не прийняв ключ	The service didn't accept the key
+Сервис не прочитал снимок	Сервіс не прочитав знімок	The service didn't read the picture
+Сервис ответил непонятно — прочитать не вышло	Сервіс відповів незрозуміло — прочитати не вийшло	The service's answer made no sense, so nothing was read
+Сервис ответил: {0}	Сервіс відповів: {0}	The service said: {0}
+Сервис отказал	Сервіс відмовив	The service refused
+Сервис отказал (код {0})	Сервіс відмовив (код {0})	The service refused (code {0})
+Сервис отказался отвечать на этот запрос	Сервіс відмовився відповідати на цей запит	The service refused to answer this request
+Сервис просит оплату	Сервіс просить оплату	The service wants payment
+Сервис сейчас не настроен	Сервіс зараз не налаштовано	The service isn't set up right now
+Сервис сейчас не отвечает	Сервіс зараз не відповідає	The service isn't answering right now
+Сжать	Стиснути	Compress
+Скопируйте ключ целиком, без пробелов по краям, и проверьте, что он от того сервиса, который выбран выше.	Скопіюйте ключ цілком, без пробілів по краях, і перевірте, що він від того сервісу, який вибрано вище.	Copy the whole key with no spaces at the ends, and check that it's from the service chosen above.
+Слайд {0}.txt	Слайд {0}.txt	Slide {0}.txt
+Слайды	Слайди	Slides
+Слайды есть, а текста на них нет — Point достаёт из презентации только слова. Откройте её целиком, чтобы посмотреть глазами	Слайди є, а тексту на них немає — Point дістає з презентації лише слова. Відкрийте її цілком, щоб подивитися	The slides have no text, and Point only takes words out of a presentation. Open the whole presentation to look at it
+Слишком много попыток подряд. Повторите через минуту.	Забагато спроб поспіль. Повторіть за хвилину.	Too many tries in a row. Try again in a minute.
+Слушаю запись	Слухаю запис	Listening to the recording
+Смотрю на снимок	Дивлюся на знімок	Looking at the picture
+Снимок слишком большой, чтобы его прочитать	Знімок завеликий, щоб його прочитати	The picture is too big to read
+Снимок уйдёт на сервер распознавания и вернётся текстом.	Знімок піде на сервер розпізнавання й повернеться текстом.	The picture goes to a recognition server and comes back as text.
+Снято	Знято	Taken
+Собираю бланк	Збираю бланк	Putting the form together
+Собираю документ	Збираю документ	Putting the document together
+Собираю список	Складаю список	Making the list
+Собираю таблицу	Збираю таблицю	Putting the table together
+Собираю файл	Збираю файл	Putting the file together
+Собрать данные	Зібрати дані	Collect data
+Создать событие	Створити подію	Create event
+Сохранить контакт	Зберегти контакт	Save contact
+Список покупок	Список покупок	Shopping list
+Ссылка	Посилання	Link
+Ссылка больше не работает — выдайте новую	Посилання більше не працює — видайте нове	The link no longer works. Give out a new one
+Ссылка получена, но не сохранилась на устройстве	Посилання отримано, але воно не збереглося на пристрої	Got the link but it couldn't be saved on the device
+Ссылки	Посилання	Links
+Стало понятнее	Стало зрозуміліше	Clearer now
+Страница {0} из {1}	Сторінка {0} з {1}	Page {0} of {1}
+Страница большая — читаю упрощённо	Сторінка велика — читаю спрощено	The page is large, reading it in a simpler way
+Страница входа живёт пять минут. Нажмите «Войти через Google» ещё раз.	Сторінка входу живе п’ять хвилин. Натисніть «Увійти через Google» ще раз.	The sign-in page lasts five minutes. Press “Sign in with Google” again.
+Страница ещё не прочитана — искать не в чем	Сторінку ще не прочитано — шукати нема в чому	The page hasn't been read yet, so there's nothing to search
+Страницу целиком не нашёл на {0} снимках из {1} — они обработаны как есть	Сторінку цілком не знайшов на {0} знімках з {1} — їх оброблено як є	Couldn't find the whole page in {0} of {1} pictures; they were processed as is
+Страницу целиком не нашёл на одном снимке из {0} — он обработан как есть	Сторінку цілком не знайшов на одному знімку з {0} — його оброблено як є	Couldn't find the whole page in one of {0} pictures; it was processed as is
+Страницу целиком не нашёл — обработан весь снимок	Сторінку цілком не знайшов — оброблено весь знімок	Couldn't find the whole page, so the full picture was processed
+Страницы	Сторінки	Pages
+Сумма	Сума	Amount
+Суммы	Суми	Amounts
+Таблицу читают {0} {1} одновременно	Таблицю читають {0} {1} одночасно	{0} {1} are reading the table at once
+Такой объект прочитать нечем — {0} {1}	Такий об’єкт нема чим прочитати — {0} {1}	Nothing can read this item: {0} {1}
+Текст	Текст	Text
+Текст не достался — документ повреждён или это не офисный файл	Текст не дістався — документ пошкоджено або це не офісний файл	Couldn't get the text: the document is damaged or isn't an Office file
+Текст прочитан — он у самого документа	Текст прочитано — він у самого документа	Text read. It's with the document itself
+Текст прочитан, но не сохранился рядом с документом — папка может быть только для чтения или на диске нет места. Перенесите документ в свою папку и повторите	Текст прочитано, але він не зберігся поруч із документом — тека може бути лише для читання або на диску немає місця. Перенесіть документ у свою теку й повторіть	The text was read but couldn't be saved next to the document: the folder may be read-only or the disk full. Move the document to your own folder and try again
+Текста на снимке не нашлось	Тексту на знімку не знайшлося	No text found in the picture
+Телефон	Телефон	Phone
+Телефоны	Телефони	Phones
+Тема	Тема	Subject
+Только на этом устройстве	Лише на цьому пристрої	Only on this device
+У этого ключа нет бесплатного доступа. Возьмите ключ у другого сервиса из списка выше — там отмечено, где бесплатный уровень есть.	У цього ключа немає безкоштовного доступу. Візьміть ключ в іншого сервісу зі списку вище — там позначено, де є безкоштовний рівень.	This key has no free access. Get a key from another service in the list above; it shows which have a free tier.
+Устройство	Пристрій	Device
+Файл {0} — ссылкой отдаётся до {1}	Файл {0} — посиланням віддається до {1}	The file is {0}; links take up to {1}
+Файл великоват — сервис его не берёт	Файл завеликий — сервіс його не бере	The file is too big for the service
+Файл дошёл, а сохранить его на этом устройстве не вышло — проверьте свободное место	Файл дійшов, а зберегти його на цьому пристрої не вийшло — перевірте вільне місце	The file arrived but couldn't be saved on this device. Check free space
+Файл не открылся — он повреждён	Файл не відкрився — він пошкоджений	The file didn't open: it's damaged
+Файл не открылся — он повреждён или это не PDF	Файл не відкрився — він пошкоджений або це не PDF	The file didn't open: it's damaged or not a PDF
+Файл не открылся — он повреждён или это не изображение	Файл не відкрився — він пошкоджений або це не зображення	The file didn't open: it's damaged or not a picture
+Файл пустой — в нём нечего читать	Файл порожній — у ньому нічого читати	The file is empty, there's nothing to read
+Файл уедет на сервер Point и сутки будет открыт любому, у кого есть ссылка. Потом ссылка перестанет работать.	Файл поїде на сервер Point і добу буде відкритий будь-кому, у кого є посилання. Потім посилання перестане працювати.	The file goes to the Point server and for a day anyone with the link can open it. Then the link stops working.
+Файла больше нет на этом устройстве	Файлу більше немає на цьому пристрої	The file is no longer on this device
+Файла объекта нет на диске	Файлу об’єкта немає на диску	The item's file isn't on the disk
+Чаще всего это имя модели. Выберите сервис в списке выше, чтобы оно подставилось само.	Найчастіше це назва моделі. Виберіть сервіс у списку вище, щоб вона підставилася сама.	Most often it's the model name. Choose a service in the list above so it fills itself in.
+Чей это ключ?	Чий це ключ?	Whose key is this?
+Читать таблицу некем — {0}	Читати таблицю нікому — {0}	No one to read the table: {0}
+Читаю документ	Читаю документ	Reading the document
+Читаю объект	Читаю об’єкт	Reading the item
+Читаю снимок в облаке	Читаю знімок у хмарі	Reading the picture in the cloud
+Читаю страницу	Читаю сторінку	Reading the page
+Читаю страницу {0} из {1}	Читаю сторінку {0} з {1}	Reading page {0} of {1}
+Читаю страницы — {0}	Читаю сторінки — {0}	Reading pages: {0}
+Читаю страницы — {0} из {1}, дальше за один заход не выйдет	Читаю сторінки — {0} з {1}, далі за один захід не вийде	Reading pages: {0} of {1}, which is as far as one run goes
+Читаю таблицу	Читаю таблицю	Reading the table
+Читаю текст PDF	Читаю текст PDF	Reading the PDF text
+Читаю текст на устройстве	Читаю текст на пристрої	Reading the text on the device
+Читают все бесплатные сервисы, какие есть, — так распознаётся больше всего даром. Часть из них учится на присланном и держит его у себя.	Читають усі безкоштовні сервіси, які є, — так безкоштовно розпізнається найбільше. Частина з них вчиться на надісланому й тримає його в себе.	Every free service available reads it, so the most gets recognised for free. Some of them learn from what they get and keep it.
+Чтение заняло слишком долго и оборвалось	Читання тривало задовго й обірвалося	Reading took too long and was stopped
+Чтение с фото и распаковка работают и без ключа	Читання з фото й розпакування працюють і без ключа	Reading photos and unpacking work without a key
+Что Point помнит	Що Point пам’ятає	What Point remembers
+Что внутри?	Що всередині?	What's inside?
+Что именно не так, сервис не сказал. Попробуйте другой сервис из списка выше.	Що саме не так, сервіс не сказав. Спробуйте інший сервіс зі списку вище.	The service didn't say what's wrong. Try another service in the list above.
+Что можно сделать?	Що можна зробити?	What can be done?
+Что на изображении?	Що на зображенні?	What's in the picture?
+Что найти в документе?	Що знайти в документі?	What should be found in the document?
+Что от меня хотят?	Чого від мене хочуть?	What do they want from me?
+Что сделать с объектом? (пусто = авто-анализ)	Що зробити з об’єктом? (порожньо = автоаналіз)	What should be done with it? (empty = automatic analysis)
+Что это?	Що це?	What is this?
+Штрихкод	Штрихкод	Barcode
+Это действие для такого объекта не выполняется	Ця дія для такого об’єкта не виконується	This action doesn't work for this kind of item
+Это действие сейчас выполнить нечем — вернитесь к объекту и выберите другое	Цю дію зараз нема чим виконати — поверніться до об’єкта й виберіть іншу	Nothing can do this right now. Go back to the item and choose something else
+Это не про ваш ключ — у сервиса неполадки. Попробуйте через несколько минут.	Це не через ваш ключ — у сервісу негаразди. Спробуйте за кілька хвилин.	It's not your key; the service is having trouble. Try in a few minutes.
+Это рукопись: текст ниже прочитан по снимку, а не взят из файла, — ошибка чтения возможна в любом слове. Сверьте с оригиналом.	Це рукопис: текст нижче прочитано зі знімка, а не взято з файлу, — помилка читання можлива в будь-якому слові. Звірте з оригіналом.	This is handwriting: the text below was read from a picture, not taken from a file, so any word may be misread. Check it against the original.
+Это старый формат Office — Point читает .docx, .xlsx и .pptx. Пересохраните документ в одном из них	Це старий формат Office — Point читає .docx, .xlsx і .pptx. Пересбережіть документ в одному з них	This is an old Office format. Point reads .docx, .xlsx and .pptx. Save the document again in one of them
+Это устройство больше не в вашем круге — войдите заново	Цей пристрій більше не у вашому колі — увійдіть заново	This device is no longer in your circle. Sign in again
+Это устройство не в вашем аккаунте	Цей пристрій не у вашому акаунті	This device isn't in your account
+Это устройство отключили от аккаунта	Цей пристрій відключили від акаунта	This device was removed from the account
+Это устройство отключили от аккаунта. Войдите заново.	Цей пристрій відключили від акаунта. Увійдіть заново.	This device was removed from the account. Sign in again.
+Этот текст длиннее, чем помещается в QR-код — сократите его	Цей текст довший, ніж уміщається в QR-код — скоротіть його	This text is longer than fits in a QR code. Shorten it
+Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac	Цей формат запису не читається — підійдуть ogg, mp3, m4a, wav, flac	This recording format can't be read. Use ogg, mp3, m4a, wav or flac
+Ячейка {0}×{1}	Клітинка {0}×{1}	Cell {0}×{1}
+Ячейка «{0}» × «{1}»	Клітинка «{0}» × «{1}»	Cell “{0}” × “{1}”
+Ящик открыт, а ссылку на него собрать не вышло	Скриньку відкрито, а посилання на неї скласти не вийшло	The box is open, but a link to it couldn't be made
+авг	серп	Aug
+августа	серпня	August
+адрес	адреса	address
+адрес почты	адреса пошти	email address
+адрес, который вы вписали сами	адреса, яку ви вписали самі	an address you entered yourself
+апр	квіт	Apr
+апреля	квітня	April
+архив	архів	archive
+без сети	без мережі	offline
+бесплатная дневная норма	безкоштовна денна норма	free daily allowance
+бесплатная дневная норма у сети, которая рядом с человеком	безкоштовна денна норма в мережі, що поруч із людиною	free daily allowance on a network close to you
+бесплатная квота в сутки	безкоштовна квота на добу	free daily quota
+бесплатная модель, лимит не назван	безкоштовна модель, ліміт не названо	free model, no stated limit
+бесплатно после регистрации, суточный предел вызовов	безкоштовно після реєстрації, добова межа викликів	free after sign-up, daily call limit
+бесплатное чтение на сегодня закончилось	безкоштовне читання на сьогодні скінчилося	free reading is used up for today
+бесплатные вызовы после регистрации, предел не назван	безкоштовні виклики після реєстрації, межу не названо	free calls after sign-up, no stated limit
+бесплатные модели есть	є безкоштовні моделі	has free models
+бесплатный	безкоштовний	toll-free
+бесплатный уровень	безкоштовний рівень	free tier
+бесплатный уровень после подтверждения телефона	безкоштовний рівень після підтвердження телефону	free tier after confirming a phone number
+бесплатный уровень с лимитом в минуту	безкоштовний рівень з лімітом на хвилину	free tier with a per-minute limit
+бланк {0}.xlsx	бланк {0}.xlsx	form {0}.xlsx
+большие Qwen3-VL даром — читает фото документа целиком	великі Qwen3-VL безкоштовно — читає фото документа цілком	large Qwen3-VL for free; reads a photo of a document in full
+буквы двух алфавитов в одном слове — обычная подмена при чтении	літери двох алфавітів в одному слові — звичайна підміна під час читання	letters from two alphabets in one word, a common reading mix-up
+был на связи {0} назад	був на зв’язку {0} тому	last online {0} ago
+быстрый текст, картинки не понимает	швидкий текст, картинок не розуміє	fast text, doesn't understand pictures
+в {0}	о {0}	at {0}
+в ответе нет ни одной буквы и ни одной цифры	у відповіді немає жодної літери й жодної цифри	the answer has no letters or digits at all
+валюта	валюта	currency
+ваш ключ {0}	ваш ключ {0}	your key {0}
+видит картинки, но часто отвечает «занят»	бачить картинки, але часто відповідає «зайнятий»	sees pictures but often answers “busy”
+всё, что оставалось	усе, що лишалося	everything that was left
+вчера	вчора	yesterday
+вчера в {0}	вчора о {0}	yesterday at {0}
+выведено правилом	виведено правилом	derived by a rule
+городской	міський	landline
+давно	давно	long ago
+дата	дата	date
+действие спрашивает на компьютере — ответить отсюда нечем	дія питає на комп’ютері — відповісти звідси нічим	the action is asking on the computer, and there's no way to answer from here
+дек	груд	Dec
+декабря	грудня	December
+день	день	day
+дней	днів	days
+дня	дні	days
+документ	документ	document
+документ Word	документ Word	a Word document
+документ Word · {0} уйдёт в сервис	документ Word · {0} піде в сервіс	Word document · the {0} goes to a service
+документ целиком	документ цілком	the whole document
+документ.docx	документ.docx	document.docx
+дочитать таблицу	дочитати таблицю	finish reading the table
+единица	одиниця	unit
+ещё не обращались	ще не зверталися	not asked yet
+ещё не связывались	ще не зв’язувалися	not connected yet
+ещё ни разу не выходило на связь	ще жодного разу не виходив на зв’язок	has never been online
+ждёт связи	чекає на зв’язок	waiting for a connection
+за один заход читается не больше {0}	за один захід читається не більше {0}	one run reads no more than {0}
+за один заход чтение идёт не дольше {0} минут	за один захід читання триває не довше {0} хв	one run reads for no more than {0} min
+задайте свой ключ	задайте свій ключ	add your own key
+запись	запис	recording
+изображение	зображення	picture
+исследование не удалось	дослідження не вдалося	the check failed
+исходная запись рядом	вихідний запис поруч	the original recording is right here
+исходник рядом	оригінал поруч	the original is right here
+исходный документ рядом	вихідний документ поруч	the original document is right here
+исходный снимок рядом	вихідний знімок поруч	the original picture is right here
+исходный текст рядом	вихідний текст поруч	the original text is right here
+итог не сошёлся: строки дают {0}, а написано {1}	підсумок не зійшовся: рядки дають {0}, а написано {1}	the total doesn't add up: the lines give {0}, but it says {1}
+июл	лип	Jul
+июля	липня	July
+июн	черв	Jun
+июня	червня	June
+карта	картка	card
+картинку	картинку	a picture
+каталог чужих моделей на своих карточках: мелкие отвечают сразу, крупные ждут запуска	каталог сторонніх моделей на власних картах: дрібні відповідають одразу, великі чекають запуску	a catalogue of other makers' models on its own hardware: small ones answer at once, large ones wait to start
+ключ не подошёл	ключ не підійшов	key didn't work
+ключ не принят	ключ не прийнято	key not accepted
+ключа нет — этот сервис молчит	ключа немає — цей сервіс мовчить	no key, so this service stays silent
+координаты	координати	coordinates
+лимит исчерпан	ліміт вичерпано	limit reached
+лучше всех бесплатных читает фото документа — им Point разбирает страницу	найкраще з безкоштовних читає фото документа — ним Point розбирає сторінку	reads photos of documents best among the free ones; Point uses it to read pages
+мар	бер	Mar
+марта	березня	March
+мая	травня	May
+меньше минуты	менше хвилини	less than a minute
+меньше часа назад	менше години тому	less than an hour ago
+мест	місць	places
+места	місця	places
+место	місце	place
+месяц	місяць	month
+месяца	місяці	months
+месяцев	місяців	months
+минут	хвилин	minutes
+минуту	хвилину	minute
+минуты	хвилини	minutes
+мобильный	мобільний	mobile
+моделей	моделей	models
+модели	моделі	models
+модель	модель	model
+модель ответила рассуждением без ответа	модель відповіла міркуванням без відповіді	the model replied with reasoning but no answer
+модель ответила текстом, а не таблицей	модель відповіла текстом, а не таблицею	the model answered with text, not a table
+на компьютере	на комп’ютері	on the computer
+на компьютере нет офиса	на комп’ютері немає офісу	the computer has no Office
+на связи	на зв’язку	online
+на телефоне	на телефоні	on the phone
+набор файлов	набір файлів	set of files
+найдёт суть, суммы, даты и контакты	знайде суть, суми, дати й контакти	finds the gist, amounts, dates and contacts
+нашлось: 	знайшлося: 	found: 
+не отвечал	не відповідав	didn't answer
+недели	тижні	weeks
+недель	тижнів	weeks
+неделю	тиждень	week
+нет	немає	none
+нет интернета	немає інтернету	no internet
+номер квитанции	номер квитанції	receipt number
+ноя	лист	Nov
+ноября	листопада	November
+нужен вход — устройство не в аккаунте	потрібен вхід — пристрій не в акаунті	sign-in needed: the device isn't in the account
+нужен ключ	потрібен ключ	needs a key
+нужен компьютер с офисом	потрібен комп’ютер з офісом	needs a computer with Office
+обещал не учиться на присланном и не хранить его	пообіцяв не вчитися на надісланому й не зберігати його	promised not to learn from what it gets or keep it
+объект	об’єкт	item
+объект не прочитан	об’єкт не прочитано	the item wasn't read
+объект.{0}	об’єкт.{0}	item.{0}
+объекта	об’єкти	items
+объектов	об’єктів	items
+один ключ — десятки моделей разом	один ключ — десятки моделей разом	one key, dozens of models at once
+одна и та же строка повторена {0} раз подряд	той самий рядок повторено {0} разів поспіль	the same line is repeated {0} times in a row
+окт	жовт	Oct
+октября	жовтня	October
+ответил	відповів	answered
+отправитель	відправник	sender
+перевозчик	перевізник	carrier
+платно	платно	paid
+платно, зато предсказуемо	платно, зате передбачувано	paid, but predictable
+платно, сильна в длинных документах	платно, сильна в довгих документах	paid, strong with long documents
+платный	платний	premium-rate
+подтверждено вами	підтверджено вами	confirmed by you
+подтверждено: 	підтверджено: 	confirmed: 
+показание	показник	reading
+получатель	одержувач	recipient
+понимает фотографии, отвечает стабильно	розуміє фотографії, відповідає стабільно	understands photos, answers reliably
+понято по смыслу	зрозуміло за змістом	understood from meaning
+посмотрели, но недостаточно	подивилися, але недостатньо	looked, but not enough
+почта	пошта	email
+примерно {0} мин	приблизно {0} хв	about {0} min
+примерно {0} сек	приблизно {0} с	about {0} sec
+причина не названа	причину не названо	no reason given
+приём файла — дождаться файла	приймання файлу — дочекатися файлу	receiving a file: wait for the file
+приём файла — закрыть ящик	приймання файлу — закрити скриньку	receiving a file: close the box
+приём файла — открыть ящик	приймання файлу — відкрити скриньку	receiving a file: open the box
+приём файла — подтвердить приём	приймання файлу — підтвердити приймання	receiving a file: confirm receipt
+приём файла — положить файл на устройство	приймання файлу — покласти файл на пристрій	receiving a file: save it on the device
+про обучение на присланном не сказал ничего	про навчання на надісланому нічого не сказав	said nothing about learning from what it gets
+проверено начало — {0} из {1} символов	перевірено початок — {0} з {1} символів	checked the beginning: {0} of {1} characters
+проверяю связь…	перевіряю зв’язок…	checking the connection…
+проверяю…	перевіряю…	checking…
+прочитано	прочитано	read
+прочитать	прочитати	read
+прочтения спорят	прочитання розходяться	readings disagree
+прочтения спорят: 	прочитання розходяться: 	readings disagree: 
+работает на ключе Point	працює на ключі Point	runs on Point's key
+разложите на страницы	розкладіть на сторінки	split it into pages
+расшифровать	розшифрувати	transcribe
+расшифровку умеют Groq и OpenAI, но не OpenRouter	розшифровувати вміють Groq і OpenAI, але не OpenRouter	Groq and OpenAI can transcribe, OpenRouter can't
+с поддержкой аудио	з підтримкою аудіо	that supports audio
+с поддержкой изображений	з підтримкою зображень	that supports pictures
+самый быстрый ответ из бесплатных; им же Point расшифровывает голосовые	найшвидша відповідь серед безкоштовних; ним же Point розшифровує голосові	the fastest free answers; Point also uses it to transcribe voice messages
+сделать кое-что	дещо зробити	do something
+сегодня	сьогодні	today
+сен	вер	Sep
+сентября	вересня	September
+сервис	сервіс	service
+сервис, обещавший не учиться на присланном	сервіс, що пообіцяв не вчитися на надісланому	a service that promised not to learn from what it gets
+слова записи · запись уйдёт в сервис	слова запису · запис піде в сервіс	words of the recording · the recording goes to a service
+смотрели — не нашлось	дивилися — не знайшлося	looked, nothing found
+сначала извлеките текст	спершу витягніть текст	extract the text first
+сначала распознайте текст	спершу розпізнайте текст	recognise the text first
+снимок	знімок	picture
+спорную ячейку	спірну клітинку	disputed cell
+спорные ячейки	спірні клітинки	disputed cells
+спорных ячеек	спірних клітинок	disputed cells
+ссылка	посилання	link
+ссылка на {0}	посилання на {0}	link to {0}
+ссылка на квитанцию	посилання на квитанцію	receipt link
+ссылка на сутки · файл уйдёт на сервер Point · до 	посилання на добу · файл піде на сервер Point · до 	link for a day · the file goes to the Point server · up to 
+ссылку	посилання	a link
+столбец {0}	стовпець {0}	column {0}
+страница вернулась пустой	сторінка повернулася порожньою	the page came back empty
+страница прочитана пустой	сторінку прочитано порожньою	the page was read as empty
+сумма	сума	amount
+сутки	добу	a day
+таблица.xlsx	таблиця.xlsx	table.xlsx
+таблицу	таблицю	a table
+текст	текст	text
+текст · сначала на телефоне, потом спрошу про сервис	текст · спершу на телефоні, потім спитаю про сервіс	text · first on the phone, then I'll ask about a service
+текст всех страниц	текст усіх сторінок	text of all pages
+текст документа · без сети	текст документа · без мережі	document text · offline
+текст объекта недоступен	текст об’єкта недоступний	the item's text isn't available
+текст точнее · снимок уйдёт в сервис	точніший текст · знімок піде в сервіс	more accurate text · the picture goes to a service
+телефон	телефон	phone
+тема	тема	subject
+только то, что в кадре	лише те, що в кадрі	only what's in the frame
+только что	щойно	just now
+трек-номер	трек-номер	tracking number
+у вас это уже есть — 	у вас це вже є — 	you already have this: 
+уйдёт в сервис	піде в сервіс	goes to a service
+уточнено: 	уточнено: 	refined: 
+учится на присланном и держит его у себя	вчиться на надісланому й тримає його в себе	learns from what it gets and keeps it
+файл	файл	file
+фев	лют	Feb
+февраля	лютого	February
+хорошо понимает фотографии	добре розуміє фотографії	understands photos well
+час	годину	hour
+часа	години	hours
+часов	годин	hours
+часть документа обрезана	частину документа обрізано	part of the document is cut off
+через компьютер в сервис	через комп’ютер у сервіс	through the computer to a service
+чужой сервер	сторонній сервер	another company's server
+это устройство · 	цей пристрій · 	this device · 
+янв	січ	Jan
+января	січня	January
+⚠ Страница {0} из {1} не прочиталась — проверьте её отдельно	⚠ Сторінка {0} з {1} не прочиталася — перевірте її окремо	⚠ Page {0} of {1} wasn't read. Check it separately
+⚠ Страница {0} не читалась — {1}	⚠ Сторінка {0} не читалася — {1}	⚠ Page {0} wasn't read: {1}
+⚠ Страницы {0}–{1} не читались — {2}	⚠ Сторінки {0}–{1} не читалися — {2}	⚠ Pages {0}–{1} weren't read: {2}

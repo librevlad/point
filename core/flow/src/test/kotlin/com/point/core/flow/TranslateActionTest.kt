@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.ActionResult
+import com.point.core.model.Lang
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -31,6 +32,21 @@ class TranslateActionTest {
     @Test
     fun `mostly-latin mixed text defaults to russian`() {
         assertEquals("русский", translateDefaultTarget("Meeting at 10: agenda, notes, action items"))
+    }
+
+    @Test
+    fun `по умолчанию переводится на язык человека, а свой текст — на английский (#1473)`() {
+        val russian = "Привет, как дела? Это тест."
+        val ukrainian = "Привіт, як справи? Це тест."
+        val english = "Hello, how are you? This is a test."
+
+        assertEquals(Lang.UK, translateTargetLang(russian, Lang.UK))
+        assertEquals(Lang.UK, translateTargetLang(english, Lang.UK))
+        assertEquals(Lang.EN, translateTargetLang(ukrainian, Lang.UK))
+        assertEquals(Lang.EN, translateTargetLang(russian, Lang.EN))
+        assertEquals(Lang.EN, translateTargetLang(ukrainian, Lang.EN))
+        assertEquals(Lang.RU, translateTargetLang(ukrainian, Lang.RU))
+        assertEquals(Lang.EN, translateTargetLang(russian, Lang.RU))
     }
 
     private fun llm(out: File) = object : LlmClient {

@@ -5,6 +5,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.Relation
 import com.point.core.model.RelationType
 
+import com.point.core.model.tr
 /*
  * Сделанное остаётся у исходника (Product Constitution P4).
  *
@@ -23,19 +24,19 @@ import com.point.core.model.RelationType
 fun madeMessage(produced: PointObject): String {
     val name = produced.metadata["name"]?.trim()?.takeIf { it.isNotEmpty() }
     val noun = produced.metadata[META_YIELD_NOUN]?.substringBefore(" · ")?.trim()?.takeIf { it.isNotEmpty() }
-    return "Готово: " + (name ?: noun ?: madeNoun(produced.state.kind))
+    return tr("Готово: ") + (name ?: noun ?: madeNoun(produced.state.kind))
 }
 
 private fun madeNoun(kind: ObjectKind): String = when (kind) {
-    ObjectKind.TEXT -> "текст"
-    ObjectKind.IMAGE -> "изображение"
+    ObjectKind.TEXT -> tr("текст")
+    ObjectKind.IMAGE -> tr("изображение")
     ObjectKind.PDF -> "PDF"
-    ObjectKind.OFFICE -> "документ"
-    ObjectKind.URL -> "ссылка"
-    ObjectKind.AUDIO -> "запись"
-    ObjectKind.ZIP -> "архив"
-    ObjectKind.COLLECTION -> "набор файлов"
-    else -> "файл"
+    ObjectKind.OFFICE -> tr("документ")
+    ObjectKind.URL -> tr("ссылка")
+    ObjectKind.AUDIO -> tr("запись")
+    ObjectKind.ZIP -> tr("архив")
+    ObjectKind.COLLECTION -> tr("набор файлов")
+    else -> tr("файл")
 }
 
 /** Что сделано из объекта [id]: найденные рядом объекты, полученные из него действием. */

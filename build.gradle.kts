@@ -11,3 +11,15 @@ plugins {
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.google.services) apply false
 }
+
+/**
+ * Тесты читают русские фразы продукта (#1473): Point говорит на языке устройства, а машина CI
+ * бывает английской. Язык тестов закреплён здесь, один раз для всех модулей, свойством
+ * `point.lang` (`Lang.current`), а не подменой `Locale`: от него зависит разбор сумм и дат.
+ * Как Point выбирает язык и что видит англичанин или украинец, проверяют `TrTest` и `:checks`.
+ */
+subprojects {
+    tasks.withType<Test>().configureEach {
+        systemProperty("point.lang", "ru")
+    }
+}

@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlin.coroutines.cancellation.CancellationException
 
 class FirstHeardSpeechToText(
@@ -51,6 +52,6 @@ class FirstHeardSpeechToText(
     private companion object {
 
         /** Глагол этой цепочки для общей сводки отказов (#1237). */
-        const val WHAT_FAILED = "расшифровать"
+        val WHAT_FAILED: String get() = tr("расшифровать")
     }
 }

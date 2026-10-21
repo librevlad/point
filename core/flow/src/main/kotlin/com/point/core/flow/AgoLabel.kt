@@ -1,19 +1,22 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
+
 fun agoLabel(millisAgo: Long): String {
-    if (millisAgo < 0) return "только что"
+    if (millisAgo < 0) return tr("только что")
     val minutes = millisAgo / 60_000
     val hours = minutes / 60
     val days = hours / 24
     return when {
-        minutes < 1 -> "только что"
-        minutes < 60 -> "$minutes ${plural(minutes, "минуту", "минуты", "минут")} назад"
-        hours < 24 -> "$hours ${plural(hours, "час", "часа", "часов")} назад"
-        days == 1L -> "вчера"
-        days < 7 -> "$days ${plural(days, "день", "дня", "дней")} назад"
-        days < 31 -> "${days / 7} ${plural(days / 7, "неделю", "недели", "недель")} назад"
-        days < 365 -> "${days / 30} ${plural(days / 30, "месяц", "месяца", "месяцев")} назад"
-        else -> "давно"
+        minutes < 1 -> tr("только что")
+        minutes < 60 -> tr("{0} {1} назад", minutes, trPlural(minutes, "минуту", "минуты", "минут"))
+        hours < 24 -> tr("{0} {1} назад", hours, trPlural(hours, "час", "часа", "часов"))
+        days == 1L -> tr("вчера")
+        days < 7 -> tr("{0} {1} назад", days, trPlural(days, "день", "дня", "дней"))
+        days < 31 -> tr("{0} {1} назад", days / 7, trPlural(days / 7, "неделю", "недели", "недель"))
+        days < 365 -> tr("{0} {1} назад", days / 30, trPlural(days / 30, "месяц", "месяца", "месяцев"))
+        else -> tr("давно")
     }
 }
 
@@ -26,15 +29,5 @@ fun stampLabel(epochMillis: Long, zone: java.time.ZoneId = java.time.ZoneId.syst
 
 /** Короткие русские месяцы в стиле продукта — «17 авг», «3 мая». Общие для подписей времени. */
 internal val MONTHS = listOf(
-    "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
+    tr("янв"), tr("фев"), tr("мар"), tr("апр"), tr("мая"), tr("июн"), tr("июл"), tr("авг"), tr("сен"), tr("окт"), tr("ноя"), tr("дек"),
 )
-
-internal fun plural(n: Long, one: String, few: String, many: String): String {
-    val mod100 = n % 100
-    if (mod100 in 11..14) return many
-    return when (n % 10) {
-        1L -> one
-        2L, 3L, 4L -> few
-        else -> many
-    }
-}

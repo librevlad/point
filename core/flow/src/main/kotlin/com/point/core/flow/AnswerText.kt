@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Ответ модели без того, что человеку не адресовано (#1320).
  *
@@ -19,7 +21,7 @@ fun answerOnly(answer: String): String {
 }
 
 /** Ответом было одно рассуждение вслух — отвечать оказалось нечем (#1320). */
-const val ONLY_REASONING = "модель ответила рассуждением без ответа"
+val ONLY_REASONING: String get() = tr("модель ответила рассуждением без ответа")
 
 /**
  * Рассуждение вслух — не ответ (#1320).

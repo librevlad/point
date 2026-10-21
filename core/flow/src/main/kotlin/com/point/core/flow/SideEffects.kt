@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 
+import com.point.core.model.tr
 interface Sharer {
     suspend fun share(obj: PointObject)
 
@@ -150,11 +151,11 @@ fun List<DocBlock>.withReadingNote(mode: ReadingMode): List<DocBlock> {
     return listOf(DocBlock(note, DocStyle.NORMAL)) + this
 }
 
-const val HANDWRITTEN_NOTE =
-    "Это рукопись: текст ниже прочитан по снимку, а не взят из файла, — ошибка чтения возможна " +
-        "в любом слове. Сверьте с оригиналом."
+val HANDWRITTEN_NOTE: String get() =
+    tr("Это рукопись: текст ниже прочитан по снимку, а не взят из файла, — ошибка чтения возможна " +
+        "в любом слове. Сверьте с оригиналом.")
 
-const val HANDWRITTEN_MARKS = "Жёлтым отмечено то, что стоит проверить в первую очередь."
+val HANDWRITTEN_MARKS: String get() = tr("Жёлтым отмечено то, что стоит проверить в первую очередь.")
 
 interface DocxWriter {
 

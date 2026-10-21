@@ -8,6 +8,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,7 +33,7 @@ class FixErrorsCapability(
 
     override val meta = CapabilityMeta(priority = 32, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
-    override fun label(state: ObjectState) = labelNeedingKey("Исправить ошибки", keys.keySet())
+    override fun label(state: ObjectState) = labelNeedingKey(tr("Исправить ошибки"), keys.keySet())
 
     // Знание не привязано к форме: исправлять бывает что у любого объекта. Сужает не форма,
     // а само знание — им и занимается разбор по Graph State ниже.
@@ -60,7 +61,7 @@ class FixErrorsStrongerCapability(
 
     override val meta = CapabilityMeta(priority = 33, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
-    override fun label(state: ObjectState) = labelNeedingKey("Исправить сильнее", keys.keySet())
+    override fun label(state: ObjectState) = labelNeedingKey(tr("Исправить сильнее"), keys.keySet())
 
     // Сверять с источником есть смысл там, где источник — снимок: у текста модель уже
     // видела всё, что можно, на первой ступени.
@@ -103,9 +104,9 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
     withContext(Dispatchers.IO) {
         val facts = fixableFacts(input.metadata)
         if (facts.isEmpty()) {
-            return@withContext ActionResult.Failure("Исправлять нечего — знания об объекте пока нет", recoverable = false)
+            return@withContext ActionResult.Failure(tr("Исправлять нечего — знания об объекте пока нет"), recoverable = false)
         }
-        reportStage(if (withObject) "Сверяю со снимком" else "Проверяю найденное")
+        reportStage(if (withObject) tr("Сверяю со снимком") else tr("Проверяю найденное"))
         runCatching {
 
             // Первой ступени снимок не нужен: она правит опечатки в самом знании, и
@@ -135,7 +136,7 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
                 )
             }
         }.getOrElse {
-            ActionResult.Failure(it.message ?: "Не удалось проверить знание", recoverable = true)
+            ActionResult.Failure(it.message ?: tr("Не удалось проверить знание"), recoverable = true)
         }
     }
 
@@ -160,9 +161,9 @@ private suspend fun fixOwnText(
     // потеряло бы хвост. В запрос же уходит только окно — длинный текст одним вопросом не
     // проверить, а итог честно говорит, какая часть проверена.
     val text = known.textOf(input, limit = Int.MAX_VALUE)?.takeIf { it.isNotBlank() }
-        ?: return@withContext ActionResult.Failure("Исправлять нечего — текста у объекта нет", recoverable = false)
+        ?: return@withContext ActionResult.Failure(tr("Исправлять нечего — текста у объекта нет"), recoverable = false)
     val window = fixTextWindow(text)
-    reportStage("Проверяю текст")
+    reportStage(tr("Проверяю текст"))
     runCatching {
         val answer = File(llm.run(input, fixTextPrompt(window)).uri.value).readText()
         val fixed = fixText(text, answer)
@@ -196,6 +197,6 @@ private suspend fun fixOwnText(
             else -> ActionResult.Done(fixedTextMessage(fixed, checked = window.length, total = text.length))
         }
     }.getOrElse {
-        ActionResult.Failure(it.message ?: "Не удалось проверить текст", recoverable = true)
+        ActionResult.Failure(it.message ?: tr("Не удалось проверить текст"), recoverable = true)
     }
 }

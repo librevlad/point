@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 
+import com.point.core.model.tr
 class FallbackLlmClient(
     private val providers: List<@JvmSuppressWildcards LlmClient>,
 
@@ -26,7 +27,7 @@ class FallbackLlmClient(
     override suspend fun run(obj: PointObject, prompt: String): ResultObject = run(obj, prompt, emptySet())
 
     override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
-        if (providers.isEmpty()) error("AI не настроен — $AI_KEY_HINT")
+        if (providers.isEmpty()) error(tr("AI не настроен — {0}", AI_KEY_HINT))
 
         // Снимок читает тот, кто видит. В режиме YOLO сильная модель идёт первой всегда
         // (#795): человек попросил лучший результат, а не самый бережный порядок.
@@ -105,15 +106,15 @@ class FallbackLlmClient(
         }
         if (considered == 0) {
             if (skippedUnconfigured > 0 && errors.isEmpty()) {
-                error("AI не настроен — $AI_KEY_HINT")
+                error(tr("AI не настроен — {0}", AI_KEY_HINT))
             }
 
             val needed = if (obj.mime.startsWith("audio/") || obj.mime == "application/ogg") {
-                "с поддержкой аудио"
+                tr("с поддержкой аудио")
             } else {
-                "с поддержкой изображений"
+                tr("с поддержкой изображений")
             }
-            error("Такой объект прочитать нечем — $AI_KEY_HINT $needed")
+            error(tr("Такой объект прочитать нечем — {0} {1}", AI_KEY_HINT, needed))
         }
         // Сеть могла оборваться ПОСРЕДИ очереди (#1134): каждый сервис тогда падает своим
         // отказом, и человек читал «сервисы капризничают», хотя настоящая причина —
@@ -134,9 +135,9 @@ class FallbackLlmClient(
         }
 
         /** Та же, что у облачного чтения: человеку без разницы, кто именно упёрся в лимит. */
-        const val FREE_LIMITS_SPENT = FREE_LIMITS_SPENT_TEXT
+        val FREE_LIMITS_SPENT: String get() = FREE_LIMITS_SPENT_TEXT
 
         /** Глагол этой цепочки для общей сводки отказов (#1237). */
-        internal const val WHAT_FAILED = "прочитать"
+        internal val WHAT_FAILED: String get() = tr("прочитать")
     }
 }

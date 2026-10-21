@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 enum class BlockRole {
 
     TITLE,
@@ -257,9 +259,9 @@ const val META_TABLE_PAGES = "table.pages"
 const val META_TABLE_PAGES_UNREAD = "table.pages.unread"
 
 fun scopeLabel(scope: DocScope): String = when (scope) {
-    DocScope.FULL -> "документ целиком"
-    DocScope.VIEWPORT -> "только то, что в кадре"
-    DocScope.CROPPED -> "часть документа обрезана"
+    DocScope.FULL -> tr("документ целиком")
+    DocScope.VIEWPORT -> tr("только то, что в кадре")
+    DocScope.CROPPED -> tr("часть документа обрезана")
 }
 
-fun headerLabel(headerRows: Int): String = if (headerRows <= 0) "нет" else headerRows.toString()
+fun headerLabel(headerRows: Int): String = if (headerRows <= 0) tr("нет") else headerRows.toString()

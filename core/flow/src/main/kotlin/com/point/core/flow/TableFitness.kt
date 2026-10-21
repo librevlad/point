@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 const val UNFIT_UNREAD_SHARE: Double = 1.0 / 3.0
 
 private const val MIN_JUDGEABLE_WORDS = 40
@@ -10,13 +12,13 @@ fun unfitTable(document: DocumentLayout, disputed: Int, gridCells: Int): String?
     val read = document.readWords
     val unread = document.unreadWords
     if (read == 0 && unread > 0) {
-        return "Прочитать таблицу не удалось: ни одной части документа со страницы не собралось"
+        return tr("Прочитать таблицу не удалось: ни одной части документа со страницы не собралось")
     }
     if (unread + read >= MIN_JUDGEABLE_WORDS && unread.toDouble() / (unread + read) >= UNFIT_UNREAD_SHARE) {
-        return "Прочитать таблицу не удалось: больше трети страницы разобрать не вышло"
+        return tr("Прочитать таблицу не удалось: больше трети страницы разобрать не вышло")
     }
     if (gridCells >= MIN_JUDGEABLE_CELLS && disputed.toDouble() / gridCells >= WARNING_WALL_SHARE) {
-        return "Прочитать таблицу не удалось: чтения разошлись больше чем на трети ячеек"
+        return tr("Прочитать таблицу не удалось: чтения разошлись больше чем на трети ячеек")
     }
     return null
 }

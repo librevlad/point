@@ -6,15 +6,16 @@ import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.Findings
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-const val OFFICE_READ_STAGE = "Читаю документ"
+val OFFICE_READ_STAGE: String get() = tr("Читаю документ")
 
 /** Что слышит человек, когда текст прочитан, а лечь на диск не смог: причина записи (#995). */
-const val TEXT_NOT_KEPT =
-    "Текст прочитан, но не сохранился рядом с документом — папка может быть только для чтения " +
-        "или на диске нет места. Перенесите документ в свою папку и повторите"
+val TEXT_NOT_KEPT: String get() =
+    tr("Текст прочитан, но не сохранился рядом с документом — папка может быть только для чтения " +
+        "или на диске нет места. Перенесите документ в свою папку и повторите")
 
 /**
  * Куда ложится прочитанный текст (#1379).
@@ -51,7 +52,7 @@ class OfficeRealizer(
             reportStage(OFFICE_READ_STAGE)
             val text = runCatching { officeText.extractText(input) }.getOrElse {
                 return@withContext ActionResult.Failure(
-                    "Текст не достался — документ повреждён или это не офисный файл",
+                    tr("Текст не достался — документ повреждён или это не офисный файл"),
                     recoverable = true,
                 )
             }

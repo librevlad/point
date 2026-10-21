@@ -6,6 +6,7 @@ import com.point.core.model.Findings
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -34,7 +35,7 @@ class TranscribeCapability(
     )
 
     override fun label(state: ObjectState) =
-        labelNeedingKey("Расшифровать", readiness.missingKeys().isEmpty())
+        labelNeedingKey(tr("Расшифровать"), readiness.missingKeys().isEmpty())
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO
 
@@ -86,7 +87,7 @@ class TranscribeRealizer(
             val heard = runCatching { speech.transcribe(input) }
                 .getOrElse {
                     return@withContext ActionResult.Failure(
-                        it.message ?: "Не удалось расшифровать запись",
+                        it.message ?: tr("Не удалось расшифровать запись"),
                         recoverable = true,
                     )
                 }
@@ -101,7 +102,7 @@ class TranscribeRealizer(
                     // Слова ложатся представлением на исходник тем же ключом, каким лежит
                     // любое чтение, и экран записи показывает их своим блоком «Текст».
                     val ref = runCatching { keeper.keep(input, transcriptFileText(heard)) }.getOrNull()
-                        ?: return@withContext ActionResult.Failure("Ошибка записи результата", recoverable = true)
+                        ?: return@withContext ActionResult.Failure(tr("Ошибка записи результата"), recoverable = true)
                     ActionResult.Done(
                         // Слова о сделанном — из общего словаря (#1097): ту же работу делает
                         // компьютер, и звучать она обязана одинаково.

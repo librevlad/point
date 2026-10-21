@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Орган, который превращает офисный документ в PDF слайд в слайд (#403).
  *
@@ -18,10 +20,10 @@ fun interface OfficeOrgan {
 }
 
 /** Компьютера нет вовсе — или он не на связи. */
-const val NO_PC_WITH_OFFICE = "нужен компьютер с офисом"
+val NO_PC_WITH_OFFICE: String get() = tr("нужен компьютер с офисом")
 
 /** Компьютер есть, офиса на нём нет — случай, который человек может исправить сам. */
-const val NO_OFFICE_ON_PC = "на компьютере нет офиса"
+val NO_OFFICE_ON_PC: String get() = tr("на компьютере нет офиса")
 
 /** Орган на месте: так его видят компьютер и тесты, которым про офис ничего не важно. */
 val OfficeAlwaysHere = OfficeOrgan { null }

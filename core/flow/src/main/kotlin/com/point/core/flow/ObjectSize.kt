@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlin.math.roundToInt
 
 const val META_SIZE = "size"
@@ -7,11 +8,11 @@ const val META_SIZE = "size"
 fun humanWeight(bytes: Long): String? {
     if (bytes <= 0L) return null
     val kb = bytes / 1024.0
-    if (kb < 1.0) return "$bytes Б"
-    if (kb < 1024.0) return "${kb.roundToInt()} КБ"
+    if (kb < 1.0) return tr("{0} Б", bytes)
+    if (kb < 1024.0) return tr("{0} КБ", kb.roundToInt())
     val mb = kb / 1024.0
-    if (mb < 1024.0) return "${oneDecimal(mb)} МБ"
-    return "${oneDecimal(mb / 1024.0)} ГБ"
+    if (mb < 1024.0) return tr("{0} МБ", oneDecimal(mb))
+    return tr("{0} ГБ", oneDecimal(mb / 1024.0))
 }
 
 private fun oneDecimal(value: Double): String {

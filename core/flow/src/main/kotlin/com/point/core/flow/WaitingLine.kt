@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Сколько идёт работа — одними словами на телефоне и компьютере (#901).
  *
@@ -13,10 +15,10 @@ package com.point.core.flow
  * модели нет.
  */
 fun waitingLine(elapsed: Int, network: Boolean, cancelable: Boolean = true): String = when {
-    !network -> if (elapsed < 3) "Обрабатываю…" else "Идёт $elapsed с"
-    elapsed < LONG_WAIT_S -> "Идёт $elapsed с"
-    cancelable -> "Идёт $elapsed с · долгое ожидание, можно отменить"
-    else -> "Идёт $elapsed с · долгое ожидание"
+    !network -> if (elapsed < 3) tr("Обрабатываю…") else tr("Идёт {0} с", elapsed)
+    elapsed < LONG_WAIT_S -> tr("Идёт {0} с", elapsed)
+    cancelable -> tr("Идёт {0} с · долгое ожидание, можно отменить", elapsed)
+    else -> tr("Идёт {0} с · долгое ожидание", elapsed)
 }
 
 /** С какой секунды ожидание считается долгим и об этом говорят вслух. */

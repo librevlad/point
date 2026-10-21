@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Ключ человека к одному сервису (#699). Раньше ключ был ровно один на всё
  * приложение, и вопрос «какие ключи каких моделей вбиты» не имел ответа даже
@@ -19,9 +21,9 @@ data class UserAiKey(
 /** Сервис, адрес которого человек вписал сам — в списке известных его нет. */
 const val OWN_SERVICE_ID = "own"
 
-const val OWN_SERVICE_NAME = "Свой адрес"
+val OWN_SERVICE_NAME: String get() = tr("Свой адрес")
 
-const val OWN_SERVICE_WHAT = "адрес, который вы вписали сами"
+val OWN_SERVICE_WHAT: String get() = tr("адрес, который вы вписали сами")
 
 /** Ключи человека — по одному на сервис. */
 data class UserAiKeys(val entries: List<UserAiKey> = emptyList()) {
@@ -215,4 +217,4 @@ val SPEECH_PROVIDER_IDS: List<String> = listOf(GROQ_PROVIDER_ID, "openai")
 /** Кто в очереди умеет расшифровывать: этими именами и объясняем, чего не хватает. */
 fun speechProviderNames(): String =
     SPEECH_PROVIDER_IDS.mapNotNull { id -> AI_PROVIDERS.firstOrNull { it.id == id }?.name }
-        .joinToString(" или ")
+        .joinToString(tr(" или "))

@@ -6,19 +6,20 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
-    ObjectKind.IMAGE -> listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки")
-    ObjectKind.TEXT -> listOf("Кратко перескажи", "Исправь ошибки и стиль", "Ответь на это")
-    ObjectKind.PDF -> listOf("Краткое содержание", "Главные тезисы", "О чём документ?")
-    ObjectKind.OFFICE -> listOf("Краткое содержание", "Извлеки ключевые данные", "Главные тезисы")
-    ObjectKind.URL -> listOf("О чём эта ссылка?", "Краткое содержание страницы", "Главные тезисы")
-    ObjectKind.AUDIO -> listOf("О чём эта запись?", "Кто что сказал?", "Что от меня хотят?")
-    ObjectKind.ZIP, ObjectKind.COLLECTION -> listOf("Что внутри?", "Что можно сделать?")
-    else -> listOf("Что это?", "Что можно сделать?")
+    ObjectKind.IMAGE -> listOf(tr("Что на изображении?"), tr("Извлеки весь текст"), tr("Переведи текст с картинки"))
+    ObjectKind.TEXT -> listOf(tr("Кратко перескажи"), tr("Исправь ошибки и стиль"), tr("Ответь на это"))
+    ObjectKind.PDF -> listOf(tr("Краткое содержание"), tr("Главные тезисы"), tr("О чём документ?"))
+    ObjectKind.OFFICE -> listOf(tr("Краткое содержание"), tr("Извлеки ключевые данные"), tr("Главные тезисы"))
+    ObjectKind.URL -> listOf(tr("О чём эта ссылка?"), tr("Краткое содержание страницы"), tr("Главные тезисы"))
+    ObjectKind.AUDIO -> listOf(tr("О чём эта запись?"), tr("Кто что сказал?"), tr("Что от меня хотят?"))
+    ObjectKind.ZIP, ObjectKind.COLLECTION -> listOf(tr("Что внутри?"), tr("Что можно сделать?"))
+    else -> listOf(tr("Что это?"), tr("Что можно сделать?"))
 }
 
 private val WORD_HINTS = listOf("word", "ворд", "docx")
@@ -64,7 +65,7 @@ class AiRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         if (amendment == null) {
             return ActionResult.NeedsInput(
-                "Что сделать с объектом? (пусто = авто-анализ)",
+                tr("Что сделать с объектом? (пусто = авто-анализ)"),
                 suggestions = aiSuggestions(input.state.kind),
             )
         }
@@ -76,14 +77,15 @@ class AiRealizer(
         return withContext(Dispatchers.IO) {
             runCatching {
 
-                reportStage("Читаю объект")
+                reportStage(tr("Читаю объект"))
                 ActionResult.Success(llm.run(input, buildPrompt(input, amendment)))
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка AI", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка AI"), recoverable = true) }
         }
     }
 
     private fun buildPrompt(input: PointObject, amendment: String): String = buildString {
         append(systemPrompt(input.state.kind))
+        append(' ').append(answerInUserLanguage())
         if (amendment.isNotBlank()) {
             append("\n\nЗапрос пользователя: ")
             append(amendment)

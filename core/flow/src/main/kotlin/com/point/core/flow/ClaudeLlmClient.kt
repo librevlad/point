@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -37,7 +38,7 @@ class ClaudeLlmClient(
             val key = apiKey
 
             // Имя ключа сборки человеку не адресовано (#1236).
-            require(key.isNotBlank()) { "AI не настроен — $AI_KEY_HINT" }
+            require(key.isNotBlank()) { tr("AI не настроен — {0}", AI_KEY_HINT) }
             val res = http.post(
                 "$baseUrl/v1/messages",
                 mapOf("x-api-key" to key, "anthropic-version" to ANTHROPIC_VERSION),

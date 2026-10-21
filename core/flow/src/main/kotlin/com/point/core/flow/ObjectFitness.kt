@@ -4,6 +4,7 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 
+import com.point.core.model.tr
 /**
  * Годность — часть состояния объекта, а не отдельный тип и не проверка внутри каждого
  * исполнителя (решение владельца, #684/#685). `Feature.UNUSABLE` говорит: с содержимым
@@ -104,20 +105,20 @@ private fun tellsAboutContent(key: String, value: String): Boolean = when {
 private val READINGS = setOf(META_READ_TEXT, META_OCR_TEXT_REF, META_OCR_ATOMS_REF)
 
 /** Файл без единого байта — нулевой сигнал первого экрана, пустота видна до всякого чтения. */
-const val EMPTY_FILE_REASON = "Файл пустой — в нём нечего читать"
+val EMPTY_FILE_REASON: String get() = tr("Файл пустой — в нём нечего читать")
 
 /**
  * Архив, чей каталог не читается: обломок вместо архива (#570). Видно при первом же заходе
  * внутрь, и это про сам объект — как пустой файл, а не как сорвавшаяся попытка.
  */
-const val BROKEN_ARCHIVE_REASON = "Архив не открылся — он повреждён или обрезан"
+val BROKEN_ARCHIVE_REASON: String get() = tr("Архив не открылся — он повреждён или обрезан")
 
 /**
  * Когда причина не сказана, а негодность известна. Одна на оба устройства (#855): телефон
  * говорил это из `UnusableRealizer`, компьютер — «действие для такого объекта не
  * выполняется», то есть про действие вместо объекта.
  */
-const val UNFIT_DEFAULT_REASON = "С этим файлом нечего делать"
+val UNFIT_DEFAULT_REASON: String get() = tr("С этим файлом нечего делать")
 
 /** Причина, только когда она действительно сказана — пустая строка не считается знанием. */
 fun unusableReasonOf(metadata: Map<String, String>): String? =

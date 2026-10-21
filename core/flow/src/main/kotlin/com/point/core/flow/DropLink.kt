@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 fun interface DropLink {
 
     suspend fun give(path: String, fileName: String, mime: String): DropOutcome
@@ -30,7 +32,7 @@ sealed interface DropOutcome {
 }
 
 /** Сколько весит файл — словами человека, для отказа и для обещания. */
-fun megabytes(bytes: Long): String = "${(bytes + 1024 * 1024 - 1) / (1024 * 1024)} МБ"
+fun megabytes(bytes: Long): String = tr("{0} МБ", (bytes + 1024 * 1024 - 1) / (1024 * 1024))
 
 /**
  * Файл тяжелее предела — предел назван числом (#1284).
@@ -39,11 +41,11 @@ fun megabytes(bytes: Long): String = "${(bytes + 1024 * 1024 - 1) / (1024 * 1024
  * того, как пятьдесят пять мегабайт уже уехали на сервер.
  */
 fun tooHeavyForLink(bytes: Long): String =
-    "Файл ${megabytes(bytes)} — ссылкой отдаётся до ${megabytes(MAX_DROP_BYTES)}"
+    tr("Файл {0} — ссылкой отдаётся до {1}", megabytes(bytes), megabytes(MAX_DROP_BYTES))
 
 /** Сервер Point не принял файл и сказал, почему. */
 fun serverRefusedDrop(reason: String): String =
-    if (reason.isBlank()) "Сервер Point не принял файл" else "Сервер Point не принял файл: $reason"
+    if (reason.isBlank()) tr("Сервер Point не принял файл") else tr("Сервер Point не принял файл: {0}", reason)
 
 /** Файла, за которым пришли, на устройстве больше нет. */
-const val NO_FILE_FOR_LINK = "Файла больше нет на этом устройстве"
+val NO_FILE_FOR_LINK: String get() = tr("Файла больше нет на этом устройстве")

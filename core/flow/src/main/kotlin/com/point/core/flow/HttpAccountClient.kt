@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -54,8 +55,8 @@ class HttpAccountClient(
                 if (id.isNullOrBlank() || token.isNullOrBlank()) {
 
                     LoginPoll.Refused(
-                        what = "Сервер Point ответил без пропуска устройства",
-                        fix = "Попробуйте войти ещё раз.",
+                        what = tr("Сервер Point ответил без пропуска устройства"),
+                        fix = tr("Попробуйте войти ещё раз."),
                     )
                 } else {
                     val account = (json as? JsonValue.Obj)?.fields?.get("account")
@@ -72,8 +73,8 @@ class HttpAccountClient(
             }
 
             else -> LoginPoll.Refused(
-                what = "Сервер Point ответил непонятно",
-                fix = "Попробуйте войти ещё раз.",
+                what = tr("Сервер Point ответил непонятно"),
+                fix = tr("Попробуйте войти ещё раз."),
             )
         }
     }
@@ -90,7 +91,7 @@ class HttpAccountClient(
                 CircleDevice(
                     id = id,
                     kind = kindOf(item.str("kind")),
-                    name = item.str("name")?.takeIf { it.isNotBlank() } ?: "Устройство",
+                    name = item.str("name")?.takeIf { it.isNotBlank() } ?: tr("Устройство"),
                     lastSeenMillis = item.long("last_seen")?.takeIf { it > 0 }?.times(1_000L),
                     self = item.bool("self") ?: (id == account.deviceId),
                     key = item.str("key_agree").orEmpty(),

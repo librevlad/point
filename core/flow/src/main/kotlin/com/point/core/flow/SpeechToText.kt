@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.PointObject
 
+import com.point.core.model.tr
 interface SpeechToText {
     suspend fun transcribe(obj: PointObject): Transcription
 
@@ -27,9 +28,9 @@ fun speechKeyNeeds(engines: List<SpeechToText>): List<SpeechKeyNeed> {
 
 fun speechKeyRefusal(needs: List<SpeechKeyNeed>): String =
     if (needs.isEmpty()) NO_SPEECH_ENGINES
-    else "Расшифровать некому: " + needs.joinToString(", ") { it.phrase } + ". $KEY_SETTINGS_CALL"
+    else tr("Расшифровать некому: ") + needs.joinToString(", ") { it.phrase } + ". $KEY_SETTINGS_CALL"
 
-const val NO_SPEECH_ENGINES = "Расшифровать некому — ни один движок распознавания речи не настроен"
+val NO_SPEECH_ENGINES: String get() = tr("Расшифровать некому — ни один движок распознавания речи не настроен")
 
 sealed interface Transcription {
 
@@ -39,7 +40,7 @@ sealed interface Transcription {
 }
 
 /** Одни слова про пустую запись на всех путях — и когда услышал телефон, и когда сервис (#1053). */
-const val NO_SPEECH_HEARD = "В записи не слышно речи"
+val NO_SPEECH_HEARD: String get() = tr("В записи не слышно речи")
 
 /**
  * Расшифровано — и слова легли на саму запись, а не в новый объект (#1097).
@@ -47,7 +48,7 @@ const val NO_SPEECH_HEARD = "В записи не слышно речи"
  * Одна фраза на оба устройства: работа одна, и сказать о ней человеку надо одно и то же,
  * где бы её ни сделали.
  */
-const val SPEECH_IS_KNOWLEDGE = "Расшифровано — слова у записи"
+val SPEECH_IS_KNOWLEDGE: String get() = tr("Расшифровано — слова у записи")
 
 /**
  * Что «Расшифровать» обещает человеку до тапа — одна фраза на оба устройства (#1254).
@@ -58,7 +59,7 @@ const val SPEECH_IS_KNOWLEDGE = "Расшифровано — слова у за
  * человеку в двух файлах, которые никто не сверяет. Правка формулировки на одной стороне
  * молча оставляла бы вторую с прежними словами.
  */
-const val SPEECH_PROMISE = "слова записи · запись уйдёт в сервис"
+val SPEECH_PROMISE: String get() = tr("слова записи · запись уйдёт в сервис")
 
 const val NO_AUDIO_MARKER = "NO_AUDIO"
 
@@ -84,7 +85,7 @@ private const val TEXT_MARKER = "РАСШИФРОВКА:"
 
 fun parseTranscription(raw: String): Transcription {
     val answer = raw.trim()
-    if (answer.startsWith(NO_AUDIO_MARKER)) error("Запись не дошла — расшифровывать нечего")
+    if (answer.startsWith(NO_AUDIO_MARKER)) error(tr("Запись не дошла — расшифровывать нечего"))
     if (answer.startsWith(NO_SPEECH_MARKER)) return Transcription.Silence
     if (answer.isBlank()) return Transcription.Silence
 

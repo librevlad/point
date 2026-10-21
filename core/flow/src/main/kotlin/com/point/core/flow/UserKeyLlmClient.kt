@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 
+import com.point.core.model.tr
 /**
  * Ключи человека — по одному на сервис (#699). Идут в том порядке, в каком Point
  * обращается к сервисам, и каждый исход запоминается за своим сервисом.
@@ -43,7 +44,7 @@ class UserKeyLlmClient(
 
     override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
         val all = userKeys.keys().mine
-        if (all.isEmpty()) error("$AI_KEY_HINT — откройте «$SETTINGS_TITLE» на домашнем экране")
+        if (all.isEmpty()) error(tr("{0} — откройте «{1}» на домашнем экране", AI_KEY_HINT, SETTINGS_TITLE))
 
         val level = runCatching { privacy.level() }.getOrDefault(PrivacyLevel.DEFAULT)
         val mine = allowedBy(level, all) { promiseOfService(it.providerId) }

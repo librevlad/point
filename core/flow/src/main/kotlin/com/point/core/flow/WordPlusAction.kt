@@ -7,6 +7,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.tr
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -57,14 +58,14 @@ class WordPlusCapability(
     override val icon = "office"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
-    override fun label(state: ObjectState) = labelNeedingKey("В Word+", keys.keySet())
+    override fun label(state: ObjectState) = labelNeedingKey(tr("В Word+"), keys.keySet())
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
     override fun yields(state: ObjectState) = ActionYield.New(
         ObjectKind.OFFICE,
-        "документ Word · ${if (state.kind == ObjectKind.IMAGE) "снимок" else "текст"} уйдёт в сервис",
+        tr("документ Word · {0} уйдёт в сервис", if (state.kind == ObjectKind.IMAGE) tr("снимок") else tr("текст")),
     )
 
     companion object { val ID = KnownCapabilities.WORD_PLUS }
@@ -91,7 +92,7 @@ class WordPlusRealizer(
                         ?: known.textOf(input)
                         ?: when (input.state.kind) {
                             ObjectKind.IMAGE -> {
-                                reportStage("Распознаю текст на фото")
+                                reportStage(tr("Распознаю текст на фото"))
 
                                 layer = (recognizer as? AtomRecognizer)?.read(input)
                                 layer?.text ?: recognizer.recognize(input)
@@ -105,20 +106,20 @@ class WordPlusRealizer(
 
                 val modelReads = photo && mode == ReadingMode.HANDWRITTEN
                 if (text.isBlank() && !modelReads) {
-                    return@withContext ActionResult.Failure("Нет текста (возможно, это скан — сначала распознайте текст)", recoverable = true)
+                    return@withContext ActionResult.Failure(tr("Нет текста (возможно, это скан — сначала распознайте текст)"), recoverable = true)
                 }
-                reportStage(if (modelReads) "Читаю страницу" else "Размечаю документ")
+                reportStage(if (modelReads) tr("Читаю страницу") else tr("Размечаю документ"))
                 val answer =
                     if (modelReads) llm.run(input, WORD_PLUS_HANDWRITING_PROMPT)
                     else llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)
                 val read = parseDocBlocks(File(answer.uri.value).readText(), mode)
                 if (read.isEmpty()) {
                     ActionResult.Failure(
-                        if (modelReads) "Не удалось прочитать страницу" else "Не удалось разметить документ",
+                        if (modelReads) tr("Не удалось прочитать страницу") else tr("Не удалось разметить документ"),
                         recoverable = true,
                     )
                 } else {
-                    reportStage("Собираю документ")
+                    reportStage(tr("Собираю документ"))
                     val blocks = read
 
                         .withCropEvidence(layer, input.uri.value)
@@ -127,11 +128,11 @@ class WordPlusRealizer(
                     ActionResult.Success(
                         ResultObject(
                             ObjectKind.OFFICE, DOCX_MIME, docx.writeStyled(blocks),
-                            mapOf("op" to "to-word-plus", "name" to "документ.docx"),
+                            mapOf("op" to "to-word-plus", "name" to tr("документ.docx")),
                         ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось оформить документ", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось оформить документ"), recoverable = true) }
         }
 
     private companion object {

@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.PointObject
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -25,17 +26,17 @@ class GroqWhisperSpeechToText(
     val configured: Boolean get() = apiKey().isNotBlank()
 
     override fun missingKey(): SpeechKeyNeed? =
-        if (configured) null else SpeechKeyNeed("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID)
+        if (configured) null else SpeechKeyNeed(tr("Whisper слушает по ключу Groq"), GROQ_PROVIDER_ID)
 
     override suspend fun transcribe(obj: PointObject): Transcription = withContext(Dispatchers.IO) {
         val key = apiKey()
-        if (key.isBlank()) error("Whisper не настроен — нужен ключ Groq. $KEY_SETTINGS_CALL")
+        if (key.isBlank()) error(tr("Whisper не настроен — нужен ключ Groq. {0}", KEY_SETTINGS_CALL))
         val mime = modelReadableAudio(obj.mime, obj.metadata["name"])
-            ?: error("Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac")
+            ?: error(tr("Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac"))
         val file = File(obj.uri.value)
         val bytes = file.length()
         if (bytes > MAX_WHISPER_BYTES) {
-            error("Запись слишком большая (${bytes / (1024 * 1024)} МБ) — Whisper принимает до 25 МБ")
+            error(tr("Запись слишком большая ({0} МБ) — Whisper принимает до 25 МБ", bytes / (1024 * 1024)))
         }
         val res = http.postMultipart(
             url = baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/') + PATH,
@@ -66,7 +67,7 @@ class GroqWhisperSpeechToText(
         /** Коды, на которые человеку есть что сделать: ключ. */
         val KEY_CODES = setOf(401, 403, 404)
 
-        const val WHO_TRANSCRIBES = "расшифровку умеют Groq и OpenAI, но не OpenRouter"
+        val WHO_TRANSCRIBES: String get() = tr("расшифровку умеют Groq и OpenAI, но не OpenRouter")
 
         const val PATH = "/audio/transcriptions"
 

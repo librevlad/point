@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.Provenance
 
+import com.point.core.model.tr
 /**
  * «Исправить ошибки» (#666): всё знание объекта уходит в модель, она возвращает исправления
  * опечаток распознавания — «Паринкн» → «Паринкін», «ад! 01.12.2020» → «01.12.2020»,
@@ -119,10 +120,10 @@ fun applyFixes(metadata: Map<String, String>, fixes: Map<String, String>): Map<S
  * числом: «ошибок не нашлось» говорится только там, где модель ничего и не предложила (#1032).
  */
 fun fixedMessage(fixed: FixedFacts): String = when {
-    fixed.fixes.isEmpty() && fixed.missed.isEmpty() -> "Ошибок не нашлось — знание оставлено как было"
+    fixed.fixes.isEmpty() && fixed.missed.isEmpty() -> tr("Ошибок не нашлось — знание оставлено как было")
     fixed.fixes.isEmpty() -> FIX_FACTS_NOT_APPLIED
-    fixed.missed.isEmpty() -> "Исправлено: ${fixed.fixes.size}"
-    else -> "Исправлено: ${fixed.fixes.size}; ещё ${fixed.missed.size} применить не удалось"
+    fixed.missed.isEmpty() -> tr("Исправлено: {0}", fixed.fixes.size)
+    else -> tr("Исправлено: {0}; ещё {1} применить не удалось", fixed.fixes.size, fixed.missed.size)
 }
 
 /**
@@ -130,7 +131,7 @@ fun fixedMessage(fixed: FixedFacts): String = when {
  * Это срыв операции, а не знание «ошибок нет» — повторить можно. Тот же ответ, что у текста
  * ([FIX_TEXT_NOT_APPLIED], #1023): молчаливых цепочек в Point нет (Конституция §13).
  */
-const val FIX_FACTS_NOT_APPLIED = "Проверил знание, но применить правки не удалось — знание оставлено как было"
+val FIX_FACTS_NOT_APPLIED: String get() = tr("Проверил знание, но применить правки не удалось — знание оставлено как было")
 
 /**
  * Правка самого текста (#1023): у текстового объекта знание — это его текст, и первая ступень
@@ -225,14 +226,14 @@ fun fixesForFacts(facts: List<FixableFact>, fixes: List<TextFix>, readText: Stri
  * остальном.
  */
 fun fixedTextMessage(fixed: FixedText, checked: Int, total: Int): String {
-    val scope = if (checked < total) "проверено начало — ${grouped(checked)} из ${grouped(total)} символов" else null
+    val scope = if (checked < total) tr("проверено начало — {0} из {1} символов", grouped(checked), grouped(total)) else null
     if (fixed.fixes.isEmpty()) {
-        return if (scope == null) "Ошибок не нашлось — текст оставлен как был"
-        else "В проверенной части ошибок не нашлось ($scope) — текст оставлен как был"
+        return if (scope == null) tr("Ошибок не нашлось — текст оставлен как был")
+        else tr("В проверенной части ошибок не нашлось ({0}) — текст оставлен как был", scope)
     }
     return buildString {
-        append("Исправлено: ").append(fixed.fixes.sumOf { it.places }).append(" — ").append(delta(fixed.fixes))
-        if (fixed.missed.isNotEmpty()) append("; ещё ").append(fixed.missed.size).append(" применить не удалось")
+        append(tr("Исправлено: ")).append(fixed.fixes.sumOf { it.places }).append(" — ").append(delta(fixed.fixes))
+        if (fixed.missed.isNotEmpty()) append(tr("; ещё ")).append(fixed.missed.size).append(tr(" применить не удалось"))
         if (scope != null) append(" (").append(scope).append(')')
     }
 }
@@ -241,7 +242,7 @@ fun fixedTextMessage(fixed: FixedText, checked: Int, total: Int): String {
  * Правки предложены, но ни одна не легла: «было» процитировано не так, как стоит в тексте.
  * Это срыв операции, а не знание «ошибок нет» — повторить можно.
  */
-const val FIX_TEXT_NOT_APPLIED = "Проверил текст, но применить правки не удалось — текст оставлен как был"
+val FIX_TEXT_NOT_APPLIED: String get() = tr("Проверил текст, но применить правки не удалось — текст оставлен как был")
 
 /** Сколько знаков перечисления правок показывается; дальше — «и ещё N». */
 private const val DELTA_CHARS = 120
@@ -256,7 +257,7 @@ private fun delta(fixes: List<TextFix>): String {
         length += piece.length + 2
     }
     val rest = fixes.size - shown.size
-    return shown.joinToString(", ") + if (rest > 0) " и ещё $rest" else ""
+    return shown.joinToString(", ") + if (rest > 0) tr(" и ещё {0}", rest) else ""
 }
 
 /**

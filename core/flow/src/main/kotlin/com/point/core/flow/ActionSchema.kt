@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.CapabilityId
 
+import com.point.core.model.tr
 data class ActionSchema(
 
     val id: String,
@@ -85,7 +86,7 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
                     primary
                 } else {
                     val labels = specs.map { it.label }
-                    primary.copy(label = labels.dropLast(1).joinToString(", ") + " или " + labels.last())
+                    primary.copy(label = labels.dropLast(1).joinToString(", ") + tr(" или ") + labels.last())
                 }
             }
         }
@@ -118,42 +119,42 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
     // куда передать? как передать?»; «у нас и так нет функции отслеживания»).
     ActionSchema(
         id = "track-parcel",
-        label = "Номер отправления",
+        label = tr("Номер отправления"),
 
         runs = null,
         fields = listOf(
-            FieldSpec(META_ENTITY_TRACK, "трек-номер", critical = true),
+            FieldSpec(META_ENTITY_TRACK, tr("трек-номер"), critical = true),
 
-            FieldSpec(META_GRAPH_ROLE_PREFIX + "carrier", "перевозчик", anchor = true),
+            FieldSpec(META_GRAPH_ROLE_PREFIX + "carrier", tr("перевозчик"), anchor = true),
 
-            FieldSpec(META_ENTITY_PREFIX + "date", "дата"),
+            FieldSpec(META_ENTITY_PREFIX + "date", tr("дата")),
         ),
     ),
     ActionSchema(
         id = "save-contact",
-        label = "Сохранить контакт",
+        label = tr("Сохранить контакт"),
 
         runs = CapabilityId("save-contact"),
         fields = listOf(
-            FieldSpec(META_ENTITY_PREFIX + "phone", "телефон", critical = true),
+            FieldSpec(META_ENTITY_PREFIX + "phone", tr("телефон"), critical = true),
 
-            FieldSpec(META_ENTITY_PREFIX + "email", "почта", anchor = true),
+            FieldSpec(META_ENTITY_PREFIX + "email", tr("почта"), anchor = true),
 
-            FieldSpec(META_ENTITY_PREFIX + "address", "адрес"),
+            FieldSpec(META_ENTITY_PREFIX + "address", tr("адрес")),
         ),
     ),
 
     ActionSchema(
         id = "route",
-        label = "Построить маршрут",
+        label = tr("Построить маршрут"),
 
         runs = CapabilityId("map"),
         fields = listOf(
-            FieldSpec(META_ENTITY_PREFIX + "address", "адрес", critical = true, anchor = false),
-            FieldSpec(META_ENTITY_GEO, "координаты", critical = true, insteadOf = META_ENTITY_PREFIX + "address"),
+            FieldSpec(META_ENTITY_PREFIX + "address", tr("адрес"), critical = true, anchor = false),
+            FieldSpec(META_ENTITY_GEO, tr("координаты"), critical = true, insteadOf = META_ENTITY_PREFIX + "address"),
 
             FieldSpec(
-                META_ENTITY_PLACE, "место", critical = true,
+                META_ENTITY_PLACE, tr("место"), critical = true,
                 insteadOf = META_ENTITY_PREFIX + "address", anchor = true,
             ),
         ),
@@ -161,63 +162,63 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
 
     ActionSchema(
         id = "meter-reading",
-        label = "Показание счётчика",
+        label = tr("Показание счётчика"),
 
         runs = null,
         fields = listOf(
-            FieldSpec(META_ENTITY_METER, "показание", critical = true),
+            FieldSpec(META_ENTITY_METER, tr("показание"), critical = true),
 
-            FieldSpec(META_ENTITY_METER_UNIT, "единица"),
+            FieldSpec(META_ENTITY_METER_UNIT, tr("единица")),
 
-            FieldSpec(META_ENTITY_PREFIX + "date", "дата"),
+            FieldSpec(META_ENTITY_PREFIX + "date", tr("дата")),
         ),
     ),
 
     ActionSchema(
         id = "pay-by-requisites",
-        label = "Реквизиты перевода",
+        label = tr("Реквизиты перевода"),
 
         runs = null,
         fields = listOf(
-            FieldSpec(META_ENTITY_PREFIX + "card", "карта", critical = true),
-            FieldSpec(META_ENTITY_AMOUNT, "сумма", critical = true, anchor = false),
+            FieldSpec(META_ENTITY_PREFIX + "card", tr("карта"), critical = true),
+            FieldSpec(META_ENTITY_AMOUNT, tr("сумма"), critical = true, anchor = false),
 
-            FieldSpec(META_GRAPH_ROLE_PREFIX + "receiver", "получатель"),
-            FieldSpec(META_ENTITY_AMOUNT_CURRENCY, "валюта"),
-            FieldSpec(META_ENTITY_PREFIX + "date", "дата"),
+            FieldSpec(META_GRAPH_ROLE_PREFIX + "receiver", tr("получатель")),
+            FieldSpec(META_ENTITY_AMOUNT_CURRENCY, tr("валюта")),
+            FieldSpec(META_ENTITY_PREFIX + "date", tr("дата")),
         ),
     ),
 
     ActionSchema(
         id = "forward-receipt",
-        label = "Переслать квитанцию",
+        label = tr("Переслать квитанцию"),
 
         // Пересылка квитанции — это поделиться самим объектом: дверь настоящая,
         // а не глагол без действия (живой прогон 2026-08-09).
         runs = CapabilityId("share"),
         fields = listOf(
-            FieldSpec(META_ENTITY_RECEIPT, "номер квитанции", critical = true),
+            FieldSpec(META_ENTITY_RECEIPT, tr("номер квитанции"), critical = true),
             FieldSpec(
-                META_ENTITY_PREFIX + "url", "ссылка на квитанцию",
+                META_ENTITY_PREFIX + "url", tr("ссылка на квитанцию"),
                 critical = true, insteadOf = META_ENTITY_RECEIPT, anchor = false,
             ),
 
-            FieldSpec(META_ENTITY_AMOUNT, "сумма"),
-            FieldSpec(META_ENTITY_PREFIX + "date", "дата"),
+            FieldSpec(META_ENTITY_AMOUNT, tr("сумма")),
+            FieldSpec(META_ENTITY_PREFIX + "date", tr("дата")),
         ),
     ),
 
     ActionSchema(
         id = "reply",
-        label = "Ответить",
+        label = tr("Ответить"),
 
         runs = CapabilityId("email"),
         fields = listOf(
-            FieldSpec(META_ENTITY_PREFIX + "email", "адрес почты", critical = true, anchor = false),
-            FieldSpec(META_ENTITY_SUBJECT, "тема", anchor = true),
+            FieldSpec(META_ENTITY_PREFIX + "email", tr("адрес почты"), critical = true, anchor = false),
+            FieldSpec(META_ENTITY_SUBJECT, tr("тема"), anchor = true),
 
-            FieldSpec(META_GRAPH_ROLE_PREFIX + "sender", "отправитель"),
-            FieldSpec(META_ENTITY_PREFIX + "date", "дата"),
+            FieldSpec(META_GRAPH_ROLE_PREFIX + "sender", tr("отправитель")),
+            FieldSpec(META_ENTITY_PREFIX + "date", tr("дата")),
         ),
     ),
 )

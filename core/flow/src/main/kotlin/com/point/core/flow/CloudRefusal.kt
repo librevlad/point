@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Вся цепочка исполнителей отказала — что сказать человеку (#1237).
  *
@@ -21,7 +23,7 @@ package com.point.core.flow
 fun summariseCloudErrors(errors: List<String>, whatFailed: String): String = when (cloudRefusalKind(errors)) {
     CloudRefusalKind.CONNECTION_LOST -> CONNECTION_LOST_TEXT
     CloudRefusalKind.FREE_SPENT -> FREE_LIMITS_SPENT_TEXT
-    CloudRefusalKind.OTHER -> "Не удалось $whatFailed — " +
+    CloudRefusalKind.OTHER -> tr("Не удалось {0} — ", whatFailed) +
         errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
 }
 

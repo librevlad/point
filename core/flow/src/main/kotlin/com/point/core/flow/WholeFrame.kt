@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Страницу на снимке не нашли, и человеку отдан весь кадр (#1333).
  *
@@ -15,7 +17,7 @@ package com.point.core.flow
 const val META_WHOLE_FRAME = "page.whole-frame"
 
 /** Один снимок, и страницы на нём не нашли (#1333). */
-const val WHOLE_FRAME_INSTEAD_OF_PAGE = "Страницу целиком не нашёл — обработан весь снимок"
+val WHOLE_FRAME_INSTEAD_OF_PAGE: String get() = tr("Страницу целиком не нашёл — обработан весь снимок")
 
 /**
  * Слова о кадрах, которые пошли целиком, потому что страницы на них не нашли (#1333).
@@ -27,6 +29,6 @@ const val WHOLE_FRAME_INSTEAD_OF_PAGE = "Страницу целиком не н
 fun wholeFrameNote(wholeFrames: Int, pages: Int): String? = when {
     wholeFrames <= 0 -> null
     pages <= 1 -> WHOLE_FRAME_INSTEAD_OF_PAGE
-    wholeFrames == 1 -> "Страницу целиком не нашёл на одном снимке из $pages — он обработан как есть"
-    else -> "Страницу целиком не нашёл на $wholeFrames снимках из $pages — они обработаны как есть"
+    wholeFrames == 1 -> tr("Страницу целиком не нашёл на одном снимке из {0} — он обработан как есть", pages)
+    else -> tr("Страницу целиком не нашёл на {0} снимках из {1} — они обработаны как есть", wholeFrames, pages)
 }

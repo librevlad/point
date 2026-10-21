@@ -8,6 +8,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -29,7 +30,7 @@ class SlidesCapability : Capability {
 
     // Слайды лежали внутри презентации, а не сделаны заново, — связь с исходником «содержит».
     override val meta = CapabilityMeta(latency = Latency.FAST, revealsInside = true)
-    override fun label(state: ObjectState) = "Слайды"
+    override fun label(state: ObjectState) = tr("Слайды")
 
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.OFFICE && state.has(Feature.IS_PRESENTATION)
@@ -104,13 +105,13 @@ class SlidesRealizer(
     companion object {
 
         /** Имя части — то, что человек читает в наборе: слайд и его номер в презентации. */
-        fun slideName(number: Int): String = "Слайд $number.txt"
+        fun slideName(number: Int): String = tr("Слайд {0}.txt", number)
 
-        const val SPLIT_STAGE = "Разбираю презентацию на слайды"
+        val SPLIT_STAGE: String get() = tr("Разбираю презентацию на слайды")
 
         /** Что случилось — и что дальше: дверь «Открыть» у презентации есть всегда. */
-        const val NOT_SPLIT =
-            "Не удалось разобрать презентацию на слайды — откройте её целиком, чтобы посмотреть глазами"
+        val NOT_SPLIT: String get() =
+            tr("Не удалось разобрать презентацию на слайды — откройте её целиком, чтобы посмотреть глазами")
 
         /**
          * Колода из одних картинок: слайды у человека есть, слов на них нет (#1105).
@@ -118,8 +119,8 @@ class SlidesRealizer(
          * Прежде здесь звучало «в этом документе текста нет» — ответ про текст на вопрос про
          * слайды, да ещё и отменяющий сами слайды.
          */
-        const val NO_WORDS_ON_SLIDES =
-            "Слайды есть, а текста на них нет — Point достаёт из презентации только слова. " +
-                "Откройте её целиком, чтобы посмотреть глазами"
+        val NO_WORDS_ON_SLIDES: String get() =
+            tr("Слайды есть, а текста на них нет — Point достаёт из презентации только слова. " +
+                "Откройте её целиком, чтобы посмотреть глазами")
     }
 }

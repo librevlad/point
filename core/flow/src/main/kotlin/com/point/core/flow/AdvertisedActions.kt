@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.ObjectState
 
+import com.point.core.model.tr
 fun advertisedActions(
     capabilities: Collection<Capability>,
     probes: List<ObjectState> = inventoryProbes(),
@@ -54,6 +55,6 @@ private val ObjectKindCount: Int get() = com.point.core.model.ObjectKind.entries
  * Телефон умеет ровно обратное: номер и дата — признаки, а вид ему безразличен.
  */
 val PHONE_ADVERTISED_FALLBACK = listOf(
-    PcRemoteAction("call", "Позвонить", features = setOf("HAS_PHONE"), priority = 40),
-    PcRemoteAction("event", "Создать событие", features = setOf("HAS_DATE", "IS_MEETING"), priority = 16),
+    PcRemoteAction("call", tr("Позвонить"), features = setOf("HAS_PHONE"), priority = 40),
+    PcRemoteAction("event", tr("Создать событие"), features = setOf("HAS_DATE", "IS_MEETING"), priority = 16),
 )

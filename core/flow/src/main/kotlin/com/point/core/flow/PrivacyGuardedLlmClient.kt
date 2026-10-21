@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 
+import com.point.core.model.tr
 /**
  * Общий шов режима приватности перед выходом наружу.
  *
@@ -51,8 +52,8 @@ class PrivacyGuardedLlmClient(
 
 fun chainClosedBy(level: PrivacyLevel): String = when (level) {
     PrivacyLevel.DEVICE_ONLY ->
-        "Наружу сейчас не отправляем — это меняется в настройках"
+        tr("Наружу сейчас не отправляем — это меняется в настройках")
     PrivacyLevel.NO_TRAINING ->
-        "Наружу можно только к тем, кто обещал не учиться на присланном, — такого сейчас нет"
-    PrivacyLevel.FREE_FIRST -> "Отправка наружу закрыта настройками"
+        tr("Наружу можно только к тем, кто обещал не учиться на присланном, — такого сейчас нет")
+    PrivacyLevel.FREE_FIRST -> tr("Отправка наружу закрыта настройками")
 }

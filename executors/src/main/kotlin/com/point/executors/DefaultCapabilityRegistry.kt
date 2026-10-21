@@ -197,6 +197,6 @@ class DefaultCapabilityRegistry @Inject constructor(
         }
 
         /** Одно слово про сеть на все экраны — оно живёт в `:core:flow` (#569, #759). */
-        const val NO_INTERNET = com.point.core.flow.NO_INTERNET_NOTE
+        val NO_INTERNET: String get() = com.point.core.flow.NO_INTERNET_NOTE
     }
 }

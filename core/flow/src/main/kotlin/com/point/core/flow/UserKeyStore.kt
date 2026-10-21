@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+
 /**
  * Одно обращение к сервису: адрес, ключ и модель. Не хранилище — хранилище
  * держит ключ на каждый сервис ([UserAiKeys], #699).
@@ -21,9 +23,9 @@ data class UserAiConfig(
     }
 }
 
-const val AI_KEY_HINT = "задайте свой ключ"
+val AI_KEY_HINT: String get() = tr("задайте свой ключ")
 
-const val SETTINGS_TITLE = "Настройки"
+val SETTINGS_TITLE: String get() = tr("Настройки")
 
 /**
  * Заголовки разделов настроек — один дом на все модули (#1249).
@@ -33,11 +35,11 @@ const val SETTINGS_TITLE = "Настройки"
  * раздел в одном месте — второе окно осталось бы со старым именем, и перешедший за компьютер
  * искал бы раздел под другим названием.
  */
-const val KEY_SECTION_TITLE = "Ключи AI"
+val KEY_SECTION_TITLE: String get() = tr("Ключи AI")
 
-const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
+val PRIVACY_SECTION_TITLE: String get() = tr("Отправка и приватность")
 
-const val MEMORY_TITLE = "Что Point помнит"
+val MEMORY_TITLE: String get() = tr("Что Point помнит")
 
 interface UserKeyStore {
 
@@ -50,7 +52,7 @@ interface UserKeyStore {
     suspend fun clear()
 }
 
-const val KEY_SETTINGS_CALL = "Задайте ключ в настройках"
+val KEY_SETTINGS_CALL: String get() = tr("Задайте ключ в настройках")
 
 fun refusalNeedsKey(reason: String): Boolean =
     KEY_REFUSAL_MARKS.any { reason.contains(it, ignoreCase = true) }

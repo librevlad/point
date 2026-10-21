@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.tr
+import com.point.core.model.trPlural
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -38,7 +40,7 @@ class AiServiceRefusal(
     val serviceSaid: String? = null,
 ) : IllegalStateException(message)
 
-const val KEY_NOT_ACCEPTED = "ключ не принят"
+val KEY_NOT_ACCEPTED: String get() = tr("ключ не принят")
 
 fun aiOutcomeOf(failure: Throwable): AiOutcome =
     if (failure is AiServiceRefusal) {
@@ -85,24 +87,24 @@ private fun refusalLoudness(failure: Throwable): Int = when (aiOutcomeOf(failure
 }
 
 /** Пока к сервису не обращались — говорить о нём в строке нечего (#887). */
-const val NEVER_ASKED = "ещё не обращались"
+val NEVER_ASKED: String get() = tr("ещё не обращались")
 
 /** Последний факт словами человека: «ответил 3 минуты назад», «лимит исчерпан в 23:26». */
 fun aiFactLine(fact: AiFact?, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {
     if (fact == null) return NEVER_ASKED
     val what = when (fact.outcome) {
-        AiOutcome.ANSWERED -> "ответил"
-        AiOutcome.LIMIT -> "лимит исчерпан"
-        AiOutcome.BAD_KEY -> "ключ не подошёл"
-        AiOutcome.SILENT -> "не отвечал"
+        AiOutcome.ANSWERED -> tr("ответил")
+        AiOutcome.LIMIT -> tr("лимит исчерпан")
+        AiOutcome.BAD_KEY -> tr("ключ не подошёл")
+        AiOutcome.SILENT -> tr("не отвечал")
     }
     return "$what ${whenWord(fact.at, now, zone)}"
 }
 
 /** Возраст сведений: пока человек не нажал «Проверить все», они могут быть вчерашними. */
 fun aiCheckedLine(facts: Map<String, AiFact>, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {
-    val newest = facts.values.maxByOrNull { it.at } ?: return "Ещё не проверяли"
-    return "Проверено ${whenWord(newest.at, now, zone)}"
+    val newest = facts.values.maxByOrNull { it.at } ?: return tr("Ещё не проверяли")
+    return tr("Проверено {0}", whenWord(newest.at, now, zone))
 }
 
 /**
@@ -123,24 +125,24 @@ fun aiChainLine(
     val known = ready.mapNotNull { facts[it] }
     if (ready.isEmpty() || known.size < ready.size) return aiCheckedLine(facts, now, zone)
     val answered = known.count { it.outcome == AiOutcome.ANSWERED }
-    val count = if (answered == ready.size) "Отвечают все ${ready.size}" else "Отвечают $answered из ${ready.size}"
-    return "$count · проверено ${whenWord(known.maxOf { it.at }, now, zone)}"
+    val count = if (answered == ready.size) tr("Отвечают все {0}", ready.size) else tr("Отвечают {0} из {1}", answered, ready.size)
+    return tr("{0} · проверено {1}", count, whenWord(known.maxOf { it.at }, now, zone))
 }
 
 fun whenWord(at: Long, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {
     val ago = now - at
-    if (ago in 0 until MINUTE) return "только что"
+    if (ago in 0 until MINUTE) return tr("только что")
     if (ago in 0 until HOUR) {
         val minutes = ago / MINUTE
-        return "$minutes ${plural(minutes, "минуту", "минуты", "минут")} назад"
+        return tr("{0} {1} назад", minutes, trPlural(minutes, "минуту", "минуты", "минут"))
     }
     val then = LocalDateTime.ofInstant(Instant.ofEpochMilli(at), zone)
     val today = LocalDateTime.ofInstant(Instant.ofEpochMilli(now), zone).toLocalDate()
     val clock = "${pad(then.hour)}:${pad(then.minute)}"
     return when (then.toLocalDate()) {
-        today -> "в $clock"
-        today.minusDays(1) -> "вчера в $clock"
-        else -> "${then.dayOfMonth} ${MONTHS_OF[then.monthValue - 1]} в $clock"
+        today -> tr("в {0}", clock)
+        today.minusDays(1) -> tr("вчера в {0}", clock)
+        else -> tr("{0} {1} в {2}", then.dayOfMonth, MONTHS_OF[then.monthValue - 1], clock)
     }
 }
 
@@ -168,7 +170,7 @@ data class AiServiceLine(
 )
 
 /** Цена ключа у сервиса без бесплатного уровня. */
-const val AI_PAID_OFFER = "платно"
+val AI_PAID_OFFER: String get() = tr("платно")
 
 /**
  * Все известные сервисы списком — в том порядке, в каком Point к ним обращается.
@@ -210,9 +212,9 @@ private fun line(
         place = aiChainPlace(id),
         offer = if (mine.isNotEmpty() || ours || provider == null) null else provider.freeNote ?: AI_PAID_OFFER,
         keyLine = when {
-            mine.isNotEmpty() -> "ваш ключ ${maskedKey(mine)}"
-            ours -> "работает на ключе Point"
-            else -> "ключа нет — этот сервис молчит"
+            mine.isNotEmpty() -> tr("ваш ключ {0}", maskedKey(mine))
+            ours -> tr("работает на ключе Point")
+            else -> tr("ключа нет — этот сервис молчит")
         },
         factLine = aiFactLine(facts[id], now, zone),
         mine = mine.isNotEmpty(),
@@ -229,11 +231,11 @@ private fun line(
  */
 fun aiKeysSummary(keys: UserAiKeys): String {
     val counted = aiKeysCount(keys)
-    return if (keys.mine.isEmpty()) "$counted — Point работает на своих" else counted
+    return if (keys.mine.isEmpty()) tr("{0} — Point работает на своих", counted) else counted
 }
 
 /** Только счёт: на самом экране ключей длинная приписка уже сказана выше (#887). */
-fun aiKeysCount(keys: UserAiKeys): String = "Свои ключи: ${keys.mine.size} из ${AI_PROVIDERS.size}"
+fun aiKeysCount(keys: UserAiKeys): String = tr("Свои ключи: {0} из {1}", keys.mine.size, AI_PROVIDERS.size)
 
 fun encodeAiFacts(facts: Map<String, AiFact>): String = facts.entries.joinToString("\n") {
     "${it.key}\t${it.value.outcome.name}\t${it.value.at}"
@@ -253,8 +255,8 @@ fun decodeAiFacts(text: String?): Map<String, AiFact> {
 private fun pad(value: Int): String = value.toString().padStart(2, '0')
 
 private val MONTHS_OF = listOf(
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    tr("января"), tr("февраля"), tr("марта"), tr("апреля"), tr("мая"), tr("июня"),
+    tr("июля"), tr("августа"), tr("сентября"), tr("октября"), tr("ноября"), tr("декабря"),
 )
 
 private const val MINUTE = 60_000L
@@ -271,9 +273,9 @@ private const val HOUR = 60 * MINUTE
  * владельца по мокапам 12.08.2026: «вариант Б — общее сказано один раз».
  */
 enum class AiServiceGroup(val title: String) {
-    MINE("Ваши ключи"),
-    OURS("Работают на ключе Point"),
-    SILENT("Нужен ваш ключ"),
+    MINE(tr("Ваши ключи")),
+    OURS(tr("Работают на ключе Point")),
+    SILENT(tr("Нужен ваш ключ")),
 }
 
 fun aiServiceGroupOf(line: AiServiceLine): AiServiceGroup = when {
@@ -296,45 +298,45 @@ fun aiServiceGroups(lines: List<AiServiceLine>): List<Pair<AiServiceGroup, List<
  * Две мысли, а не семь строк: экран ключей — панель состояния, а не документация. Остальное
  * ждёт за «Как это работает» (#902, разбор 13.08.2026).
  */
-const val AI_CHAIN_WHAT =
-    "Point обращается к сервисам по очереди — отвечает первый доступный. Свой ключ не " +
-        "обязателен: он снимает общий лимит и пускает Point работать на вашей квоте."
+val AI_CHAIN_WHAT: String get() =
+    tr("Point обращается к сервисам по очереди — отвечает первый доступный. Свой ключ не " +
+        "обязателен: он снимает общий лимит и пускает Point работать на вашей квоте.")
 
 /** Подробное объяснение — по запросу, а не поверх экрана. */
-const val AI_CHAIN_MORE =
-    "«Понять», «Перевести», «AI» и расшифровку записи делает модель. У большинства сервисов " +
+val AI_CHAIN_MORE: String get() =
+    tr("«Понять», «Перевести», «AI» и расшифровку записи делает модель. У большинства сервисов " +
         "ключ бесплатный. Ключ живёт только на этом устройстве. Проверка сервисов идёт только " +
-        "по вашему нажатию — сам Point ничего не проверяет."
+        "по вашему нажатию — сам Point ничего не проверяет.")
 
 /**
  * Почему «Ваши ключи» стоят не подряд: 05, 09, 12 — это их места в общей очереди (#911).
  * Без этой строки номера заставляли искать логику сортировки там, где её нет.
  */
-const val AI_MINE_KEEP_PLACE = "Ваши ключи сохраняют свои места в общей очереди."
+val AI_MINE_KEEP_PLACE: String get() = tr("Ваши ключи сохраняют свои места в общей очереди.")
 
 /**
  * Вставка ключа, ещё не знающего своего сервиса: он сам встаёт к своему по приметам начала.
  * Раньше человек искал строку сервиса среди двенадцати, раскрывал её, вставлял и отдельно
  * нажимал «Проверить».
  */
-const val PASTE_ANY_KEY = "Вставить ключ из буфера"
+val PASTE_ANY_KEY: String get() = tr("Вставить ключ из буфера")
 
-const val PASTE_ANY_KEY_WHAT = "Ключ встанет к своему сервису и сразу проверится."
+val PASTE_ANY_KEY_WHAT: String get() = tr("Ключ встанет к своему сервису и сразу проверится.")
 
-const val NO_KEY_IN_CLIPBOARD = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
+val NO_KEY_IN_CLIPBOARD: String get() = tr("В буфере нет ключа — скопируйте его на странице сервиса и вернитесь.")
 
 /** Ключ без приметы сервиса: Point спрашивает, а не гадает. */
-const val WHOSE_KEY_TITLE = "Чей это ключ?"
+val WHOSE_KEY_TITLE: String get() = tr("Чей это ключ?")
 
-const val WHOSE_KEY_WHAT =
-    "По виду ключа сервис не узнать. Нажмите тот, где вы его взяли, — проверять ключ Point будет только там."
+val WHOSE_KEY_WHAT: String get() =
+    tr("По виду ключа сервис не узнать. Нажмите тот, где вы его взяли, — проверять ключ Point будет только там.")
 
-const val WHOSE_KEY_DISMISS = "Не вставлять"
+val WHOSE_KEY_DISMISS: String get() = tr("Не вставлять")
 
 /** Ключ другого сервиса узнан по началу — сказать до проверки, а не объявить его негодным. */
-fun keyOfAnotherService(owner: String, here: String): String = "Похоже, это ключ $owner, а не $here."
+fun keyOfAnotherService(owner: String, here: String): String = tr("Похоже, это ключ {0}, а не {1}.", owner, here)
 
-fun checkAsKeyOf(owner: String): String = "Проверить как ключ $owner"
+fun checkAsKeyOf(owner: String): String = tr("Проверить как ключ {0}", owner)
 
 /** Место сервиса в очереди: «03» перед именем объясняет порядок обращения без слов. */
 fun aiChainPlace(providerId: String): Int =
@@ -355,7 +357,7 @@ fun aiTroubleLine(fact: AiFact?, now: Long, zone: ZoneId = ZoneId.systemDefault(
  * проверки.
  */
 fun aiServiceState(line: AiServiceLine, checking: Boolean, open: Boolean): String? = when {
-    checking -> "проверяю…"
+    checking -> tr("проверяю…")
     open && line.mine -> line.what + "\n" + line.keyLine + " · " + line.factLine
     open -> line.what
     line.mine -> "${line.keyLine} · ${line.factLine}"
