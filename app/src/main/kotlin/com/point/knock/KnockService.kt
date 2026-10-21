@@ -50,9 +50,14 @@ class KnockService : FirebaseMessagingService() {
             return
         }
         val sent = runBlocking { runCatching { client.tellPushAddress(account, token) } }
+        // Ответ сервера «нет» — тоже не «отправлен» (#1449): прежде след писал «адрес
+        // отправлен» и тогда, когда сервер его не принял.
         trace.note(
-            if (sent.isSuccess) "адрес отправлен серверу"
-            else "адрес не отправлен: " + (sent.exceptionOrNull()?.message ?: "без причины"),
+            when {
+                sent.getOrDefault(false) -> "адрес отправлен серверу"
+                sent.isSuccess -> "адрес сервер не принял"
+                else -> "адрес не отправлен: " + (sent.exceptionOrNull()?.message ?: "без причины")
+            },
         )
     }
 

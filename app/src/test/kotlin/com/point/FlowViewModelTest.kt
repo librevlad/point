@@ -3908,6 +3908,38 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
     }
 
+    @Test fun `компьютер в круге узнаётся экраном — и забывается с выходом`() = runTest(dispatcher) {
+
+        // По этому знанию Point сам предлагает разрешить уведомления (#1449): прежде
+        // разрешение пряталось строкой в «Моих устройствах», и стук не видел никто.
+        val vm = vm(
+            account = FakeAccountStore(TEST_ACCOUNT),
+            accountClient = FakeCircleClient(listOf(
+                com.point.core.flow.CircleDevice("d-pc", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            )),
+        )
+        assertFalse(vm.ui.value.pcInCircle)
+
+        vm.openDevices(); advanceUntilIdle()
+        assertTrue("экран не узнал о компьютере в круге", vm.ui.value.pcInCircle)
+
+        vm.signOut(); advanceUntilIdle()
+        assertFalse("компьютер вышедшего аккаунта остался в круге", vm.ui.value.pcInCircle)
+    }
+
+    @Test fun `без компьютера в круге экран о нём не знает`() = runTest(dispatcher) {
+        val vm = vm(
+            account = FakeAccountStore(TEST_ACCOUNT),
+            accountClient = FakeCircleClient(listOf(
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PHONE, "Второй телефон"),
+            )),
+        )
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertFalse(vm.ui.value.pcInCircle)
+    }
+
     @Test fun `ключ с компьютера доезжает до телефона и включает AI`() = runTest(dispatcher) {
 
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")

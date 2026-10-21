@@ -5,7 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -87,6 +91,17 @@ class HomeActivity : ComponentActivity() {
                             onHideFromPc = viewModel::hideFromPc,
 
                             aiKeySet = state.aiKeySet,
+                        )
+
+                        // Point сам предлагает разрешить уведомления, когда в круге есть
+                        // компьютер (#1449): на экране «с чего начать» тоже.
+                        KnockOffer(
+                            pcInCircle = state.pcInCircle,
+                            modifier = androidx.compose.ui.Modifier
+                                .align(androidx.compose.ui.Alignment.BottomCenter)
+                                .systemBarsPadding()
+                                .widthIn(max = com.point.core.ui.PortalColumnWidth)
+                                .padding(16.dp),
                         )
                     } else {
                         PointFlow(
