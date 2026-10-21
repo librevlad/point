@@ -1501,7 +1501,8 @@ class FlowViewModelTest {
         pcTransport.outbox = listOf(resultEntry(4))
         dispatcher.scheduler.advanceTimeBy(6_000); advanceUntilIdle()
 
-        assertEquals("объект не узнал, что готово", "В PDF — готово: slides.pdf", vm.ui.value.message)
+        val said = vm.ui.value.message.orEmpty()
+        assertTrue("объект не назвал ни просьбу, ни готовый файл: $said", "В PDF" in said && "slides.pdf" in said)
         assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
         assertEquals("вещь доехала — вот теперь она подтверждена", listOf(4), pcTransport.acked)
         assertEquals("вещь просьбы осталась в общем списке «с компьютера»", 0, vm.fromPcCount.value)

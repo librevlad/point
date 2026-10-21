@@ -183,7 +183,8 @@ class SlowPcActionTest {
     fun `долгий результат несёт дом своей просьбы, и компьютер стучит телефону`() {
         val outbox = Outbox(temp.newFolder("out-home"))
         val until = kotlinx.coroutines.CompletableDeferred<Unit>()
-        val slow = Slow("pdf", temp.newFolder("r6"), delayMs = 0, holds = until)
+        val made = temp.newFolder("r6")
+        val slow = Slow("pdf", made, delayMs = 0, holds = until)
         val (state, item) = harness(slow, outbox)
         val fromPhone = item.copy(obj = item.obj.copy(metadata = mapOf(com.point.core.flow.META_ORIGIN_ID to "phone-obj")))
         state.budgetTimer = { }
@@ -197,7 +198,7 @@ class SlowPcActionTest {
         assertEquals("вещь не знает, к чьей просьбе она", "phone-obj", entry.meta[e.HOME])
         assertEquals(phoneFacingLabel("pdf", "pdf"), entry.meta[e.LABEL])
         assertTrue("телефон не узнает в ней ответ своей просьбы", com.point.core.flow.answersRequest(entry.meta))
-        assertEquals("готовое и есть файл", "готово", outbox.file(entry.id)!!.readText())
+        assertEquals("готовое и есть файл", File(made, "result.txt").readText(), outbox.file(entry.id)!!.readText())
         waitUntil { knocks.get() == 1 }
     }
 
