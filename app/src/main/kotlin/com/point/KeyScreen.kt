@@ -47,6 +47,7 @@ import com.point.core.flow.MEMORY_TITLE
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.OWN_SERVICE_ID
 import com.point.core.flow.PRIVACY_SECTION_TITLE
+import com.point.core.flow.PointServer
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UserAiKey
@@ -178,6 +179,7 @@ fun KeyScreen(
                     onToggleYolo = onToggleYolo,
                     privacyLevel = privacyLevel,
                     onPickPrivacyLevel = onPickPrivacyLevel,
+                    onOpenPolicy = { onOpenUrl(PointServer.PRIVACY_URL) },
                     onBack = { section = null },
                 )
 

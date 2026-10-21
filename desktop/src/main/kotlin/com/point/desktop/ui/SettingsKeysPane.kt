@@ -86,7 +86,10 @@ fun SettingsKeys(
     onSave: (PcConfig) -> Unit,
     keyCheck: com.point.core.flow.AiKeyCheck =
         com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
-    onOpenUrl: (String) -> Unit = {},
+
+    // Без значения по умолчанию: с пустым `{}` окно настроек его не передавало, и «Открыть
+    // сайт …» на компьютере молча не делало ничего (#1487).
+    onOpenUrl: (String) -> Unit,
     readClipboard: () -> String? = ::clipboardText,
 ) {
     var keys by remember { mutableStateOf(config.aiKeys) }

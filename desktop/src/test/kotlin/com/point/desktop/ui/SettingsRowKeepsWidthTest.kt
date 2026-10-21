@@ -113,6 +113,7 @@ class SettingsRowKeepsWidthTest {
                 onRightClick = { null },
                 rightClickHolds = { null },
                 onSweepNow = { 0 },
+                onOpenUrl = {},
                 onBack = {},
             )
         }

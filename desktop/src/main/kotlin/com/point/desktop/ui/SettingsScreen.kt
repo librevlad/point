@@ -276,6 +276,7 @@ fun SettingsPrivacy(
     level: com.point.core.flow.PrivacyLevel,
     onRevoke: () -> Unit,
     onPickLevel: (com.point.core.flow.PrivacyLevel) -> Unit,
+    onOpenPolicy: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -318,6 +319,14 @@ fun SettingsPrivacy(
             tr("Про такое Point спрашивает каждый раз и ответ не запоминает: ссылка на сутки — " +
                 "каждый раз новая ставка."),
             style = PointType.small,
+        )
+
+        // Та же строка, что на телефоне (#1487): политика открывается из самого Point.
+        PortalRow(
+            title = com.point.core.flow.PRIVACY_POLICY_TITLE,
+            subtitle = com.point.core.flow.PRIVACY_POLICY_WHAT,
+            onClick = onOpenPolicy,
+            subtitleMaxLines = 3,
         )
     }
 }

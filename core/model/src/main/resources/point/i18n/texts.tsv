@@ -678,6 +678,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Показывается	Показується	Shown
 Показывать объект моделям	Показувати об’єкт моделям	Show items to models
 Покупка	Покупка	Purchase
+Политика конфиденциальности	Політика конфіденційності	Privacy policy
 Получено: {0}	Отримано: {0}	Received: {0}
 Получилось	Вийшло	Made
 Понимание	Розуміння	Understanding
@@ -1055,6 +1056,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Чтение снаружи не берётся за этот объект — читают снимок страницы	Читання назовні не береться за цей об’єкт — читають знімок сторінки	Outside reading doesn't take this item; it reads pictures of pages
 Чтение снаружи не настроено — задайте бесплатный ключ Mistral (см. настройки)	Читання назовні не налаштовано — задайте безкоштовний ключ Mistral (див. налаштування)	Outside reading isn't set up. Add a free Mistral key (see Settings)
 Что Point помнит	Що Point пам’ятає	What Point remembers
+Что Point хранит, кому отдаёт объект и как всё удалить. Страница на сайте Point.	Що Point зберігає, кому віддає об’єкт і як усе видалити. Сторінка на сайті Point.	What Point keeps, who gets your item and how to delete it all. A page on the Point website.
 Что внутри?	Що всередині?	What's inside?
 Что именно не так, сервис не сказал. Попробуйте другой сервис из списка выше.	Що саме не так, сервіс не сказав. Спробуйте інший сервіс зі списку вище.	The service didn't say what's wrong. Try another service in the list above.
 Что можно с записью	Що можна із записом	What you can do with the entry

@@ -1,15 +1,19 @@
 package com.point.desktop.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AiKeyCheck
 import com.point.core.flow.KeyProbe
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
+import com.point.core.model.tr
 import com.point.desktop.PcConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,10 +41,33 @@ class KeysOnPcTest {
 
     private var saved: PcConfig? = null
 
+    private val opened = mutableListOf<String>()
+
     private fun keys(check: FakeCheck, config: PcConfig = PcConfig(name = "ПК"), clipboard: String? = null) {
         compose.setContent {
-            SettingsKeys(config = config, onSave = { saved = it }, keyCheck = check, readClipboard = { clipboard })
+            SettingsKeys(
+                config = config,
+                onSave = { saved = it },
+                keyCheck = check,
+                onOpenUrl = { opened += it },
+                readClipboard = { clipboard },
+            )
         }
+    }
+
+    /**
+     * #1487: окно настроек не передавало экрану ключей дорогу в браузер, и «Открыть сайт …» на
+     * компьютере молча не делало ничего — человек оставался без ключа и без объяснения.
+     */
+    @Test
+    fun `сайт сервиса открывается в браузере`() {
+        keys(FakeCheck())
+        val groq = AI_PROVIDERS.first { it.id == "groq" }
+
+        compose.onAllNodesWithText(groq.name).onFirst().performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText(tr("Открыть сайт {0}", groq.name)).performSemanticsAction(SemanticsActions.OnClick)
+
+        assertEquals(listOf(groq.keyUrl), opened)
     }
 
     @Test

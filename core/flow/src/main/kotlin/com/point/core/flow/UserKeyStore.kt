@@ -41,6 +41,16 @@ val PRIVACY_SECTION_TITLE: String get() = tr("Отправка и приватн
 
 val MEMORY_TITLE: String get() = tr("Что Point помнит")
 
+/**
+ * Политика конфиденциальности — строка раздела «Отправка и приватность» на обоих устройствах
+ * (#1487). Play требует, чтобы она открывалась из самого приложения, а не только из карточки
+ * магазина; человеку она отвечает на тот же вопрос, с которым он пришёл в этот раздел.
+ */
+val PRIVACY_POLICY_TITLE: String get() = tr("Политика конфиденциальности")
+
+val PRIVACY_POLICY_WHAT: String get() =
+    tr("Что Point хранит, кому отдаёт объект и как всё удалить. Страница на сайте Point.")
+
 interface UserKeyStore {
 
     fun keys(): UserAiKeys
