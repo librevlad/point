@@ -58,9 +58,10 @@ Point не является AI-чатом, менеджером файлов и�
 - Установщик Windows (`:desktop:packageMsi`) этим JDK **не собирается**: в JBR нет `jpackage.exe`.
   Для него `JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot` (Temurin 17).
 - Ставить MSI на компьютер — только `tools/install-desktop.ps1`: он останавливает работающий
-  Point, а после установки проверяет очередь удалений Windows и версию. MSI поверх работающего
-  Point отчитывается «успешно» (код 3010), а после перезагрузки оставляет установку без
-  библиотек и без JVM (#1408).
+  Point, а после установки проверяет очередь удалений Windows и версию. Сам MSI тоже закрывает
+  работающий Point перед снятием старой версии (`desktop/msi/close-point-before-upgrade.ps1`):
+  без этого установка поверх открытого Point отчитывалась «успешно» (код 3010), а после
+  перезагрузки оставалась без библиотек и без JVM (#1408).
 - Toolchain: JDK 17 через `jvmToolchain(17)` + `foojay-resolver`.
 - `compileSdk = 36`.
 - Версии — в `gradle/libs.versions.toml`.

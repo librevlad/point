@@ -135,3 +135,23 @@ tasks.register<JavaExec>("fontSample") {
     mainClass.set("com.point.desktop.FontSampleKt")
     classpath = sourceSets["test"].runtimeClasspath
 }
+
+/**
+ * Установщик сам закрывает работающий Point перед заменой файлов (#1408): иначе Windows
+ * откладывает удаление занятых jar до перезагрузки, и после неё Point не запускается. Как и
+ * почему правится готовый MSI — в самом скрипте.
+ */
+val closePointScript = project.file("msi/close-point-before-upgrade.ps1")
+
+tasks.matching { it.name == "packageMsi" || it.name == "packageReleaseMsi" }.configureEach {
+    inputs.file(closePointScript)
+    doLast {
+        outputs.files.asFileTree.matching { include("**/*.msi") }.forEach { msi ->
+            val run = ProcessBuilder(
+                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", closePointScript.absolutePath, "-Msi", msi.absolutePath,
+            ).inheritIO().start()
+            check(run.waitFor() == 0) { "Не удалось научить ${msi.name} закрывать Point (#1408)" }
+        }
+    }
+}
