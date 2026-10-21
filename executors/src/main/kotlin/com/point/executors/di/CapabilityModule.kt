@@ -223,7 +223,7 @@ abstract class CapabilityModule {
     // действие. Способность графики Android не трогает — её тут держит @Binds, в отличие от
     // реализатора ниже.
     @Binds @IntoSet @OwnCapabilities
-    abstract fun cleanMetadataCap(c: com.point.executors.CleanMetadataCapability): Capability
+    abstract fun cleanMetadataCap(c: com.point.executors.CleanMetadataCapabilityOnPhone): Capability
 
     @Binds @IntoSet abstract fun shareR(r: ShareRealizer): Realizer
     @Binds @IntoSet abstract fun saveR(r: SaveRealizer): Realizer

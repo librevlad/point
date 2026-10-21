@@ -460,6 +460,9 @@ class SmartActionsTest {
 
         // Картинки набора в PDF собирает pdfbox (#1379, волна 2).
         "merge-pdf",
+
+        // Что снимок знает о себе, и снимок без этого (#547, #1379).
+        "exif", "clean-metadata",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())
