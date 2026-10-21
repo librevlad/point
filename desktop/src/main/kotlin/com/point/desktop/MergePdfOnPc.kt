@@ -43,7 +43,7 @@ class PcMergePdfRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching { merge(input) }
-                .getOrElse { ActionResult.Failure("Собрать PDF не вышло", recoverable = true) }
+                .getOrElse { ActionResult.Failure("Собрать PDF не вышло — попробуйте ещё раз или соберите на телефоне", recoverable = true) }
         }
 
     private suspend fun merge(input: PointObject): ActionResult {
@@ -125,6 +125,6 @@ class PcMergePdfRealizer(
 
     private companion object {
 
-        const val NO_PICTURES = "В наборе нет картинок для PDF"
+        const val NO_PICTURES = "В наборе нет картинок — добавьте снимки, и PDF соберётся"
     }
 }

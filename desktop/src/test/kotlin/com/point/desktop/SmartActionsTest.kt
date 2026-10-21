@@ -457,6 +457,9 @@ class SmartActionsTest {
         // Шесть чистых умений телефона с руками компьютера (#1379, #1415): реестр компьютера
         // теперь собирается в `desktopCapabilities`, и список исполнителей здесь идёт за ним.
         "pdf-pages", "slides", "renew-period", "find", "extract-all", "correct-value",
+
+        // Картинки набора в PDF собирает pdfbox (#1379, волна 2).
+        "merge-pdf",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())
