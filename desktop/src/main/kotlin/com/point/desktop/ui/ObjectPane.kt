@@ -87,7 +87,12 @@ internal fun ObjectPane(
 
     val content: @Composable () -> Unit = {
         work?.let { Working(it) { state.cancelWork() } }
-        picture?.let { PicturePanel(it) }
+        picture?.let {
+            // Обведённое мышью место — Focus объекта (#1379): действия над ним встают рядом.
+            val turn = remember(item.obj.uri.value) { pictureTurn(item) }
+            val places = com.point.core.flow.focusOf(item.obj.metadata, item.obj.id)?.places.orEmpty()
+            PicturePanel(it, PictureArea(turn, places, { shown -> state.showArea(item, shown) }, { state.clearArea(item) }))
+        }
         Knowledge(
             item,
             onCopyFact = state::copyFact,

@@ -67,6 +67,19 @@ fun desktopCapabilities(
     com.point.core.flow.FindCapability(),
     com.point.core.flow.ExtractAllCapability(),
     com.point.core.flow.CorrectValueCapability(),
+
+    // Картинки набора в PDF собирает pdfbox (#1379, волна 2): лист тот же, что у телефона.
+    com.point.core.flow.MergePdfCapability(),
+
+    // Что снимок знает о себе, компьютер читает сам (#547): без этого «Очистить метаданные»
+    // здесь не появлялось ни у одного снимка.
+    PcPhotoHeadCapability(),
+    com.point.core.flow.CleanMetadataCapability(),
+
+    // Место, обведённое мышью на снимке, — Focus, как выделение на телефоне (#1379): над ним
+    // встают «Взять фрагмент» и «Замазать». Своего круга — соседу показанное не передать.
+    com.point.core.flow.TakeFragmentCapability(),
+    com.point.core.flow.HideAreaCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,

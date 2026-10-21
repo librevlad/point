@@ -6,6 +6,8 @@ import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.Focus
 import com.point.core.flow.GraphState
+import com.point.core.flow.TakeFragmentCapability
+import com.point.core.flow.TakeFragmentRealizer
 import com.point.core.flow.META_SELECTION_REGION
 import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.ObjectStore

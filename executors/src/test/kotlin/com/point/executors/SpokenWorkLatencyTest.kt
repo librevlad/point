@@ -24,7 +24,7 @@ class SpokenWorkLatencyTest {
         WordCapability(),
         PagesCapability(),
         ArchiveCapability(),
-        MergePdfCapability(),
+        MergePdfCapabilityOnPhone(),
         ScanPdfCapability(),
         CutoutCapability(),
         BlurBgCapability(),

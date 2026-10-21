@@ -52,19 +52,19 @@ class RealCapabilityInventoryTest {
         FixErrorsCapabilityOnPhone(aiKeysReady), FixErrorsStrongerCapabilityOnPhone(aiKeysReady),
         CutoutCapability(), EmailCapability(), EventCapability(),
         ExcelCapabilityOnPhone(aiKeysReady), ExtractAllCapabilityOnPhone(), FindCapabilityOnPhone(),
-        JobReplyCapabilityOnPhone(aiKeysReady), MapCapability(), MergePdfCapability(),
+        JobReplyCapabilityOnPhone(aiKeysReady), MapCapability(), MergePdfCapabilityOnPhone(),
         OpenCapability(), OpenInCapability(), OpenUrlCapability(),
         PagesCapabilityOnPhone(), PcCapability(pairedPc), PhoneAppsCapability(),
         ReadDocumentCapabilityOnPhone(),
         ReadQrCapability(), RenewPeriodCapabilityOnPhone(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
         SlidesCapabilityOnPhone(), SpeakCapability(),
-        TakeFragmentCapability(), HideAreaCapability(),
+        TakeFragmentCapabilityOnPhone(), HideAreaCapabilityOnPhone(),
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
         ShootMoreCapability(),
         ShoppingListCapabilityOnPhone(aiKeysReady), SmsCapability(), TranscribeCapabilityOnPhone(keysReady),
         TranslateCapabilityOnPhone(aiKeysReady), UnderstandCapabilityOnPhone(aiKeysReady), VCardCapability(), WordCapabilityOnPhone(),
-        WordPlusCapabilityOnPhone(aiKeysReady), CleanMetadataCapability(),
+        WordPlusCapabilityOnPhone(aiKeysReady), CleanMetadataCapabilityOnPhone(),
     )
 
     private val sharedNames: Set<String> = shared.map { it.javaClass.simpleName }.toSet()

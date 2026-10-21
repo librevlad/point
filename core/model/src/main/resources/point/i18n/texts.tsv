@@ -61,7 +61,7 @@ Whisper не настроен — нужен ключ Groq. {0}	Whisper не н�
 Whisper слушает по ключу Groq	Whisper слухає за ключем Groq	Whisper listens with a Groq key
 {0} {1} в {2}	{0} {1} о {2}	{1} {0} at {2}
 {0} {1} назад	{0} {1} тому	{0} {1} ago
-{0} · без метаданных.jpg	{0} · без метаданих.jpg	{0} · no metadata.jpg
+{0} · без метаданных	{0} · без метаданих	{0} · no metadata
 {0} · ждёт телефона	{0} · чекає на телефон	{0} · waiting for the phone
 {0} · на телефон	{0} · на телефон	{0} · to the phone
 {0} · на телефоне	{0} · на телефоні	{0} · on the phone
@@ -145,6 +145,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 В документе нет ни одной страницы	У документі немає жодної сторінки	The document has no pages
 В записи не слышно речи	У записі не чути мовлення	No speech can be heard in the recording
 В коллекции нет изображений для PDF	У наборі немає зображень для PDF	The set has no pictures for a PDF
+В наборе нет картинок — добавьте снимки, и PDF соберётся	У наборі немає картинок — додайте знімки, і PDF збереться	The set has no pictures — add photos and the PDF will come together
 В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста	У наборі немає сторінок для таблиці — ні знімка, ні PDF, ні тексту	The set has no pages for a table: no picture, PDF or text
 В области ничего не нашлось	В області нічого не знайшлося	Nothing was found in the area
 В объекте нет ссылки, которую можно открыть	В об’єкті немає посилання, яке можна відкрити	The item has no link to open
@@ -526,6 +527,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 О чём спросить	Про що спитати	What to ask
 О чём эта запись?	Про що цей запис?	What is this recording about?
 О чём эта ссылка?	Про що це посилання?	What is this link about?
+Обведите мышью место на снимке — его можно взять фрагментом или замазать	Обведіть мишею місце на знімку — його можна взяти фрагментом або замазати	Circle a spot on the photo with the mouse — you can take it as a fragment or hide it
 Обещали {0} — вышло {1}	Обіцяли {0} — вийшло {1}	Promised {0}, got {1}
 Обрабатываю…	Обробляю…	Working…
 Объединить в PDF	Об’єднати в PDF	Combine into PDF
@@ -609,6 +611,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Очистить	Очистити	Clear
 Очистить метаданные	Очистити метадані	Remove metadata
 Очистить не вышло	Очистити не вийшло	Couldn't clean it
+Очистить не вышло — этот формат снимка компьютер не открывает	Очистити не вийшло — цей формат знімка комп'ютер не відкриває	Couldn't clean it — the computer can't open this photo format
 Очистить недавнее	Очистити нещодавнє	Clear recent
 Очистить поиск	Очистити пошук	Clear search
 Ошибка AI	Помилка AI	AI error
@@ -771,6 +774,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Реквизиты перевода	Реквізити переказу	Payment details
 Рецепт	Рецепт	Recipe
 С PDF	З PDF	With the PDF
+С Shift обводится ещё одно место	З Shift обводиться ще одне місце	Hold Shift to circle another spot
 С адресом	З адресою	With the address
 С архивом	З архівом	With the archive
 С датой	З датою	With the date
@@ -789,6 +793,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 С файлом	З файлом	With the file
 С человеком	З людиною	With the person
 С этим файлом нечего делать	З цим файлом нічого робити	There's nothing to do with this file
+Сбросить	Скинути	Reset
 Свернуть	Згорнути	Collapse
 Свернуть способы	Згорнути способи	Hide ways
 Сверяю со снимком	Звіряю зі знімком	Checking against the picture
@@ -904,6 +909,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Собираю список	Складаю список	Making the list
 Собираю таблицу	Збираю таблицю	Putting the table together
 Собираю файл	Збираю файл	Putting the file together
+Собрать PDF не вышло — попробуйте ещё раз или соберите на телефоне	Зібрати PDF не вийшло — спробуйте ще раз або зберіть на телефоні	Couldn't build the PDF — try again or build it on the phone
 Собрать данные	Зібрати дані	Collect data
 Событие	Подія	Event
 Содержимое	Вміст	Contents

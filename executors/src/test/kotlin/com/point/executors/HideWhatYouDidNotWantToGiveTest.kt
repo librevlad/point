@@ -4,6 +4,9 @@ import com.point.core.flow.Box
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.Focus
 import com.point.core.flow.GraphState
+import com.point.core.flow.HideAreaCapability
+import com.point.core.flow.HideAreaRealizer
+import com.point.core.flow.META_HIDDEN_PLACES
 import com.point.core.flow.ImageRedactor
 import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.ObjectStore

@@ -1,9 +1,7 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,8 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -43,32 +39,6 @@ import com.point.core.ui.bubbleIcon
  * прочитанный текст, состав набора, идущая работа. В узком окне та же панель встаёт между
  * значениями и остальными действиями.
  */
-
-/** Снимок загружается один раз на экран: им пользуются и кольцо шапки, и панель содержимого. */
-@Composable
-internal fun rememberPicture(item: InboxItem): ImageBitmap? =
-    remember(item.obj.uri.value, item.obj.state.kind) {
-        if (item.obj.state.kind != ObjectKind.IMAGE) {
-            null
-        } else {
-            runCatching {
-                java.io.File(item.obj.uri.value).inputStream().use { androidx.compose.ui.res.loadImageBitmap(it) }
-            }.getOrNull()
-        }
-    }
-
-/** Снимок крупно, своей панелью. */
-@Composable
-internal fun PicturePanel(picture: ImageBitmap) {
-    Box(Modifier.fillMaxWidth().glassPanel().padding(8.dp), contentAlignment = Alignment.Center) {
-        Image(
-            bitmap = picture,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(12.dp)),
-        )
-    }
-}
 
 /**
  * Текст, который Point знает у этого объекта (P2/P3, #995).
