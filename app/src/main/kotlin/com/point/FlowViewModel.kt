@@ -639,38 +639,50 @@ class FlowViewModel @Inject constructor(
             val taken = mutableListOf<Triple<com.point.core.flow.PcOutboxEntry, String, Boolean>>()
             taken += handled
 
-            when {
+            // Что открыть, решается здесь, а открывается после подтверждения (#1458): вход в
+            // объект сам заглядывает в очередь компьютера, и прежде он успевал раньше, чем
+            // доходили «забрал», — список «с компьютера» снова считал уже забранное, и плашка
+            // оставалась, пока человек не зайдёт ещё раз.
+            val open: () -> Unit = when {
                 own.isNotEmpty() -> {
                     val one = own.first()
                     taken += one
                     if (own.size == 1) taken += plain
-                    onShared(
-                        "file://${one.second}",
-                        one.first.meta["mime"] ?: "application/octet-stream",
-                        autoAction = one.first.meta["pc.action"]?.takeIf { it.isNotBlank() },
-                        name = one.first.meta["name"],
-                        carried = one.first.meta - PC_SERVICE_META,
-                    )
+                    {
+                        onShared(
+                            "file://${one.second}",
+                            one.first.meta["mime"] ?: "application/octet-stream",
+                            autoAction = one.first.meta["pc.action"]?.takeIf { it.isNotBlank() },
+                            name = one.first.meta["name"],
+                            carried = one.first.meta - PC_SERVICE_META,
+                        )
+                    }
                 }
                 plain.size == 1 -> {
                     taken += plain
-                    onShared(
-                        "file://${plain[0].second}",
-                        plain[0].first.meta["mime"] ?: "application/octet-stream",
-                        name = plain[0].first.meta["name"],
-                        carried = plain[0].first.meta - PC_SERVICE_META,
-                    )
+                    {
+                        onShared(
+                            "file://${plain[0].second}",
+                            plain[0].first.meta["mime"] ?: "application/octet-stream",
+                            name = plain[0].first.meta["name"],
+                            carried = plain[0].first.meta - PC_SERVICE_META,
+                        )
+                    }
                 }
                 plain.isNotEmpty() -> {
                     taken += plain
-                    onSharedMultiple(plain.map { "file://${it.second}" })
+                    { onSharedMultiple(plain.map { "file://${it.second}" }) }
                 }
-                else -> _ui.update {
-                    it.copy(
-                        busy = null, busyStage = null,
-                        message = if (missed.isEmpty()) it.message else com.point.core.flow.pcPullFailedText(missed.map { m -> m.first.meta["name"].orEmpty() }),
-                        messageOutcome = if (missed.isEmpty()) it.messageOutcome else Outcome.FAILED,
-                    )
+                else -> {
+                    {
+                        _ui.update {
+                            it.copy(
+                                busy = null, busyStage = null,
+                                message = if (missed.isEmpty()) it.message else com.point.core.flow.pcPullFailedText(missed.map { m -> m.first.meta["name"].orEmpty() }),
+                                messageOutcome = if (missed.isEmpty()) it.messageOutcome else Outcome.FAILED,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -683,6 +695,7 @@ class FlowViewModel @Inject constructor(
             val waiting = pulled.filterNot { left -> taken.any { it.first.id == left.first.id } }
             fromPcEntries = waiting.map { it.first }
             _fromPcCount.value = waiting.size
+            open()
         }
     }
 

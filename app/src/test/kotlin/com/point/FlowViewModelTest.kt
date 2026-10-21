@@ -1489,6 +1489,26 @@ class FlowViewModelTest {
         assertEquals("несъехавшая вещь потерялась из списка", 1, vm.fromPcCount.value)
     }
 
+    /**
+     * Плашка «с компьютера» оставалась после забора (#1458, живой прогон 21.10): вход в
+     * забранный объект сам спрашивал очередь компьютера, и спрашивал раньше, чем туда
+     * доходили «забрал». Ответ приходил позже итогового счёта забора и снова говорил «4».
+     */
+    @Test fun `после забора список «с компьютера» пуст, даже когда разговор с компьютером медленный`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = (1..4).map { id ->
+            com.point.core.flow.PcOutboxEntry(id, mapOf("name" to "чек-$id.jpg", "mime" to "image/jpeg"))
+        }
+        pcTransport.ackDelayMs = 300
+        pcTransport.fetchDelayMs = 2_000
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals("забранное не ушло из очереди", listOf(1, 2, 3, 4), pcTransport.acked)
+        assertEquals("плашка снова считает уже забранное", 0, vm.fromPcCount.value)
+    }
+
     /** Если не доехало ничего, срыв называет вещь, а не безликий «объект». */
     @Test fun `срыв забора называет несъехавшую вещь`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
@@ -6638,10 +6658,16 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         }
         return listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
     }
+    /** Разговор с компьютером идёт через сервер и занимает время — ответ отстаёт от вопроса. */
+    var fetchDelayMs = 0L
+    var ackDelayMs = 0L
+
     override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcOutboxEntry>? {
         outboxFetches++
         atFetchOutbox?.invoke()
-        return outbox
+        val seen = outbox
+        if (fetchDelayMs > 0) kotlinx.coroutines.delay(fetchDelayMs)
+        return seen
     }
     override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String): Boolean {
         atDownload?.invoke(id)
@@ -6651,6 +6677,7 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     }
     /** Подтверждённое исчезает из очереди, как на реле: второй раз его телефону не привезут. */
     override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) {
+        if (ackDelayMs > 0) kotlinx.coroutines.delay(ackDelayMs)
         acked += id
         outbox = outbox.filterNot { it.id == id }
     }
