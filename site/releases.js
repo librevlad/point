@@ -15,14 +15,20 @@
   var box = document.querySelector('[data-build]');
   var buttons = Array.prototype.slice.call(document.querySelectorAll('a[data-get]'));
 
+  // Слова строки о сборке — на языке страницы (i18n.js); без него — английские.
+  function say(key, fallback) {
+    return window.pointText ? window.pointText(key, fallback) : fallback;
+  }
+
   function human(iso) {
     var d = new Date(iso);
     if (isNaN(d)) return '';
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    var lang = window.pointLang === 'uk' ? 'uk-UA' : window.pointLang === 'ru' ? 'ru-RU' : 'en-GB';
+    return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
   function mb(bytes) {
-    return Math.round(bytes / 1024 / 1024) + ' MB';
+    return Math.round(bytes / 1024 / 1024) + say('build.mb', ' MB');
   }
 
   function pick(assets, exts) {
@@ -72,9 +78,9 @@
       });
 
       if (box) {
-        var parts = ['Version ' + (rel.tag_name || '').replace(/^v/, '')];
+        var parts = [say('build.version', 'Version ') + (rel.tag_name || '').replace(/^v/, '')];
         if (rel.published_at) parts.push(human(rel.published_at));
-        box.innerHTML = parts.join(' · ') + ' · <a href="' + rel.html_url + '">what’s new</a>';
+        box.innerHTML = parts.join(' · ') + ' · <a href="' + rel.html_url + '">' + say('build.news', 'what’s new') + '</a>';
       }
     })
     .catch(function () { /* кнопки уже ведут на страницу релизов */ });
