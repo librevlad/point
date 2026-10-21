@@ -3,7 +3,7 @@
 Её видит не владелец Point, а посторонний, открывший незнакомую ссылку: он не знает ни
 продукта, ни его устройства. Поэтому здесь ровно одно действие и ни одного слова о Point.
 
-Портал — тот же знак, что и в приложении (`core/ui/Portal.kt`): фиолетово-голубое кольцо.
+Портал — тот же знак, что и в приложении (`core/ui/src/shared/.../PointMark.kt`): фиолетово-голубое кольцо.
 Здесь он ещё и работает индикатором — кольцо заполняется по мере отправки, и объект буквально
 уходит через портал. Это ответ на «виснет у клиента»: сервер принимает 4 МБ за сотые доли
 секунды, но снимок по мобильной связи идёт секунды, и раньше страница всё это время молчала.
@@ -31,8 +31,8 @@ background:conic-gradient(#00E0FF calc(var(--p)*1%),transparent 0)}
 .sending .r-fill{opacity:1}
 .sending .r-out{opacity:.25}
 .core{position:relative;text-align:center;line-height:1.35;padding:0 22px}
-.core b{display:block;font-size:17px;font-weight:600;color:#EAF0FF}
-.core span{margin-top:4px;font-size:13px;color:#9AA3B2;max-width:132px;overflow:hidden;
+.core b{display:block;font-size:17px;font-weight:500;color:#EDE7EA}
+.core span{margin-top:4px;font-size:13px;color:#EDE7EA94;max-width:132px;overflow:hidden;
 display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .portal:focus-within .r-out{opacity:1}
 .over .r-out{opacity:1;--w:8px}
@@ -41,26 +41,26 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:
 #file{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
 clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .no-js #file{position:static;width:100%;height:auto;margin:0 0 12px;clip:auto;
-padding:14px;border:1px dashed #FFFFFF2E;border-radius:12px;background:#00000033;color:#A8ADB8}
+padding:14px;border:1px dashed #FFFFFF2E;border-radius:14px;background:#FFFFFF0E;color:#EDE7EABD}
 .no-js .portal{display:none}
 button[disabled]{opacity:.5;cursor:default}
-.tabs{display:flex;gap:4px;background:#00000033;border-radius:12px;padding:4px;margin:0 0 16px}
-.tab{flex:1;padding:9px 0;border:0;border-radius:9px;background:transparent;color:#9AA3B2;
-font-size:14px;font-weight:500;cursor:pointer}
-.tab.on{background:#1A1D25;color:#EAF0FF;font-weight:600}
+.tabs{display:flex;gap:4px;background:#FFFFFF0E;border:1px solid #FFFFFF14;border-radius:14px;padding:4px;margin:0 0 16px}
+.tab{flex:1;padding:9px 0;border:0;border-radius:10px;background:transparent;box-shadow:none;color:#EDE7EA94;
+font:inherit;font-size:14px;font-weight:400;cursor:pointer}
+.tab.on{background:#FFFFFF1F;color:#EDE7EA;font-weight:500}
 /* Отправка состоялась: вкладки видно, но нажимать нечего — страница больше не принимает. */
 .tab.done{opacity:.4;cursor:default}
 #text{display:none;width:100%;margin:0 0 14px;padding:12px;border:1px solid #FFFFFF2E;
-border-radius:12px;background:#00000033;color:#F2F3F5;font:inherit;font-size:15px;resize:vertical}
+border-radius:14px;background:#FFFFFF0E;color:#EDE7EA;font:inherit;font-size:15px;resize:vertical}
 .no-js #text{display:block}
 .no-js .tabs{display:none}
 .said{margin:0 0 14px;font-size:14px;line-height:1.5;min-height:1.2em}
-.bad{color:#FF9A9A}
+.bad{color:#EFBE9F}
 #contact{display:none}
 #contact input{width:100%;box-sizing:border-box;margin:0 0 8px;padding:12px 14px;
-border-radius:12px;border:1px solid #ffffff14;background:#1B1E27;color:#EAF0FF;font-size:15px}
-#contact input::placeholder{color:#6C7488}
-#place{display:none;text-align:center;padding:10px 0 4px;color:#9AA3B2;font-size:14px}
+border-radius:14px;border:1px solid #FFFFFF1F;background:#FFFFFF0E;color:#EDE7EA;font:inherit;font-size:15px}
+#contact input::placeholder{color:#EDE7EA7A}
+#place{display:none;text-align:center;padding:10px 0 4px;color:#EDE7EA94;font-size:14px}
 </style>
 """
 

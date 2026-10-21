@@ -14,40 +14,55 @@ from __future__ import annotations
 import html
 
 PAGE_STYLE = """
+/* Стекло Point, то же, что у телефона и окна ПК (макет «Point · концепт в стиле Gestalt»,
+   19.10.2026; палитра — core/ui/src/shared/.../PointPalette.kt, обои — GlassSurfaces.kt).
+   Страницы сервера оставались на прежней почти чёрной земле с ярким фиолетовым: человек
+   шёл из приложения в стекле на страницу другого продукта. Шрифт Ubuntu — только если он
+   уже стоит у человека: тянуть шрифт с чужого домена страница не станет. */
 *{box-sizing:border-box}
-body{margin:0;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:#0E1014;color:#F2F3F5;
-font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}
-main{width:100%;max-width:420px;background:linear-gradient(#1A1D25,#121419);border:1px solid #FFFFFF14;
-border-radius:18px;padding:24px}
-h1{margin:0 0 8px;font-size:22px;font-weight:600}
-p{margin:0 0 16px;font-size:15px;line-height:1.5;color:#A8ADB8}
-.code{display:block;margin:0 0 16px;padding:14px;border:1px dashed #FFFFFF2E;border-radius:12px;
-background:#00000033;color:#F2F3F5;font-size:28px;font-weight:600;letter-spacing:4px;text-align:center}
-button,a.go{display:block;width:100%;padding:14px;border:0;border-radius:12px;background:#7C5CFF;
-color:#fff;font-size:16px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
-button:active,a.go:active{background:#6A4BE8}
-/* Обычная ссылка на тёмном фоне: браузер красит её своим тёмно-синим (#0000EE), и на
-   #0E1014 человек её почти не видит — «Открыть в картах» и «Скачать файлом» пропадали
-   (ревью страниц 02.09.2026). Цвет — тот же сиреневый, что у кнопок. */
-main a:not(.go){color:#A78BFA;text-decoration:underline;text-underline-offset:2px}
-main a:not(.go):hover{color:#C4B5FD}
-small{display:block;margin-top:16px;font-size:13px;line-height:1.5;color:#7E8492}
-small.warn{border-left:2px solid #FF6B6B80;padding-left:10px;margin-top:12px}
-.shot{display:block;width:100%;border-radius:12px;border:1px solid #FFFFFF14;margin:0 0 12px}
+body{margin:0;padding:24px 16px;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background-color:#2B2531;background-image:
+radial-gradient(circle at 18% 8%,#805678C7,#80567800 46%),
+radial-gradient(circle at 96% 26%,#D6805C33,#D6805C00 40%),
+radial-gradient(circle at 46% 92%,#545E8CB8,#545E8C00 52%),
+radial-gradient(circle at 92% 96%,#80567885,#80567800 32%);
+background-attachment:fixed;color:#EDE7EA;
+font-family:Ubuntu,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}
+main{width:100%;max-width:420px;padding:24px;border-radius:24px;
+background:#241F2AA3;border:1px solid #FFFFFF1F;border-top-color:#FFFFFF38;
+box-shadow:0 24px 60px #00000040;-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+h1{margin:0 0 8px;font-size:22px;font-weight:500}
+p{margin:0 0 16px;font-size:15px;line-height:1.5;color:#EDE7EABD}
+.code{display:block;margin:0 0 16px;padding:14px;border:1px dashed #FFFFFF2E;border-radius:14px;
+background:#FFFFFF0E;color:#EDE7EA;font-family:'Ubuntu Mono',ui-monospace,Menlo,Consolas,monospace;
+font-size:28px;font-weight:600;letter-spacing:4px;text-align:center}
+/* Главный шаг — светлая строка, тёмный текст, как «Новый объект» и первое действие. */
+button,a.go{display:block;width:100%;padding:14px;border:1px solid #FFFFFFF2;border-radius:14px;
+background:linear-gradient(#F1ECF4F7,#E5DEEDEB);box-shadow:0 8px 20px #00000033;
+color:#2B2531;font:inherit;font-size:16px;font-weight:500;cursor:pointer;text-align:center;text-decoration:none}
+button:active,a.go:active{background:linear-gradient(#E5DEEDF2,#D9D1E3E6)}
+/* Обычная ссылка на тёмном стекле: браузер красит её своим тёмно-синим (#0000EE), и человек
+   её почти не видит — «Открыть в картах» и «Скачать файлом» пропадали (ревью страниц
+   02.09.2026). Цвет — светлый фиолетовый Point для слова-ссылки. */
+main a:not(.go){color:#CBBEEE;text-decoration:underline;text-underline-offset:2px}
+main a:not(.go):hover{color:#E2D9F7}
+small{display:block;margin-top:16px;font-size:13px;line-height:1.5;color:#EDE7EA94}
+small.warn{border-left:2px solid #D98B63;padding-left:10px;margin-top:12px;color:#EFBE9F}
+.shot{display:block;width:100%;border-radius:14px;border:1px solid #FFFFFF1F;margin:0 0 12px}
 .player{display:block;width:100%;margin:0 0 12px}
-.what{color:#F2F3F5;font-weight:600;margin-bottom:4px}
+.what{color:#EDE7EA;font-weight:500;margin-bottom:4px}
 /* Чужой человек открывает незнакомую ссылку и должен видеть, куда попал (#1388).
-   Две строки по построению: имя и дверь к обещанию в одной, пояснение под ними. На узком
-   телефоне пояснение иначе переносилось и наезжало на ссылку. */
-.brand{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;margin:0 0 20px;
-padding-bottom:12px;border-bottom:1px solid #FFFFFF14;font-size:13px;color:#7E8492}
-.brand b{font-size:16px;font-weight:600;color:#F2F3F5;letter-spacing:.2px}
+   Две строки по построению: знак, имя и дверь к обещанию в одной, пояснение под ними. На
+   узком телефоне пояснение иначе переносилось и наезжало на ссылку. */
+.brand{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;margin:0 0 20px;
+padding-bottom:12px;border-bottom:1px solid #FFFFFF14;font-size:13px;color:#EDE7EA94}
+.brand svg{flex:none;width:20px;height:20px}
+.brand b{font-size:16px;font-weight:500;color:#EDE7EA;letter-spacing:.2px}
 .brand a{margin-left:auto;white-space:nowrap}
-.brand span{flex:0 0 100%;margin-top:2px}
+.brand span{flex:0 0 100%;margin-top:2px;padding-left:28px}
 /* Главное на странице о данных читается списком, а не пятью абзацами. */
-.brief{margin:0 0 16px;padding:12px 14px;border-radius:12px;background:#00000033}
-.brief p{margin:0 0 6px;font-size:14px;color:#C8CCD4}
+.brief{margin:0 0 16px;padding:12px 14px;border-radius:14px;background:#FFFFFF0E;border:1px solid #FFFFFF14}
+.brief p{margin:0 0 6px;font-size:14px;color:#EDE7EAD9}
 .brief p:last-child{margin-bottom:0}
 /* Кнопка не липнет к предупреждению, которое человек обязан прочесть до неё. */
 small + a.go,small + button{margin-top:16px}
@@ -95,6 +110,17 @@ def _hours_word(hours: int) -> str:
     return "часов"
 
 
+#: Знак Point — тот же портал, что у иконки приложения и в шапке окна ПК (`PointMark.kt`):
+#: кольцо с переходом белый → фиолетовый → голубой. Доли те же: внешний край 0.583, толщина
+#: 0.257 половины кадра. Рисунок встроен — ни одного запроса за картинкой.
+MARK = (
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="pm" '
+    'gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="19">'
+    '<stop offset="0" stop-color="#EAF0FF"/><stop offset=".45" stop-color="#9B7BFF"/>'
+    '<stop offset="1" stop-color="#00A6FF"/></linearGradient></defs>'
+    '<circle cx="12" cy="12" r="5.46" fill="none" stroke="url(#pm)" stroke-width="3.08"/></svg>'
+)
+
 #: Страница называет себя (#1388).
 #:
 #: Чужой человек открывает незнакомую ссылку с телефона, первый раз в жизни, и видит карточку
@@ -102,7 +128,7 @@ def _hours_word(hours: int) -> str:
 #: чем сервис занят, стоят на каждой странице; рядом — дверь к обещанию о данных, чтобы
 #: недоверчивому было куда пойти проверить, а не только гадать.
 BRAND = (
-    '<p class="brand"><b>Point</b><a href="/privacy">О ваших данных</a>'
+    '<p class="brand">' + MARK + '<b>Point</b><a href="/privacy">О ваших данных</a>'
     '<span>передача между устройствами</span></p>'
 )
 
