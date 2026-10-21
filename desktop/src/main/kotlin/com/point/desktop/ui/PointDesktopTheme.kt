@@ -98,17 +98,30 @@ private val Ubuntu = FontFamily(
 
 private val UbuntuMono = FontFamily(Font(resource = DesktopFonts.MONO, weight = FontWeight.Normal))
 
+/**
+ * Как буквы ложатся на пиксели. Нужна мягкость Telegram, а не «квадратные» буквы Java-окна.
+ *
+ * С #590 стоял полный хинтинг, да ещё принудительный автохинтер, без субпиксельного
+ * положения: каждая линия буквы притягивалась к сетке экрана по обеим осям, а каждая буква
+ * вставала на целый пиксель. Отсюда рубленые округлости и неровные промежутки — то самое
+ * «квадратное», на что жаловался владелец 21.10.2026.
+ *
+ * Теперь — как у Telegram и браузеров: лёгкий хинтинг (сетка только по вертикали, форма буквы
+ * не ломается), дробное положение букв и обычное, не субпиксельное сглаживание: цветная кайма
+ * ClearType хуже на стекле окна и при масштабе 150 % (#590).
+ */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+internal val PointRasterizationSettings = androidx.compose.ui.text.FontRasterizationSettings(
+    smoothing = androidx.compose.ui.text.FontSmoothing.AntiAlias,
+    hinting = androidx.compose.ui.text.FontHinting.Slight,
+    subpixelPositioning = true,
+    autoHintingForced = false,
+)
+
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 private val PointRasterization = androidx.compose.ui.text.PlatformTextStyle(
     null,
-    androidx.compose.ui.text.PlatformParagraphStyle(
-        androidx.compose.ui.text.FontRasterizationSettings(
-            smoothing = androidx.compose.ui.text.FontSmoothing.AntiAlias,
-            hinting = androidx.compose.ui.text.FontHinting.Full,
-            subpixelPositioning = false,
-            autoHintingForced = true,
-        ),
-    ),
+    androidx.compose.ui.text.PlatformParagraphStyle(PointRasterizationSettings),
 )
 
 private fun ubuntu(size: Float, weight: FontWeight = FontWeight.Normal, color: Color = PointColors.text) = TextStyle(
