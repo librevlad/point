@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ScanPlusCapability
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
 import com.point.core.model.ActionResult

@@ -224,6 +224,9 @@ fun main(args: Array<String>) {
             com.point.core.flow.EmailRealizer(entities, PcUrlOpener()),
             com.point.core.flow.MapRealizer(entities, PcUrlOpener()),
             com.point.core.flow.EventRealizer(PcCalendar()),
+            PcPageScanRealizer(com.point.core.flow.ScanCapability.ID, "scan", excelStore),
+            PcPageScanRealizer(com.point.core.flow.ScanPlusCapability.ID, "scan-plus", excelStore),
+            PcScanPdfRealizer(excelStore),
             pcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(

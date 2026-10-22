@@ -2,15 +2,12 @@ package com.point.executors
 
 import android.graphics.Bitmap
 import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -21,24 +18,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
-class ScanCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "scan"
-    override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = tr("Скан")
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
-
-    override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.IMAGE, tr("чёрно-белую страницу"))
-
-    companion object { val ID = CapabilityId("scan") }
-}
 
 class ScanRealizer @Inject constructor(
     private val store: ObjectStore,
 ) : Realizer {
-    override val capabilityId = ScanCapability.ID
+    override val capabilityId = com.point.core.flow.ScanCapability.ID
 
     override val meta = RealizerMeta(priority = 90)
 
@@ -68,4 +52,20 @@ class ScanRealizer @Inject constructor(
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: tr("Ошибка сканирования"), recoverable = true) }
         }
+}
+
+/** Дверь Hilt: «ScanCapability» живёт в `:core:flow` (#1379). Члены руками, а не `by`: KSP. */
+class ScanCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.ScanCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: com.point.core.flow.GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: com.point.core.flow.GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): com.point.core.model.ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<com.point.core.model.Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }

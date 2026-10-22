@@ -89,6 +89,11 @@ fun desktopCapabilities(
     com.point.core.flow.EmailCapability(),
     com.point.core.flow.MapCapability(),
     com.point.core.flow.EventCapability(),
+
+    // Скан страницы тем же зрением, что у телефона (#1379): OpenCV на компьютере своя.
+    com.point.core.flow.ScanCapability(),
+    com.point.core.flow.ScanPlusCapability(),
+    com.point.core.flow.ScanPdfCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,

@@ -25,6 +25,7 @@ tukaaniXz = "1.10"
 junrar = "7.5.5"
 tesseract4android = "4.9.0"
 opencv = "4.14.0"
+opencvJvm = "4.9.0-0"
 onnxruntime = "1.28.0"
 mlkitEntityExtraction = "16.0.0-beta6"
 mlkitBarcode = "17.3.0"
@@ -81,6 +82,7 @@ junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" 
 tesseract4android = { group = "com.github.adaptech-cz.Tesseract4Android", name = "tesseract4android", version.ref = "tesseract4android" } # on-device OCR (Tesseract 5)
 onnxruntime = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" } # PP-OCR (кириллица) на устройстве
 opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" } # document scan pipeline (perspective + adaptive threshold)
+opencv-jvm = { group = "org.openpnp", name = "opencv", version.ref = "opencvJvm" } # the same pipeline on the PC: one self-contained native per OS (#1379)
 mlkit-entity-extraction = { group = "com.google.mlkit", name = "entity-extraction", version.ref = "mlkitEntityExtraction" } # on-device entity detection (phone/email/address/date/…)
 mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" } # on-device QR/barcode (bundled model, offline)
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version = "33.7.0" }

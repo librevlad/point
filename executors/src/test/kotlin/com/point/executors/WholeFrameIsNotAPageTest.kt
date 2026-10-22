@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ScanPlusCapability
 import com.point.core.flow.META_WHOLE_FRAME
 import com.point.core.flow.wholeFrameNote
 import com.point.core.model.ActionResult

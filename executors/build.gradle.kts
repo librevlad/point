@@ -22,6 +22,10 @@ android {
     // (#1094). Телефонные тесты берут его с classpath: путь от рабочего каталога зависел от
     // того, откуда запустили, и пропажа файла читалась бы как «компьютер ничего не умеет».
     sourceSets.getByName("test").resources.srcDir(rootProject.file("desktop/src/test/resources"))
+
+    // Зрение страницы — один код OpenCV на телефон и компьютер (#1379): исходник собирается
+    // и здесь, и в `:desktop`, тем же швом, что общие значки `core/ui/src/shared` (#849).
+    sourceSets["main"].kotlin.srcDir("src/shared/kotlin")
 }
 
 kotlin {

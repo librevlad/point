@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ScanPdfCapability
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState

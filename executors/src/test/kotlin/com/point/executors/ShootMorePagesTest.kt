@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.ScanCapability
+import com.point.core.flow.ScanPdfCapability
 import com.point.core.flow.GraphState
 import com.point.core.flow.META_COLLECTION_ORDER
 import com.point.core.flow.ObjectStore
