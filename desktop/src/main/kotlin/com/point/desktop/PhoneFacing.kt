@@ -80,6 +80,9 @@ fun desktopCapabilities(
     // встают «Взять фрагмент» и «Замазать». Своего круга — соседу показанное не передать.
     com.point.core.flow.TakeFragmentCapability(),
     com.point.core.flow.HideAreaCapability(),
+
+    // Голос — орган устройства, а действие одно (#442, #1379): у компьютера голоса Windows.
+    com.point.core.flow.SpeakCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,

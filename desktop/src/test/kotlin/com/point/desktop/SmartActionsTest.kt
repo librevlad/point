@@ -466,6 +466,9 @@ class SmartActionsTest {
 
         // Действия над местом, обведённым мышью (#1379).
         "take-fragment", "hide-area",
+
+        // «Озвучить» голосами Windows (#442, #1379).
+        "speak",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

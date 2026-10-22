@@ -1,4 +1,5 @@
 pc-open-link=Открыть в браузере на компьютере	URL				5
+speak=Озвучить	TEXT				8
 pc-open=Открыть на компьютере					10
 transcribe=Расшифровать	AUDIO				10
 pc-copy=В буфер компьютера	IMAGE,TEXT				15

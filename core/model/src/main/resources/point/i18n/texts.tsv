@@ -205,6 +205,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 ГОТОВО НА КОМПЬЮТЕРЕ	ГОТОВО НА КОМП’ЮТЕРІ	DONE ON THE COMPUTER
 Главные тезисы	Головні тези	Key points
 Голос для языка «{0}» на этом устройстве читает через интернет, а режим приватности сейчас наружу не пускает. Офлайновый голос ставят в настройках системы, в разделе синтеза речи.	Голос для мови «{0}» на цьому пристрої читає через інтернет, а режим приватності зараз назовні не пускає. Офлайновий голос встановлюють у налаштуваннях системи, в розділі синтезу мовлення.	The voice for “{0}” on this device reads over the internet, and privacy mode doesn't allow that right now. You can add an offline voice in the system settings, under text-to-speech.
+Голос компьютера не дочитал текст — попробуйте ещё раз	Голос комп’ютера не дочитав текст — спробуйте ще раз	The computer voice could not finish the text, please try again
 Голос устройства не ответил — прочитать целиком не вышло	Голос пристрою не відповів — прочитати цілком не вийшло	The device's voice didn't answer, so it couldn't read everything
 Готовим ссылку…	Готуємо посилання…	Preparing the link…
 Готовлю движок — попробуйте через минуту	Готую рушій — спробуйте за хвилину	Preparing the engine. Try in a minute
