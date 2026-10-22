@@ -83,6 +83,12 @@ fun desktopCapabilities(
 
     // Голос — орган устройства, а действие одно (#442, #1379): у компьютера голоса Windows.
     com.point.core.flow.SpeakCapability(),
+
+    // Письмо, карта и событие — те же действия, что на телефоне (#1379): открывают их почта,
+    // браузер и календарь компьютера.
+    com.point.core.flow.EmailCapability(),
+    com.point.core.flow.MapCapability(),
+    com.point.core.flow.EventCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,

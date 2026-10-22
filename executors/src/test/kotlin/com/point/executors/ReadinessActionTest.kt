@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.EmailCapability
+import com.point.core.flow.MapCapability
+import com.point.core.flow.EventCapability
 import com.point.core.flow.ACTION_SCHEMAS
 import com.point.core.flow.ContactInserter
 import com.point.core.flow.Entity

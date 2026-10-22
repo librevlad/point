@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.MapCapability
+import com.point.core.flow.EventCapability
 import com.point.core.flow.AiCapability
 
 import com.point.core.flow.Clipboard

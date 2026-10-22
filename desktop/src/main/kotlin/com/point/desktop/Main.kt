@@ -221,6 +221,9 @@ fun main(args: Array<String>) {
             com.point.core.flow.TakeFragmentRealizer(PcEvidenceCrops(), excelStore, PcUprightAngle),
             com.point.core.flow.HideAreaRealizer(PcImageRedactor(), excelStore),
             com.point.core.flow.SpeakRealizer(excelStore, PcTextToSpeech(), PcCloudPrivacy(pointDir)),
+            com.point.core.flow.EmailRealizer(entities, PcUrlOpener()),
+            com.point.core.flow.MapRealizer(entities, PcUrlOpener()),
+            com.point.core.flow.EventRealizer(PcCalendar()),
             pcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(

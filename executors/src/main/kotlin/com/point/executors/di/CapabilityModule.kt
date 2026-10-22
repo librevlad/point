@@ -20,12 +20,9 @@ import com.point.executors.remotePcCapabilities
 import com.point.executors.remotePcRealizers
 import com.point.executors.CallCapability
 import com.point.executors.CallRealizer
-import com.point.executors.EmailCapability
-import com.point.executors.EmailRealizer
-import com.point.executors.EventCapability
-import com.point.executors.EventRealizer
-import com.point.executors.MapCapability
-import com.point.executors.MapRealizer
+import com.point.executors.EmailCapabilityOnPhone
+import com.point.executors.EventCapabilityOnPhone
+import com.point.executors.MapCapabilityOnPhone
 import com.point.executors.OpenInCapability
 import com.point.executors.OpenInRealizer
 import com.point.executors.PhoneAppsCapability
@@ -167,9 +164,9 @@ abstract class CapabilityModule {
     // существовало: «не могу отправить в гетконтакт» (живой прогон 12.08.2026). Регистрация
     // и есть вся починка.
     @Binds @IntoSet @OwnCapabilities abstract fun phoneAppsCap(c: PhoneAppsCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun emailCap(c: EmailCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun mapCap(c: MapCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun eventCap(c: EventCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun emailCap(c: EmailCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun mapCap(c: MapCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun eventCap(c: EventCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun copyCardCap(c: CopyCardCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun vcardCap(c: VCardCapability): Capability
 
@@ -236,9 +233,6 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
     @Binds @IntoSet abstract fun callR(r: CallRealizer): Realizer
     @Binds @IntoSet abstract fun smsR(r: SmsRealizer): Realizer
-    @Binds @IntoSet abstract fun emailR(r: EmailRealizer): Realizer
-    @Binds @IntoSet abstract fun mapR(r: MapRealizer): Realizer
-    @Binds @IntoSet abstract fun eventR(r: EventRealizer): Realizer
     @Binds @IntoSet abstract fun copyCardR(r: CopyCardRealizer): Realizer
     @Binds @IntoSet abstract fun vcardR(r: VCardRealizer): Realizer
     @Binds @IntoSet abstract fun saveContactR(r: SaveContactRealizer): Realizer
@@ -378,6 +372,20 @@ abstract class CapabilityModule {
         @Provides @IntoSet
         fun hideAreaR(redactor: com.point.core.flow.ImageRedactor, store: ObjectStore): Realizer =
             com.point.core.flow.HideAreaRealizer(redactor, store)
+
+        // Письмо, карта и событие живут в `:core:flow` (#1379): у компьютера те же исполнители
+        // со своими органами.
+        @Provides @IntoSet
+        fun emailR(extractor: com.point.core.flow.EntityExtractor, opener: com.point.core.flow.UrlOpener): Realizer =
+            com.point.core.flow.EmailRealizer(extractor, opener)
+
+        @Provides @IntoSet
+        fun mapR(extractor: com.point.core.flow.EntityExtractor, opener: com.point.core.flow.UrlOpener): Realizer =
+            com.point.core.flow.MapRealizer(extractor, opener)
+
+        @Provides @IntoSet
+        fun eventR(calendar: com.point.core.flow.CalendarInserter): Realizer =
+            com.point.core.flow.EventRealizer(calendar)
 
         @Provides @IntoSet
         fun cleanMetadataR(store: ObjectStore): Realizer = com.point.executors.CleanMetadataRealizer(store)

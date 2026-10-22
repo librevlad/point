@@ -469,6 +469,8 @@ class SmartActionsTest {
 
         // «Озвучить» голосами Windows (#442, #1379).
         "speak",
+        // Письмо, карта и событие органами компьютера (#1379).
+        "email", "map", "event",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

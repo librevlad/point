@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.EventCapability
 import com.point.core.flow.GraphState
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
