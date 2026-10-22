@@ -74,8 +74,17 @@ class PcScratchStore(private val dir: File) : ObjectStore {
     override suspend fun children(collection: PointObject, limit: Int) =
         com.point.core.flow.CollectionContent<PointObject>(emptyList(), 0)
 
-    override suspend fun ingest(sourceUri: String, mime: String): PointObject =
-        error("на компьютере объект принимает Inbox")
+    /**
+     * Объекты компьютер принимает через Inbox. Сюда приходит только добавка к действию —
+     * файл этого компьютера, выбранный человеком (фон для «Заменить фон»): действие работает
+     * с копией, как телефон, а не с файлом человека.
+     */
+    override suspend fun ingest(sourceUri: String, mime: String): PointObject {
+        val source = File(sourceUri).takeIf(File::isFile) ?: error("на компьютере объект принимает Inbox")
+        val ref = newScratchFile(source.extension)
+        source.copyTo(File(ref.value))
+        return PointObject(UUID.randomUUID().toString(), mime, ref, ObjectState(com.point.core.model.ObjectKind.IMAGE))
+    }
 
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         error("на компьютере объект принимает Inbox")

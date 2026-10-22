@@ -46,17 +46,17 @@ class RealCapabilityInventoryTest {
     private val shared: Set<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests())
 
     private val builtIn: List<Capability> = shared.toList() + listOf(
-        AiCapabilityOnPhone(aiKeysReady), BlurBgCapability(),
+        AiCapabilityOnPhone(aiKeysReady), BlurBgCapabilityOnPhone(),
         CallCapability(), CloudOcrCapabilityOnPhone(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapabilityOnPhone(),
         FixErrorsCapabilityOnPhone(aiKeysReady), FixErrorsStrongerCapabilityOnPhone(aiKeysReady),
-        CutoutCapability(), EmailCapabilityOnPhone(), EventCapabilityOnPhone(),
+        CutoutCapabilityOnPhone(), EmailCapabilityOnPhone(), EventCapabilityOnPhone(),
         ExcelCapabilityOnPhone(aiKeysReady), ExtractAllCapabilityOnPhone(), FindCapabilityOnPhone(),
         JobReplyCapabilityOnPhone(aiKeysReady), MapCapabilityOnPhone(), MergePdfCapabilityOnPhone(),
         OpenCapability(), OpenInCapability(), OpenUrlCapability(),
         PagesCapabilityOnPhone(), PcCapability(pairedPc), PhoneAppsCapability(),
         ReadDocumentCapabilityOnPhone(),
-        ReadQrCapability(), RenewPeriodCapabilityOnPhone(), ReplaceBgCapability(),
+        ReadQrCapability(), RenewPeriodCapabilityOnPhone(), ReplaceBgCapabilityOnPhone(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapabilityOnPhone(),
         SlidesCapabilityOnPhone(), SpeakCapabilityOnPhone(),
         TakeFragmentCapabilityOnPhone(), HideAreaCapabilityOnPhone(),

@@ -2557,9 +2557,9 @@ class FlowViewModelTest {
     // оставляло человека перед экраном, на котором не менялось ничего: в живом прогоне
     // (AND-068) тап не дал ни строки состояния, ни счётчика, ни отмены (#1128).
     @Test fun `вырез фона — не тихая работа, ему положен тот же экран ожидания, что облачным`() {
-        assertEquals(false, quietWork(com.point.executors.CutoutCapability().meta))
-        assertEquals(false, quietWork(com.point.executors.BlurBgCapability().meta))
-        assertEquals(false, quietWork(com.point.executors.ReplaceBgCapability().meta))
+        assertEquals(false, quietWork(com.point.core.flow.CutoutCapability().meta))
+        assertEquals(false, quietWork(com.point.core.flow.BlurBgCapability().meta))
+        assertEquals(false, quietWork(com.point.core.flow.ReplaceBgCapability().meta))
     }
 
     @Test fun `a quiet action speaks on the object — its stage reaches the state`() = runTest(dispatcher) {

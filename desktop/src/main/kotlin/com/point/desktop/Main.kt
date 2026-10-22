@@ -146,6 +146,10 @@ fun main(args: Array<String>) {
     // «В Excel» — общее действие из :core:flow, у компьютера свои органы (#1369):
     // файлы, кадр для модели, ключи из конфига — те же, что человек вписал на телефоне.
     val excelStore = PcScratchStore(java.io.File(pointDir, "scratch"))
+
+    // Фон отделяется на самом компьютере (#1379): модель малая и исполняется OpenCV.
+    val pcRemover = PcBackgroundRemover(excelStore)
+    val pcCompositor = PcImageCompositor(excelStore)
     val excelKeys = com.point.core.flow.AiReadiness {
         FilePcConfig(pointDir).load().aiKeys.mine.isNotEmpty()
     }
@@ -227,6 +231,13 @@ fun main(args: Array<String>) {
             PcPageScanRealizer(com.point.core.flow.ScanCapability.ID, "scan", excelStore),
             PcPageScanRealizer(com.point.core.flow.ScanPlusCapability.ID, "scan-plus", excelStore),
             PcScanPdfRealizer(excelStore),
+            PcNeedsOpenCv(com.point.core.flow.CutoutRealizer(pcRemover)),
+            PcNeedsOpenCv(com.point.core.flow.BlurBgRealizer(pcRemover, pcCompositor)),
+            PcNeedsOpenCv(
+                PcPicksImage(com.point.core.flow.ReplaceBgRealizer(excelStore, pcRemover, pcCompositor)) { prompt ->
+                    pickPicture(prompt)
+                },
+            ),
             pcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer(browse),
             PcExcelRealizer(

@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.CutoutRealizer
+import com.point.core.flow.CutoutCapability
 import com.point.core.flow.BackgroundRemover
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind

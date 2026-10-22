@@ -474,6 +474,9 @@ class SmartActionsTest {
 
         // Скан страницы общим зрением OpenCV (#1379).
         "scan", "scan-plus", "scan-pdf",
+
+        // Фон отделяет малая U²-Net через OpenCV (#1379).
+        "cutout", "blur-bg", "replace-bg",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

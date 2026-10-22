@@ -305,6 +305,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Карта	Картка	Card
 Карта не найдена	Картку не знайдено	No card found
 Картинка в буфере — вставьте куда нужно	Картинка в буфері — вставте куди треба	The picture is on the clipboard. Paste it where you need
+Картинка не выбрана — без неё действию не с чем работать	Картинку не вибрано — без неї дії нема з чим працювати	No picture chosen, so the action has nothing to work with
 Картинка.png	Картинка.png	Picture.png
 Картинку не удалось сохранить — сохраните её на диск и бросьте файлом	Картинку не вдалося зберегти — збережіть її на диск і киньте файлом	Couldn't save the picture. Save it to disk and drop it as a file
 Карты	Картки	Cards

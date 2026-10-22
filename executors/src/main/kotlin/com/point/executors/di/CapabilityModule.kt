@@ -30,10 +30,9 @@ import com.point.executors.PhoneAppsRealizer
 import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveRealizer
-import com.point.executors.BlurBgCapability
+import com.point.executors.BlurBgCapabilityOnPhone
 import com.point.executors.HideAreaCapabilityOnPhone
 import com.point.executors.TakeFragmentCapabilityOnPhone
-import com.point.executors.BlurBgRealizer
 import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
@@ -74,8 +73,7 @@ import com.point.executors.CopyCapability
 import com.point.executors.CopyCardCapability
 import com.point.executors.CopyCardRealizer
 import com.point.executors.CopyRealizer
-import com.point.executors.CutoutCapability
-import com.point.executors.CutoutRealizer
+import com.point.executors.CutoutCapabilityOnPhone
 import com.point.executors.OfficeRealizerOnPhone
 import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
@@ -88,8 +86,7 @@ import com.point.executors.PagesRealizerOnPhone
 import com.point.executors.SlidesCapabilityOnPhone
 import com.point.executors.SlidesRealizerOnPhone
 import com.point.executors.PdfRealizer
-import com.point.executors.ReplaceBgCapability
-import com.point.executors.ReplaceBgRealizer
+import com.point.executors.ReplaceBgCapabilityOnPhone
 import com.point.executors.QrRealizer
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
@@ -193,14 +190,14 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun readQrCap(c: ReadQrCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanCap(c: ScanCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapabilityOnPhone): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun takeFragmentCap(c: TakeFragmentCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun hideAreaCap(c: HideAreaCapabilityOnPhone): Capability
 
-    @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun aiCap(c: AiCapabilityOnPhone): Capability
@@ -254,11 +251,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun readQrR(r: ReadQrRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
-    @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
-    @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
 
 
-    @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
 
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizerOnPhone): Realizer
@@ -328,6 +322,18 @@ abstract class CapabilityModule {
         fun pageScanRealizers(store: ObjectStore): Set<Realizer> = setOf(
             PageScanRealizer(com.point.core.flow.ScanCapability.ID, "scan", store),
             PageScanRealizer(com.point.core.flow.ScanPlusCapability.ID, "scan-plus", store),
+        )
+
+        /** Фон отделяют, размывают и меняют одни исполнители на телефоне и компьютере (#1379). */
+        @Provides @ElementsIntoSet
+        fun backgroundRealizers(
+            store: ObjectStore,
+            remover: com.point.core.flow.BackgroundRemover,
+            compositor: com.point.core.flow.ImageCompositor,
+        ): Set<Realizer> = setOf(
+            com.point.core.flow.CutoutRealizer(remover),
+            com.point.core.flow.BlurBgRealizer(remover, compositor),
+            com.point.core.flow.ReplaceBgRealizer(store, remover, compositor),
         )
 
         /**
