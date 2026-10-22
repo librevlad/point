@@ -95,11 +95,11 @@ import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
 import com.point.executors.RenewPeriodCapabilityOnPhone
 import com.point.executors.RenewPeriodRealizerOnPhone
-import com.point.executors.ScanCapability
+import com.point.executors.ScanCapabilityOnPhone
 import com.point.executors.ScanRealizer
-import com.point.executors.ScanPlusCapability
+import com.point.executors.ScanPlusCapabilityOnPhone
 import com.point.executors.PageScanRealizer
-import com.point.executors.ScanPdfCapability
+import com.point.executors.ScanPdfCapabilityOnPhone
 import com.point.executors.ScanPdfRealizer
 import com.point.executors.ShootMoreCapability
 import com.point.executors.ShootMoreRealizer
@@ -150,7 +150,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun saveAllCap(c: SaveAllCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shareAllCap(c: ShareAllCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun mergePdfCap(c: MergePdfCapabilityOnPhone): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun scanPdfCap(c: ScanPdfCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun scanPdfCap(c: ScanPdfCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun shootMoreCap(c: ShootMoreCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun openCap(c: OpenCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun extractAllCap(c: ExtractAllCapabilityOnPhone): Capability
@@ -191,8 +191,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun wordCap(c: WordCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun readQrCap(c: ReadQrCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun scanCap(c: ScanCapability): Capability
-    @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun scanCap(c: ScanCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapability): Capability
 
@@ -326,8 +326,8 @@ abstract class CapabilityModule {
          */
         @Provides @ElementsIntoSet
         fun pageScanRealizers(store: ObjectStore): Set<Realizer> = setOf(
-            PageScanRealizer(ScanCapability.ID, "scan", store),
-            PageScanRealizer(ScanPlusCapability.ID, "scan-plus", store),
+            PageScanRealizer(com.point.core.flow.ScanCapability.ID, "scan", store),
+            PageScanRealizer(com.point.core.flow.ScanPlusCapability.ID, "scan-plus", store),
         )
 
         /**

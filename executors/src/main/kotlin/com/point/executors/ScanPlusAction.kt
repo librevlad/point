@@ -1,26 +1,22 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Latency
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
-import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
-import com.point.core.model.tr
 import javax.inject.Inject
 
-class ScanPlusCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "scan"
-    override val meta = CapabilityMeta(latency = Latency.SLOW)
-
-    override fun label(state: ObjectState) = tr("Скан с цветом")
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
-
-    override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.IMAGE, tr("картинку · дольше, зато на устройстве"))
-
-    companion object { val ID = CapabilityId("scan-plus") }
+/** Дверь Hilt: «ScanPlusCapability» живёт в `:core:flow` (#1379). Члены руками, а не `by`: KSP. */
+class ScanPlusCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.ScanPlusCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: com.point.core.flow.GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: com.point.core.flow.GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): com.point.core.model.ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<com.point.core.model.Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }

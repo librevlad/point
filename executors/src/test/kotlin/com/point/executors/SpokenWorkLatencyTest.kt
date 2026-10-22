@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.ScanCapability
+import com.point.core.flow.ScanPlusCapability
+import com.point.core.flow.ScanPdfCapability
 import com.point.core.flow.RenewPeriodCapability
 import com.point.core.flow.PagesCapability
 import com.point.core.flow.WordCapability

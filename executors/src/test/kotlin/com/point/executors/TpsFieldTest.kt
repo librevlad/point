@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.vision.TpsField
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

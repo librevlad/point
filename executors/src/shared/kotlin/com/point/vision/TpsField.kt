@@ -1,4 +1,4 @@
-package com.point.executors
+package com.point.vision
 
 import kotlin.math.abs
 import kotlin.math.hypot

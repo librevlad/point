@@ -26,6 +26,26 @@ sourceSets.main {
 
     // Звуки-порталы лежат там же, откуда их берёт телефон: общий файл — общий тембр (#650).
     resources.srcDir(rootProject.file("data/src/main/res/raw"))
+
+    // Зрение страницы — один код OpenCV на телефон и компьютер (#1379): исходник лежит у
+    // телефона и собирается обоими, как значки выше.
+    kotlin.srcDir(rootProject.file("executors/src/shared/kotlin"))
+}
+
+/**
+ * OpenCV компьютера (#1379). Сборка openpnp несёт нативную библиотеку для семи систем — 110 МБ,
+ * а установщику Windows нужна одна. В Point едет копия только с Windows x64; тесты берут
+ * полную сборку — им нужна библиотека той машины, где они идут.
+ */
+val opencvJvm: Configuration by configurations.creating { isTransitive = false }
+
+val opencvForWindows by tasks.registering(Jar::class) {
+    archiveFileName.set("opencv-windows-x64.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("opencv"))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from({ opencvJvm.map { zipTree(it) } }) {
+        exclude("nu/pattern/opencv/linux/**", "nu/pattern/opencv/osx/**", "nu/pattern/opencv/windows/x86_32/**")
+    }
 }
 
 tasks.test {
@@ -45,6 +65,11 @@ dependencies {
     implementation(compose.materialIconsExtended)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.pdfbox)
+
+    opencvJvm(libs.opencv.jvm)
+    compileOnly(libs.opencv.jvm)
+    runtimeOnly(files(opencvForWindows))
+    testImplementation(libs.opencv.jvm)
 
     // Секреты на диске защищаются ключом пользователя Windows (DPAPI, #1095): свой шифр
     // изобретать нельзя, а пароль хранить было бы негде — он лежал бы рядом.

@@ -471,6 +471,9 @@ class SmartActionsTest {
         "speak",
         // Письмо, карта и событие органами компьютера (#1379).
         "email", "map", "event",
+
+        // Скан страницы общим зрением OpenCV (#1379).
+        "scan", "scan-plus", "scan-pdf",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())
