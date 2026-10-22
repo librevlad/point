@@ -58,7 +58,7 @@ class RealCapabilityInventoryTest {
         ReadDocumentCapabilityOnPhone(),
         ReadQrCapability(), RenewPeriodCapabilityOnPhone(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
-        SlidesCapabilityOnPhone(), SpeakCapability(),
+        SlidesCapabilityOnPhone(), SpeakCapabilityOnPhone(),
         TakeFragmentCapabilityOnPhone(), HideAreaCapabilityOnPhone(),
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
         ShootMoreCapability(),

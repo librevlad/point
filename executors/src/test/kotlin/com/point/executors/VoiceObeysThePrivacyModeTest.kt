@@ -68,7 +68,7 @@ class VoiceObeysThePrivacyModeTest {
 
     private fun spokenAt(level: PrivacyLevel): Boolean {
         val voice = Voice()
-        runBlocking { SpeakRealizer(store, voice, privacyAt(level)).perform(text(), null) }
+        runBlocking { com.point.core.flow.SpeakRealizer(store, voice, privacyAt(level)).perform(text(), null) }
         return voice.askedOnDeviceOnly ?: error("голос не спросили вовсе")
     }
 
