@@ -2178,7 +2178,7 @@ class FlowViewModelTest {
      * (линза «без оправданий», #1003).
      */
     @Test fun `возврат с чужого экрана без результата гасит подпись шага молча`() = runTest(dispatcher) {
-        val event = com.point.executors.EventCapability()
+        val event = com.point.core.flow.EventCapability()
         val handOff = "Открыл календарь — событие создаётся там"
         resolver.result = ActionResult.Done(handOff)
         val vm = vm(own = listOf(event))
@@ -2206,10 +2206,10 @@ class FlowViewModelTest {
         val handsOff = listOf(
             com.point.executors.SaveContactCapability(),
             com.point.executors.VCardCapability(),
-            com.point.executors.MapCapability(),
+            com.point.core.flow.MapCapability(),
             com.point.executors.CallCapability(),
             com.point.executors.SmsCapability(),
-            com.point.executors.EmailCapability(),
+            com.point.core.flow.EmailCapability(),
             com.point.executors.OpenUrlCapability(),
             com.point.executors.OpenCapability(),
             com.point.executors.ShareCapability(),
@@ -2272,7 +2272,7 @@ class FlowViewModelTest {
     }
 
     @Test fun `честный отказ календаря возвратом не гасится`() = runTest(dispatcher) {
-        val event = com.point.executors.EventCapability()
+        val event = com.point.core.flow.EventCapability()
         val refusal = "На этом устройстве нет календаря"
         resolver.result = ActionResult.Failure(refusal, recoverable = true)
         val vm = vm(own = listOf(event))

@@ -1,29 +1,22 @@
 package com.point.executors
 
-import com.point.core.flow.CalendarInserter
 import com.point.core.flow.Capability
+import com.point.core.flow.GraphState
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
-import com.point.core.flow.META_ENTITY_PREFIX
-import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.UrlOpener
 import com.point.core.model.tr
-import java.net.URLEncoder
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
+import com.point.core.model.ActionYield
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import com.point.core.model.isFileBacked
-import com.point.core.flow.asExtractedKind
-import com.point.core.flow.asMetaKey
-import com.point.core.model.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 private fun dialable(phone: String) = phone.filter { it.isDigit() || it == '+' }
@@ -86,129 +79,54 @@ class SmsRealizer @Inject constructor(
         }
 }
 
-class EmailCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "email"
-    override val meta = CapabilityMeta(priority = 13, handsOff = true)
-    override fun label(state: ObjectState) = tr("Написать письмо")
-    override fun accepts(state: ObjectState) = state.has(Feature.HAS_EMAIL)
-    override fun produces(state: ObjectState) = state
-    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
+/*
+ * «Написать письмо», «Открыть на карте» и «Создать событие» живут в `:core:flow` — одни на
+ * телефон и компьютер (#1379). Здесь только двери Hilt; исполнители — `@Provides` в
+ * `CapabilityModule`. Члены переписаны руками, а не `by`-делегатом: kotlin-делегирование в
+ * `@Inject`-классе роняет KSP всего модуля.
+ */
 
-    companion object { val ID = CapabilityId("email") }
+class EmailCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.EmailCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }
 
-class EmailRealizer @Inject constructor(
-    private val extractor: EntityExtractor,
-    private val opener: UrlOpener,
-) : Realizer {
-    override val capabilityId = EmailCapability.ID
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val email = com.point.core.flow.firstEntity(extractor, input, EntityType.EMAIL) ?: error(tr("Email не найден"))
-                opener.open("mailto:$email")
-                ActionResult.Done(tr("Открыл письмо: {0}", email))
-            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть почту"), recoverable = true) }
-        }
+class MapCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.MapCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }
 
-class MapCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "map"
-    override val meta = CapabilityMeta(priority = 15, handsOff = true)
-    override fun label(state: ObjectState) = tr("Открыть на карте")
-    override fun accepts(state: ObjectState) = state.has(Feature.HAS_ADDRESS)
-    override fun produces(state: ObjectState) = state
-    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
-
-    companion object { val ID = CapabilityId("map") }
-}
-
-class MapRealizer @Inject constructor(
-    private val extractor: EntityExtractor,
-    private val opener: UrlOpener,
-) : Realizer {
-    override val capabilityId = MapCapability.ID
-
-    override suspend fun preview(input: PointObject): Preview? =
-        com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS)
-            ?.let { Preview(tr("Открыть на карте"), listOf(it), confirmLabel = tr("Открыть")) }
-
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val address = com.point.core.flow.firstEntity(extractor, input, EntityType.ADDRESS) ?: error(tr("Адрес не найден"))
-                opener.open("geo:0,0?q=" + URLEncoder.encode(address, "UTF-8"))
-                ActionResult.Done(tr("Открыл на карте: {0}", address))
-            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть карту"), recoverable = true) }
-        }
-}
-
-class EventCapability(
-    private val today: () -> java.time.LocalDate,
-) : Capability {
-
-    @Inject constructor() : this({ java.time.LocalDate.now() })
-
-    override val id = ID
-    override val icon = "event"
-    override val meta = CapabilityMeta(priority = 16, handsOff = true)
-    override fun label(state: ObjectState) = tr("Создать событие")
-
-    override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE) || state.has(Feature.IS_MEETING)
-
-    // «Дата в прошлом не может создавать событие» (#651): дата остаётся знанием,
-    // но дверь события открывает только дата сегодня и позже — или сама встреча.
-    override fun accepts(graph: com.point.core.flow.GraphState) =
-        graph.state.has(Feature.IS_MEETING) ||
-            (
-                graph.state.has(Feature.HAS_DATE) &&
-                    com.point.core.flow.hasUpcomingDate(graph.obj.metadata, today())
-                )
-
-    override fun produces(state: ObjectState) = state
-    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
-
-    companion object { val ID = CapabilityId("event") }
-}
-
-class EventRealizer @Inject constructor(
-    private val calendar: CalendarInserter,
-) : Realizer {
-    override val capabilityId = EventCapability.ID
-
-    override suspend fun preview(input: PointObject): Preview = withContext(Dispatchers.IO) {
-        Preview(tr("Создать событие"), listOf(eventTitle(input)), confirmLabel = tr("Создать"))
-    }
-
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        withContext(Dispatchers.IO) {
-            runCatching {
-
-                // Действию отдаётся то, что Point уже знает (#1035, #1138): найденный день
-                // лежит в графе — он же открывает дверь события, — и в календарь едет он,
-                // а не сегодняшнее число.
-                calendar.insertEvent(eventTitle(input), eventDay(input))
-
-                // Исход шага — то, что сделал Point, а не то, что случится в чужом
-                // приложении (#1131). «Создаю событие» звучало продолжающейся работой и
-                // висело вечно: человек уходил из календаря ни с чем, а Point всё «создавал».
-                // Событие создаёт человек в календаре, и знать об этом Point не может.
-                ActionResult.Done(tr("Открыл календарь — событие создаётся там"))
-            }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось открыть календарь"), recoverable = true) }
-        }
-
-    /**
-     * День события — из знания объекта, ближайший к сегодня из найденных (#651). Тот же
-     * [com.point.core.flow.eventDays], что открывает дверь события, чтобы продиктованная
-     * «11 сентября в 15:00» и в календарь поехала днём, а не сегодняшним числом (#1426 ч.2).
-     * Если ближайшего дня нет — день не называется, и календарь решит сам.
-     */
-    private fun eventDay(input: PointObject): java.time.LocalDate? =
-        com.point.core.flow.eventDays(input.metadata, java.time.LocalDate.now()).minOrNull()
-
-    private fun eventTitle(input: PointObject): String =
-        com.point.core.flow.entitySourceText(input).lineSequence().map { it.trim() }
-            .firstOrNull { it.isNotBlank() }?.take(100) ?: tr("Событие")
+class EventCapabilityOnPhone @Inject constructor() : Capability {
+    private val inner = com.point.core.flow.EventCapability()
+    override val id get() = inner.id
+    override val icon get() = inner.icon
+    override val meta get() = inner.meta
+    override fun label(state: ObjectState): String = inner.label(state)
+    override fun label(graph: GraphState): String = inner.label(graph)
+    override fun accepts(state: ObjectState): Boolean = inner.accepts(state)
+    override fun accepts(graph: GraphState): Boolean = inner.accepts(graph)
+    override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
+    override fun yields(state: ObjectState): ActionYield = inner.yields(state)
+    override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }

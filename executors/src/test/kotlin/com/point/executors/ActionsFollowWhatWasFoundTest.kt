@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.MapCapability
 import com.point.core.flow.GraphState
 import com.point.core.flow.META_ENTITY_ADDRESS
 import com.point.core.flow.META_ENTITY_PHONE
