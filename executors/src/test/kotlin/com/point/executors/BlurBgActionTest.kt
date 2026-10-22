@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.BlurBgRealizer
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.ImageCompositor
 import com.point.core.model.ActionResult

@@ -94,6 +94,11 @@ fun desktopCapabilities(
     com.point.core.flow.ScanCapability(),
     com.point.core.flow.ScanPlusCapability(),
     com.point.core.flow.ScanPdfCapability(),
+
+    // Убрать, размыть и заменить фон (#1379): объект от фона отделяет своя малая модель.
+    com.point.core.flow.CutoutCapability(),
+    com.point.core.flow.BlurBgCapability(),
+    com.point.core.flow.ReplaceBgCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,
