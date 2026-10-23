@@ -54,6 +54,7 @@ class EnhancePhotoRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                reportStage(tr("Читаю снимок"))
                 val ref = enhancer.enhance(input.uri.value)
                 ActionResult.Success(ResultObject(ObjectKind.IMAGE, "image/jpeg", ref, mapOf("op" to "enhance-photo")))
             }.getOrElse {

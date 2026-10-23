@@ -17,7 +17,6 @@ import java.io.File
 class PcPhotoEnhancer(private val store: ObjectStore) : PhotoEnhancer {
 
     override suspend fun enhance(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
-        reportStage(tr("Читаю снимок"))
         val picture = uprightPicture(File(imagePath), MAX_PX) ?: error(tr("Не удалось прочитать изображение"))
         val enhanced = onFrame(picture) { rgba, scratch -> imageOf(PhotoVision.enhance(rgba, scratch)) }
 
