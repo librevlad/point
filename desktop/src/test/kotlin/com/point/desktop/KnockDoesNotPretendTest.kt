@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.KnockReply
 import com.point.core.flow.PcRemoteAction
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -61,7 +62,7 @@ class KnockDoesNotPretendTest {
      *
      * Пусто — стучать было не во что: ни аккаунта, ни телефона в круге.
      */
-    private var knocked: Map<String, Boolean> = mapOf(PHONE to true)
+    private var knocked: Map<String, KnockReply> = mapOf(PHONE to KnockReply.TAKEN)
 
     private lateinit var pc: DesktopState
 
@@ -115,7 +116,7 @@ class KnockDoesNotPretendTest {
         pc.approvePhone()
         advanceUntilIdle()
 
-        assertEquals("в телефон не постучали", 1, knocks.get())
+        assertEquals("телефон не пришёл, а второго стука не было", 2, knocks.get())
         assertEquals("компьютер так и не сказал, что телефон не проснулся", PHONE_DID_NOT_WAKE, pc.message.value)
 
         val step = lastStep(pc, obj)
@@ -226,7 +227,7 @@ class KnockDoesNotPretendTest {
      */
     @Test
     fun `письма не взяли — компьютер не выдумывает сон телефона`() = runTest(dispatcher) {
-        knocked = mapOf(PHONE to false)
+        knocked = mapOf(PHONE to KnockReply.NOT_TAKEN)
         val box = Outbox(temp.newFolder("outbox"))
         val pc = state(box)
         val obj = item()
@@ -239,6 +240,49 @@ class KnockDoesNotPretendTest {
         assertEquals("названа причина, которой компьютер не знает", COULD_NOT_KNOCK, pc.message.value)
         assertEquals("в журнале причина тоже придумана", COULD_NOT_KNOCK_NOTE, lastStep(pc, obj).note)
         assertEquals("просьба пропала вместе с неудачным стуком", 1, box.entries().size)
+    }
+
+    /**
+     * Телефон без сервисов Google стука не слышит вовсе (#1400): у него нет адреса. Звать
+     * его сон неправдой, стучать второй раз — бесполезно; честно одно: просьба дождётся,
+     * когда человек откроет Point сам.
+     */
+    @Test
+    fun `глухой телефон назван глухим, и второй раз в него не стучат`() = runTest(dispatcher) {
+        knocked = mapOf(PHONE to KnockReply.DEAF)
+        val box = Outbox(temp.newFolder("outbox"))
+        val pc = state(box)
+        val obj = item()
+        pc.onReceived(obj)
+
+        pc.sendToPhone(obj, call)
+        pc.approvePhone()
+        advanceUntilIdle()
+
+        assertEquals("глухой телефон назван не глухим", PHONE_IS_DEAF, pc.message.value)
+        assertEquals("в журнале глухой телефон назван не глухим", PHONE_IS_DEAF_NOTE, lastStep(pc, obj).note)
+        assertEquals("в глухой телефон стучали второй раз", 1, knocks.get())
+        assertEquals("просьба пропала вместе с глухим стуком", 1, box.entries().size)
+    }
+
+    /** Телефон пришёл между стуками — второй стук ему не нужен (#1400). */
+    @Test
+    fun `телефон пришёл после вердикта — второго стука нет`() = runTest(dispatcher) {
+        val box = Outbox(temp.newFolder("outbox"))
+        val pc = state(box)
+        val obj = item()
+        pc.onReceived(obj)
+
+        pc.sendToPhone(obj, call)
+        pc.approvePhone()
+        runCurrent()
+        advanceTimeBy(PHONE_WAKES_WITHIN_MS + 1)
+        assertEquals("компьютер не сказал, что телефон не проснулся", PHONE_DID_NOT_WAKE, pc.message.value)
+
+        pc.heard(PHONE)
+        advanceUntilIdle()
+
+        assertEquals("в пришедший телефон постучали второй раз", 1, knocks.get())
     }
 
     /**
@@ -262,7 +306,7 @@ class KnockDoesNotPretendTest {
         advanceUntilIdle()
 
         assertEquals("объект не уехал на телефон", 1, box.entries().size)
-        assertEquals("в телефон не постучали вслед объекту", 1, knocks.get())
+        assertEquals("вслед объекту не постучали дважды", 2, knocks.get())
         assertEquals("компьютер промолчал о непроснувшемся телефоне", PHONE_DID_NOT_WAKE, pc.message.value)
 
         val steps = stepsOf(pc, obj)
@@ -315,9 +359,9 @@ class KnockDoesNotPretendTest {
 
             override suspend fun deleteAccount(account: com.point.core.flow.PointAccount) = false
 
-            override suspend fun knock(account: com.point.core.flow.PointAccount, deviceId: String): Boolean {
+            override suspend fun knock(account: com.point.core.flow.PointAccount, deviceId: String): KnockReply {
                 letters.incrementAndGet()
-                return true
+                return KnockReply.TAKEN
             }
         },
         browser = com.point.core.flow.BrowserOpener { },

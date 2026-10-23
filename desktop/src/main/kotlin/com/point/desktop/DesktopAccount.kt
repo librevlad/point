@@ -84,12 +84,14 @@ class DesktopAccount(
      * или в круге нет ни одного телефона. Тогда стука не было вовсе, и исхода у него нет:
      * «не удалось постучать» тут было бы утверждением о телефоне, которого не существует.
      */
-    suspend fun knockPhones(): Map<String, Boolean> {
+    suspend fun knockPhones(): Map<String, com.point.core.flow.KnockReply> {
         val account = store.current() ?: return emptyMap()
         return _circle.value
             .filterNot { it.self }
             .filter { it.kind == DeviceKind.PHONE }
-            .associate { it.id to runCatching { client.knock(account, it.id) }.getOrDefault(false) }
+            .associate {
+                it.id to runCatching { client.knock(account, it.id) }.getOrDefault(com.point.core.flow.KnockReply.NOT_TAKEN)
+            }
     }
 
     fun signIn() {

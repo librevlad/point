@@ -1,6 +1,7 @@
 package com.point.desktop
 
 import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.KnockReply
 import com.point.core.flow.Resolver
 import com.point.core.flow.knownBy
 import com.point.core.model.ActionResult
@@ -102,7 +103,7 @@ class DesktopState(
      * Это не провал стука, и говорить о нём нечего: телефона, про который тут можно было
      * бы что-то утверждать, у человека просто нет.
      */
-    private val knockPhone: suspend () -> Map<String, Boolean> = { emptyMap() },
+    private val knockPhone: suspend () -> Map<String, KnockReply> = { emptyMap() },
 
     /**
      * Чем исполняется фоновая работа окна. В работе это общий пул, под тестом —
@@ -1097,16 +1098,27 @@ class DesktopState(
             knockedPhones.update { it + knocked.keys }
             delay(PHONE_WAKES_WITHIN_MS)
             if (cameBack(knocked.keys, knockedAt)) return@launch
-            val (say, note) = if (knocked.values.none { it }) {
-                COULD_NOT_KNOCK to COULD_NOT_KNOCK_NOTE
-            } else {
-                PHONE_DID_NOT_WAKE to PHONE_DID_NOT_WAKE_NOTE
+            val deaf = knocked.values.all { it == KnockReply.DEAF }
+            val (say, note) = when {
+                deaf -> PHONE_IS_DEAF to PHONE_IS_DEAF_NOTE
+                knocked.values.none { it == KnockReply.TAKEN } -> COULD_NOT_KNOCK to COULD_NOT_KNOCK_NOTE
+                else -> PHONE_DID_NOT_WAKE to PHONE_DID_NOT_WAKE_NOTE
             }
 
             // Исход уточняет ожидание — на его место и встаёт, а не поверх того, что человек
             // читает сейчас.
             sayAboutPhone(say, about) { shown -> shown.contains(WAITS_FOR_PHONE, ignoreCase = true) }
             told(note)
+
+            // Второй стук (#1400, решение владельца «ещё раз через 2 минуты»): телефон в
+            // глубоком сне или минуту без сети первый стук пропускает, а второй застаёт. Один,
+            // а не серия: человека не засыпают уведомлениями. Глухой телефон второй стук не
+            // услышит так же, как первый, — в него не стучат. Пришедший телефон отменяет
+            // сказанное сам ([phoneSpokeLate]), поэтому нового вердикта здесь нет.
+            if (deaf) return@launch
+            delay(SECOND_KNOCK_AFTER_MS)
+            if (cameBack(knocked.keys, knockedAt)) return@launch
+            runCatching { knockPhone() }
         }
     }
 
@@ -1577,6 +1589,19 @@ val PHONE_TOOK_IT: String get() = tr("телефон забрал")
  */
 val QUEUE_FORGOT_IT: String get() = tr("не уехало — просьба пролежала сутки и убрана")
 
+/** Через сколько компьютер стучит второй раз, если телефон так и не пришёл (#1400). */
+const val SECOND_KNOCK_AFTER_MS = 120_000L
+
+/**
+ * Телефон стука не слышит вовсе (#1400): на нём нет сервисов Google, или Point с переустановки
+ * не открывали. Ждать и стучать снова тут бесполезно — честнее сразу сказать, что просьба
+ * дождётся, когда человек откроет Point сам.
+ */
+val PHONE_IS_DEAF: String get() = tr("Этот телефон не слышит стука — откройте Point на телефоне и заберите объект")
+
+/** То же самое строкой журнала. */
+val PHONE_IS_DEAF_NOTE: String get() = tr("телефон не слышит стука")
+
 /** Телефон не проснулся: сказать это честно лучше, чем ждать за человека (#1108). */
 val PHONE_DID_NOT_WAKE: String get() = tr("Телефон не проснулся — откройте Point на телефоне и заберите объект")
 
@@ -1610,11 +1635,11 @@ val PHONE_SPOKE_LATE: String get() = tr("Телефон отозвался — �
 val PHONE_SPOKE_LATE_NOTE: String get() = tr("телефон отозвался позже")
 
 /**
- * Два исхода стука одним набором (#1108).
+ * Исходы стука одним набором (#1108).
  *
  * По ним компьютер и находит сказанное, когда телефон приходит позже срока: правится ровно
  * то, что он сам написал, а чужие слова в «ПУТЬ» и на плашке не трогаются.
  */
-private val KNOCK_VERDICT_NOTES = setOf(PHONE_DID_NOT_WAKE_NOTE, COULD_NOT_KNOCK_NOTE)
+private val KNOCK_VERDICT_NOTES = setOf(PHONE_DID_NOT_WAKE_NOTE, COULD_NOT_KNOCK_NOTE, PHONE_IS_DEAF_NOTE)
 
-private val KNOCK_VERDICTS = setOf(PHONE_DID_NOT_WAKE, COULD_NOT_KNOCK)
+private val KNOCK_VERDICTS = setOf(PHONE_DID_NOT_WAKE, COULD_NOT_KNOCK, PHONE_IS_DEAF)
