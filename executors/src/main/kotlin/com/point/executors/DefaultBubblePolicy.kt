@@ -7,5 +7,5 @@ import javax.inject.Inject
 
 class DefaultBubblePolicy @Inject constructor() : BubblePolicy {
     override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> =
-        candidates.sortedWith(compareBy({ it.meta.priority }, { it.id.value }))
+        candidates.sortedWith(compareBy({ it.priority(state) }, { it.id.value }))
 }

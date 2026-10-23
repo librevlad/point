@@ -86,11 +86,18 @@ internal object PageOrientation {
         val rows = gapShare(profile(ink, byRows = true))
         val cols = gapShare(profile(ink, byRows = false))
         return when {
-            rows > cols + DIRECTION_MARGIN -> Direction.ACROSS
-            cols > rows + DIRECTION_MARGIN -> Direction.ALONG
+            clearlyMore(rows, cols) -> Direction.ACROSS
+            clearlyMore(cols, rows) -> Direction.ALONG
             else -> Direction.UNKNOWN
         }
     }
+
+    /**
+     * Просветов в одну сторону явно больше. У плотной таблицы их мало в обе стороны (кадр 23
+     * корпуса: 0,09 против 0,02), и разница меньше порога — но во много раз.
+     */
+    private fun clearlyMore(a: Double, b: Double): Boolean =
+        a > b + DIRECTION_MARGIN || (a > MIN_DENSE_GAPS && a > DENSE_RATIO * b)
 
     /** Сумма чернил по рядам (или по столбцам). */
     private fun profile(ink: Mat, byRows: Boolean): IntArray {
@@ -213,6 +220,8 @@ internal object PageOrientation {
     private const val MIN_INK_FRACTION = 0.002
     private const val GAP_LEVEL = 0.1
     private const val DIRECTION_MARGIN = 0.1
+    private const val MIN_DENSE_GAPS = 0.05
+    private const val DENSE_RATIO = 3.0
     private const val MIN_LINES = 4
     private const val MIN_LINE_HEIGHT = 6
     private const val CORE_LEVEL = 0.5
