@@ -25,6 +25,13 @@ internal fun translateDefaultTarget(text: String, lang: Lang = Lang.current()): 
         Lang.RU -> "русский"
     }
 
+/** Название языка для человека — в подписи «Перевожу на …». */
+internal fun languageName(lang: Lang): String = when (lang) {
+    Lang.EN -> tr("английский")
+    Lang.UK -> tr("украинский")
+    Lang.RU -> tr("русский")
+}
+
 internal fun translateTargetLang(text: String, lang: Lang): Lang {
     val cyrillic = text.count { it in 'а'..'я' || it in 'А'..'Я' || it in "ёЁіІїЇєЄґҐ" }
     val latin = text.count { it in 'a'..'z' || it in 'A'..'Z' }

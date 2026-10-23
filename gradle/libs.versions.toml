@@ -30,6 +30,8 @@ onnxruntime = "1.28.0"
 mlkitEntityExtraction = "16.0.0-beta6"
 mlkitBarcode = "17.3.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
+mlkitTranslate = "17.0.3"
+mlkitLanguageId = "17.0.6"
 zxing = "3.5.3"
 securityCrypto = "1.1.0-alpha06"
 junit = "4.13.2"
@@ -84,6 +86,8 @@ onnxruntime = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android
 opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" } # document scan pipeline (perspective + adaptive threshold)
 opencv-jvm = { group = "org.openpnp", name = "opencv", version.ref = "opencvJvm" } # the same pipeline on the PC: one self-contained native per OS (#1379)
 mlkit-entity-extraction = { group = "com.google.mlkit", name = "entity-extraction", version.ref = "mlkitEntityExtraction" } # on-device entity detection (phone/email/address/date/…)
+mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" } # on-device translation without a key (#433); language packs download once
+mlkit-language-id = { group = "com.google.mlkit", name = "language-id", version.ref = "mlkitLanguageId" } # on-device language of a text, for the translator (bundled model)
 mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" } # on-device QR/barcode (bundled model, offline)
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version = "33.7.0" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }

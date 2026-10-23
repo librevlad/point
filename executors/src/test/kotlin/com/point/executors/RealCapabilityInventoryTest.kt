@@ -63,7 +63,7 @@ class RealCapabilityInventoryTest {
         ScanPdfCapabilityOnPhone(), ScanPlusCapabilityOnPhone(), ShareAllCapability(), ShareCapability(),
         ShootMoreCapability(),
         ShoppingListCapabilityOnPhone(aiKeysReady), SmsCapability(), TranscribeCapabilityOnPhone(keysReady),
-        TranslateCapabilityOnPhone(aiKeysReady), UnderstandCapabilityOnPhone(aiKeysReady), VCardCapability(), WordCapabilityOnPhone(),
+        TranslateCapabilityOnPhone(aiKeysReady, privacyAt()), UnderstandCapabilityOnPhone(aiKeysReady), VCardCapability(), WordCapabilityOnPhone(),
         WordPlusCapabilityOnPhone(aiKeysReady), CleanMetadataCapabilityOnPhone(),
     )
 

@@ -260,6 +260,9 @@ abstract class DataModule {
     abstract fun externalEye(impl: DefaultExternalEye): ExternalEye
 
     @Binds
+    abstract fun onDeviceTranslator(impl: com.point.data.MlKitTranslator): com.point.core.flow.OnDeviceTranslator
+
+    @Binds
     abstract fun cloudPrivacy(impl: PrefsCloudPrivacySettings): CloudPrivacySettings
 
     @Binds

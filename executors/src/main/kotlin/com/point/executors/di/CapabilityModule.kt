@@ -59,6 +59,7 @@ import com.point.executors.AiCapabilityOnPhone
 import com.point.executors.AiRealizerOnPhone
 import com.point.executors.TranslateCapabilityOnPhone
 import com.point.executors.TranslateRealizerOnPhone
+import com.point.executors.OnDeviceTranslateRealizerOnPhone
 import com.point.executors.UnderstandCapabilityOnPhone
 import com.point.executors.UnderstandRealizerOnPhone
 import com.point.executors.ExcelRealizerOnPhone
@@ -243,6 +244,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizerOnPhone): Realizer
+    @Binds @IntoSet abstract fun translateOnDeviceR(r: OnDeviceTranslateRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizerOnPhone): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizerOnPhone): Realizer

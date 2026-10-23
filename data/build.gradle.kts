@@ -156,6 +156,8 @@ dependencies {
     implementation(libs.mlkit.entity.extraction)
     implementation(libs.mlkit.barcode)
     implementation(libs.mlkit.subject.segmentation)
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.language.id)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.zxing.core)
     implementation(libs.androidx.security.crypto)
