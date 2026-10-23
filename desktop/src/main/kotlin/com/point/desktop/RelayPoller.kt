@@ -40,22 +40,32 @@ class RelayPoller(
     private val pollMillis: Long = 2_000,
 ) {
     @Volatile private var running = false
+
+    /**
+     * Чей сейчас ход (#1400). Вопрос к ящику висит до [WAIT_SECONDS] секунд, и прерыванием его
+     * не снять: остановленный и тут же запущенный заново опрос иначе оставил бы два потока,
+     * оба забирающих одну почту.
+     */
+    @Volatile private var generation = 0
     private var thread: Thread? = null
 
     fun start() {
         if (serverUrl.isBlank() || running) return
         running = true
-        thread = Thread({ loop() }, "point-mailbox").apply { isDaemon = true }.also { it.start() }
+        val mine = ++generation
+        thread = Thread({ loop(mine) }, "point-mailbox").apply { isDaemon = true }.also { it.start() }
     }
 
     fun stop() {
         running = false
+        generation++
         thread?.interrupt()
     }
 
-    private fun loop() {
+    private fun loop(mine: Int) {
         var lastFailure: String? = null
-        while (running) {
+        while (running && mine == generation) {
+            val started = System.currentTimeMillis()
             val handled = runCatching { once() }
                 .onFailure { e ->
 
@@ -69,7 +79,10 @@ class RelayPoller(
                 }
                 .getOrDefault(false)
 
-            if (!handled) runCatching { Thread.sleep(if (running) pollMillis else 0) }
+            // Сервер, который умеет ждать, сам держал вопрос: спрашивать снова можно сразу.
+            // Ответил мгновенно — старый сервер или сбой сети — и тогда пауза прежняя.
+            val pause = pollMillis - (System.currentTimeMillis() - started)
+            if (!handled && pause > 0) runCatching { Thread.sleep(if (running) pause else 0) }
         }
     }
 
@@ -79,7 +92,7 @@ class RelayPoller(
 
         // Сначала на диск, потом подтверждение. Пока письмо не сохранено, сервер его не
         // отпускает; сохранённое подтверждается сразу — второй раз его не привезут (#680).
-        val answer = mailbox.take(me.deviceId) { letter ->
+        val answer = mailbox.take(me.deviceId, WAIT_SECONDS) { letter ->
             letters.keep(letter.id, letter.blob ?: ByteArray(0))
         }
 
@@ -208,6 +221,11 @@ class RelayPoller(
         )
         val code = mailbox.post(peer.deviceId, sealed)
         if (code != 200) log("ответ телефону не доставлен: сервер ответил $code")
+    }
+
+    private companion object {
+        /** Сколько сервер держит вопрос без письма: короче его предела и предела прокси. */
+        const val WAIT_SECONDS = 20
     }
 }
 

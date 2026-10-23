@@ -56,10 +56,18 @@ class Mailbox(
      *
      * Вместе с письмом ответ приносит часы сервера (#1321): по ним получатель судит, сколько
      * письмо пролежало, — своих часов для этого не хватает, они с серверными не сверены.
+     *
+     * [waitSeconds] — сколько сервер вправе держать вопрос, пока письма нет (#1400): письмо
+     * уходит в тот же миг, как его положат, а пустых вопросов становится меньше. Сервер, ещё не
+     * умеющий ждать, отвечает сразу, как прежде.
      */
-    fun take(deviceId: String, keep: (Letter) -> Unit): Letter {
+    fun take(deviceId: String, waitSeconds: Int = 0, keep: (Letter) -> Unit): Letter {
         val letter = runCatching {
-            val c = open("$base/mbx/$deviceId")
+            val c = if (waitSeconds > 0) {
+                open("$base/mbx/$deviceId?wait=$waitSeconds").apply { readTimeout = waitSeconds * 1_000 + readTimeoutMs }
+            } else {
+                open("$base/mbx/$deviceId")
+            }
             val code = c.responseCode
             val blob = if (code == 200) c.inputStream.readBytes() else null
             val id = c.getHeaderField("X-Blob-Id").orEmpty()
