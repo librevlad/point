@@ -10,10 +10,14 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.point.core.model.tr
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class HomeActivity : ComponentActivity() {
@@ -47,6 +51,19 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         viewModel.loadRecent()
         pullIfKnocked(intent)
+
+        // Пока дом открыт, телефон сам замечает, что оставил компьютер (#1400). Прежде он
+        // спрашивал только на входе в дом: просьба, пришедшая, пока человек смотрит на экран,
+        // ждала, пока он выйдет и войдёт снова. Спрашивает он так же редко, как вход в дом, а в
+        // фоне Point по-прежнему ничего не делает.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    kotlinx.coroutines.delay(OUTBOX_THROTTLE_MS)
+                    if (!viewModel.hasFlow()) viewModel.noticeFromPc()
+                }
+            }
+        }
 
         onBackPressedDispatcher.addCallback(this) {
             when {

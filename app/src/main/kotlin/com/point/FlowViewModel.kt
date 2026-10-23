@@ -564,6 +564,9 @@ class FlowViewModel @Inject constructor(
      */
     private val pcFlow by lazy { PcFlow(pcParts) }
 
+    /** Открытый дом спрашивает компьютер сам (#1400): как часто, решает сам дом. */
+    fun noticeFromPc() = refreshFromPc(force = true)
+
     private fun refreshFromPc(force: Boolean = false) {
         val pc = pcFlow.current() ?: return
         val now = System.currentTimeMillis()
@@ -3632,7 +3635,7 @@ class FlowViewModel @Inject constructor(
 
 private const val MAX_CLIP = 2000
 
-private const val OUTBOX_THROTTLE_MS = 30_000L
+internal const val OUTBOX_THROTTLE_MS = 30_000L
 
 /** Как часто и сколько раз телефон заглядывает в очередь компьютера, пока стоит слово соседа (#1073). */
 private const val NEIGHBOUR_CHECK_MS = 5_000L
