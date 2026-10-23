@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoFilter
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Print
@@ -112,6 +113,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     // «Взять фрагмент» — та же группа преобразований, что вырезание (#1263).
     "crop" -> Icons.Outlined.Crop
     "blur" -> Icons.Outlined.BlurOn
+    "enhance" -> Icons.Outlined.PhotoFilter
     "replace-bg" -> Icons.Outlined.Wallpaper
     "ocr" -> Icons.Outlined.TextFields
 
@@ -160,6 +162,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "cutout" -> Color(0xFF0EA5A5)
     "crop" -> Color(0xFF0EA5A5)
     "blur" -> Color(0xFF6366F1)
+    "enhance" -> Color(0xFF0EA5A5)
     "replace-bg" -> Color(0xFF7C4DFF)
     "ocr" -> Color(0xFF16A34A)
     "text" -> Color(0xFF16A34A)

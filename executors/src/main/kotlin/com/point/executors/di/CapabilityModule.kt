@@ -75,6 +75,9 @@ import com.point.executors.CopyCardCapability
 import com.point.executors.CopyCardRealizer
 import com.point.executors.CopyRealizer
 import com.point.executors.CutoutCapabilityOnPhone
+import com.point.executors.EnhancePhotoCapabilityOnPhone
+import com.point.executors.OpenCvPhotoEnhancer
+import com.point.executors.OpenCvScan
 import com.point.executors.OfficeRealizerOnPhone
 import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
@@ -193,6 +196,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapabilityOnPhone): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapabilityOnPhone): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun enhancePhotoCap(c: EnhancePhotoCapabilityOnPhone): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun takeFragmentCap(c: TakeFragmentCapabilityOnPhone): Capability
 
@@ -337,6 +341,11 @@ abstract class CapabilityModule {
             com.point.core.flow.BlurBgRealizer(remover, compositor),
             com.point.core.flow.ReplaceBgRealizer(store, remover, compositor),
         )
+
+        /** «Улучшить фото» — общим зрением OpenCV на самом телефоне (#433). */
+        @Provides @IntoSet
+        fun enhancePhotoRealizer(store: ObjectStore): Realizer =
+            com.point.core.flow.EnhancePhotoRealizer(OpenCvPhotoEnhancer(store)) { OpenCvScan.available }
 
         /**
          * Кадр для второго захода чтения (#1041): обработка снимков живёт здесь, а понимание

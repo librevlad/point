@@ -17,6 +17,7 @@ understand=Понять	PDF,ZIP,OFFICE,URL,AUDIO,COLLECTION,UNKNOWN			HAS_TEXT	3
 fix-errors=Исправить ошибки					32
 fix-errors-stronger=Исправить сильнее	IMAGE				33
 drop-link=Дать ссылку	IMAGE,TEXT,PDF,ZIP,OFFICE,AUDIO,UNKNOWN				35
+enhance-photo=Улучшить фото	IMAGE				39
 cutout=Убрать фон	IMAGE				40
 find=Найти в документе				HAS_WORD_LAYER	40
 pc-download=Скачать видео на компьютер	URL				40

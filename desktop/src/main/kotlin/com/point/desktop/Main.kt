@@ -233,6 +233,7 @@ fun main(args: Array<String>) {
             PcScanPdfRealizer(excelStore),
             PcNeedsOpenCv(com.point.core.flow.CutoutRealizer(pcRemover)),
             PcNeedsOpenCv(com.point.core.flow.BlurBgRealizer(pcRemover, pcCompositor)),
+            PcNeedsOpenCv(com.point.core.flow.EnhancePhotoRealizer(PcPhotoEnhancer(excelStore))),
             PcNeedsOpenCv(
                 PcPicksImage(com.point.core.flow.ReplaceBgRealizer(excelStore, pcRemover, pcCompositor)) { prompt ->
                     pickPicture(prompt)

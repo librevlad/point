@@ -477,6 +477,9 @@ class SmartActionsTest {
 
         // Фон отделяет малая U²-Net через OpenCV (#1379).
         "cutout", "blur-bg", "replace-bg",
+
+        // «Улучшить фото» общим зрением OpenCV (#433).
+        "enhance-photo",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

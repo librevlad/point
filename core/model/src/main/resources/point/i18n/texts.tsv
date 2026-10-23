@@ -202,6 +202,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Выложить	Викласти	Share
 Выложить по открытой ссылке	Викласти за відкритим посиланням	Post by open link
 Выложить файл по ссылке?	Викласти файл за посиланням?	Share the file by link?
+Выравниваю свет и цвет	Вирівнюю світло й колір	Balancing light and color
 Выход	Вихід	Quit
 ГОТОВО НА КОМПЬЮТЕРЕ	ГОТОВО НА КОМП’ЮТЕРІ	DONE ON THE COMPUTER
 Главные тезисы	Головні тези	Key points
@@ -1003,6 +1004,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Убирается через сутки · перетащенный файл не трогается	Прибирається через добу · перетягнутий файл не чіпається	Cleared after a day · a dragged-in file is never touched
 Убирать было нечего	Прибирати було нічого	There was nothing to clear
 Убираю служебные записи	Прибираю службові записи	Removing hidden data
+Убираю шум	Прибираю шум	Removing noise
 Убрано объектов: {0}	Прибрано об’єктів: {0}	Items cleared: {0}
 Убрать	Прибрати	Remove
 Убрать всё	Прибрати все	Remove all
@@ -1014,6 +1016,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Удалить ключ	Видалити ключ	Delete key
 Удалить навсегда	Видалити назавжди	Delete forever
 Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать через её меню.	Зникнуть усі записи й усе, що Point про них дізнався. Один запис можна прибрати через його меню.	All entries go, along with everything Point learned about them. To remove one entry, use its menu.
+Улучшить фото	Покращити фото	Enhance photo
+Улучшить фото не вышло — попробуйте ещё раз	Покращити фото не вийшло — спробуйте ще раз	Could not enhance the photo. Please try again
 Уменьшить не вышло — этот формат картинки компьютер не открывает	Зменшити не вийшло — цей формат картинки комп’ютер не відкриває	Couldn't shrink it: the computer can't open this picture format
 Устройство	Пристрій	Device
 Файл {0} — на телефон за раз уходит до {1}	Файл {0} — на телефон за раз іде до {1}	The file is {0}; the phone takes up to {1} at a time
