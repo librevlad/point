@@ -231,6 +231,9 @@ data class FlowUiState(
 
     val soundEnabled: Boolean = true,
 
+    /** Сколько раз человек видел полёт найденного (#209): с привычкой театр короче и тише. */
+    val theatrePlayed: Int = 0,
+
     val privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
 
     val selection: SelectionUi? = null,

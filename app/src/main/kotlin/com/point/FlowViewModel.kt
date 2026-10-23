@@ -349,6 +349,12 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch { _crashReport.value = runCatching { crashLog.pending() }.getOrNull() }
     }
 
+    /** Полёт найденного сыгран целиком — человек увидел театр ещё раз (#209, D7). */
+    fun theatrePlayed() {
+        _ui.update { it.copy(theatrePlayed = it.theatrePlayed + 1) }
+        viewModelScope.launch(ioDispatcher) { settingsFlow.countTheatrePlayed() }
+    }
+
     fun appIcon(packageName: String): androidx.compose.ui.graphics.ImageBitmap? =
         runCatching { appIcons.iconFor(packageName) }.getOrNull()
 
@@ -1473,6 +1479,14 @@ class FlowViewModel @Inject constructor(
      * экранное состояние — им владеет ядро, а знанием о сервисах и ключах ведает держатель.
      */
     private val settingsFlow by lazy { SettingsFlow(settingsParts) }
+
+    // Отдельным блоком после [settingsFlow]: блоки инициализации идут по порядку объявления.
+    init {
+        viewModelScope.launch {
+            val played = withContext(ioDispatcher) { settingsFlow.theatrePlayed() }
+            _ui.update { it.copy(theatrePlayed = played) }
+        }
+    }
 
     private fun openKeyScreen(errand: KeyErrand?) {
 

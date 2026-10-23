@@ -54,18 +54,18 @@ fun Portal(modifier: Modifier = Modifier, size: Dp = 200.dp, intensity: Float = 
     val motion = rememberMotionEnabled()
     val transition = rememberInfiniteTransition(label = "portal")
     val spin = if (motion) {
-        transition.animateFloat(0f, 360f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "spin").value
+        transition.animateFloat(0f, 360f, infiniteRepeatable(tween(MotionTokens.PORTAL_SPIN_MS, easing = LinearEasing)), label = "spin").value
     } else {
         0f
     }
     val spinBack = if (motion) {
-        transition.animateFloat(360f, 0f, infiniteRepeatable(tween(6500, easing = LinearEasing)), label = "spinBack").value
+        transition.animateFloat(360f, 0f, infiniteRepeatable(tween(MotionTokens.PORTAL_SPIN_BACK_MS, easing = LinearEasing)), label = "spinBack").value
     } else {
         0f
     }
     val pulse = if (motion) {
         transition.animateFloat(
-            0.97f, 1.03f, infiniteRepeatable(tween(2200, easing = EaseInOutSine), RepeatMode.Reverse), label = "pulse",
+            0.97f, 1.03f, infiniteRepeatable(tween(MotionTokens.PORTAL_PULSE_MS, easing = EaseInOutSine), RepeatMode.Reverse), label = "pulse",
         ).value
     } else {
         1f
@@ -197,7 +197,7 @@ private fun StageMarker() {
     Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
         val alpha = if (motion) {
             rememberInfiniteTransition(label = "stage").animateFloat(
-                0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "stage-a",
+                0.35f, 1f, infiniteRepeatable(tween(MotionTokens.STAGE_BLINK_MS), RepeatMode.Reverse), label = "stage-a",
             ).value
         } else {
             1f

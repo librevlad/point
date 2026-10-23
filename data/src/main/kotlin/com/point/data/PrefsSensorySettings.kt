@@ -22,5 +22,14 @@ class PrefsSensorySettings @Inject constructor(
         prefs.edit().putBoolean(KEY_SOUND, enabled).apply()
     }
 
-    private companion object { const val KEY_SOUND = "sound_enabled" }
+    override fun theatrePlayed(): Int = runCatching { prefs.getInt(KEY_THEATRE, 0) }.getOrDefault(0)
+
+    override suspend fun countTheatrePlayed(): Unit = withContext(Dispatchers.IO) {
+        prefs.edit().putInt(KEY_THEATRE, prefs.getInt(KEY_THEATRE, 0) + 1).apply()
+    }
+
+    private companion object {
+        const val KEY_SOUND = "sound_enabled"
+        const val KEY_THEATRE = "theatre_played"
+    }
 }

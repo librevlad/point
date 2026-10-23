@@ -1,7 +1,9 @@
 package com.point.core.ui
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -55,8 +57,11 @@ internal fun ObjectActions(
     onBubble: (Bubble) -> Unit,
     appIconFor: (String) -> ImageBitmap? = { null },
     head: (ActionSection<Bubble>) -> ValueHead? = { null },
+
+    /** Театр экрана (#209): заголовок значения — место, куда оно приземляется. */
+    theatre: TheatreState? = null,
 ) {
-    val dim by animateFloatAsState(if (working) 0.5f else 1f, tween(200), label = "actions-dim")
+    val dim by animateFloatAsState(if (working) 0.5f else 1f, tween(MotionTokens.ACTIONS_DIM_MS), label = "actions-dim")
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -67,7 +72,7 @@ internal fun ObjectActions(
                 var expanded by rememberSaveable(section.key, section.items.size) { mutableStateOf(false) }
                 val shown = if (expanded) section.items else section.items.take(shownAtOnce(section))
                 val value = head(section)
-                if (value != null) ValueHeader(value) else GroupHeader(section.title)
+                if (value != null) ValueHeader(value, theatre, section.key) else GroupHeader(section.title)
 
                 // Раздел — одна панель стекла, строки в ней через тонкую линию (макет
                 // 19.10.2026): список читается «заголовок → однородные строки», а не стопкой
@@ -128,8 +133,20 @@ internal data class ValueHead(
 )
 
 @Composable
-private fun ValueHeader(head: ValueHead) {
+private fun ValueHeader(head: ValueHead, theatre: TheatreState? = null, key: String = "") {
     val clipboard = LocalClipboardManager.current
+
+    // Приземлившееся значение коротко подсвечивает свою строку и гаснет; пока оно в воздухе,
+    // строка держит его место и текст — для скринридера и пальца оно уже здесь.
+    val lit = theatre?.lit(key) == true
+    val glow = remember { Animatable(0f) }
+    LaunchedEffect(lit, theatre?.landings) {
+        if (lit) {
+            glow.snapTo(1f)
+            glow.animateTo(0f, tween(MotionTokens.LANDING_MS))
+        }
+    }
+    val hidden = theatre?.hidden(key) == true
     var copied by rememberSaveable(head.name, head.copy) { mutableStateOf(false) }
     LaunchedEffect(copied) {
         if (copied) {
@@ -142,6 +159,7 @@ private fun ValueHeader(head: ValueHead) {
             .fillMaxWidth()
             .padding(start = 10.dp, end = 10.dp, top = 12.dp, bottom = 6.dp)
             .clip(RoundedCornerShape(12.dp))
+            .background(PointPalette.violet.copy(alpha = 0.16f * glow.value))
             .let { base ->
                 val copy = head.copy ?: return@let base
                 base.clickable {
@@ -168,6 +186,9 @@ private fun ValueHeader(head: ValueHead) {
                     color = if (copied) PointPalette.violet else PointPalette.text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .theatreTarget(theatre, key)
+                        .graphicsLayer { alpha = if (hidden) 0f else 1f },
                 )
             }
         }

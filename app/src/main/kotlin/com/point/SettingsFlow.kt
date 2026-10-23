@@ -130,6 +130,12 @@ class SettingsFlow(private val parts: SettingsParts) {
         runCatching { parts.sensorySettings.setSoundEnabled(enabled) }
     }
 
+    fun theatrePlayed(): Int = runCatching { parts.sensorySettings.theatrePlayed() }.getOrDefault(0)
+
+    suspend fun countTheatrePlayed() {
+        runCatching { parts.sensorySettings.countTheatrePlayed() }
+    }
+
     /** Когда человек в последний раз менял ключи: по этому решается спор с другим устройством. */
     fun keysChangedAt(): Long = keys().mine.maxOfOrNull { it.savedAt } ?: 0L
 

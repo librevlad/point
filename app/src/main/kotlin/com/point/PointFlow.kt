@@ -52,6 +52,7 @@ fun PointFlow(
         onForgetAiKey = viewModel::forgetAiKey,
         onCloseKeySettings = viewModel::closeKeySettings,
         onToggleSound = viewModel::setSoundEnabled,
+        onTheatrePlayed = viewModel::theatrePlayed,
         onPickPrivacyLevel = viewModel::setPrivacyLevel,
         onToggleCloud = viewModel::setCloudAllowed,
         onToggleYolo = viewModel::setYoloEnabled,
