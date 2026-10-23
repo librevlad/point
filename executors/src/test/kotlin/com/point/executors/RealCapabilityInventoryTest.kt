@@ -50,7 +50,7 @@ class RealCapabilityInventoryTest {
         CallCapability(), CloudOcrCapabilityOnPhone(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapabilityOnPhone(),
         FixErrorsCapabilityOnPhone(aiKeysReady), FixErrorsStrongerCapabilityOnPhone(aiKeysReady),
-        CutoutCapabilityOnPhone(), EmailCapabilityOnPhone(), EventCapabilityOnPhone(),
+        CutoutCapabilityOnPhone(), EmailCapabilityOnPhone(), EnhancePhotoCapabilityOnPhone(), EventCapabilityOnPhone(),
         ExcelCapabilityOnPhone(aiKeysReady), ExtractAllCapabilityOnPhone(), FindCapabilityOnPhone(),
         JobReplyCapabilityOnPhone(aiKeysReady), MapCapabilityOnPhone(), MergePdfCapabilityOnPhone(),
         OpenCapability(), OpenInCapability(), OpenUrlCapability(),

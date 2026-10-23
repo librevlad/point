@@ -99,6 +99,9 @@ fun desktopCapabilities(
     com.point.core.flow.CutoutCapability(),
     com.point.core.flow.BlurBgCapability(),
     com.point.core.flow.ReplaceBgCapability(),
+
+    // «Улучшить фото» тем же зрением OpenCV, что у телефона (#433).
+    com.point.core.flow.EnhancePhotoCapability(),
 ) + com.point.core.flow.capabilities.sharedCapabilities(
     ocrPromise = OCR_ON_PC_PROMISE,
     signedIn = signedIn,
