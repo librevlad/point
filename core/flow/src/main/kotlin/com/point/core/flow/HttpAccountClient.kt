@@ -127,14 +127,19 @@ class HttpAccountClient(
         ).status == 200
     }
 
-    override suspend fun knock(account: PointAccount, deviceId: String): Boolean = io {
+    override suspend fun knock(account: PointAccount, deviceId: String): KnockReply = io {
         val reply = request(
             path = "/devices/" + encode(deviceId) + "/knock",
             method = "POST",
             token = account.deviceToken,
             body = "",
         )
-        reply.status == 200 && parseJson(reply.body ?: "").bool("knocked") == true
+        val answer = if (reply.status == 200) parseJson(reply.body ?: "") else null
+        when {
+            answer?.bool("knocked") == true -> KnockReply.TAKEN
+            answer?.str("why") == "no_address" -> KnockReply.DEAF
+            else -> KnockReply.NOT_TAKEN
+        }
     }
 
     override suspend fun deleteAccount(account: PointAccount): Boolean = io {

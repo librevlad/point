@@ -1098,6 +1098,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Этот компьютер не умеет класть картинку в буфер	Цей комп’ютер не вміє класти картинку в буфер	This computer can't put a picture on the clipboard
 Этот компьютер теперь в вашем круге. Войдите в тот же аккаунт на телефоне — и они найдут друг друга сами. Чтобы забрать присланное, Point на этом компьютере должен быть запущен.	Цей комп’ютер тепер у вашому колі. Увійдіть у той самий акаунт на телефоні — і вони знайдуть одне одного самі. Щоб забрати надіслане, Point на цьому комп’ютері має бути запущений.	This computer is now one of your devices. Sign in to the same account on the phone and they'll find each other. To pick up what's sent, Point must be running on this computer.
 Этот текст длиннее, чем помещается в QR-код — сократите его	Цей текст довший, ніж уміщається в QR-код — скоротіть його	This text is longer than fits in a QR code. Shorten it
+Этот телефон не слышит стука — откройте Point на телефоне и заберите объект	Цей телефон не чує стуку — відкрийте Point на телефоні й заберіть об’єкт	This phone can't hear the knock. Open Point on the phone and pick up the item
 Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac	Цей формат запису не читається — підійдуть ogg, mp3, m4a, wav, flac	This recording format can't be read. Use ogg, mp3, m4a, wav or flac
 Ячейка {0}×{1}	Клітинка {0}×{1}	Cell {0}×{1}
 Ячейка «{0}» × «{1}»	Клітинка «{0}» × «{1}»	Cell “{0}” × “{1}”
@@ -1374,6 +1375,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 телефон	телефон	phone
 телефон забрал	телефон забрав	the phone picked it up
 телефон не проснулся	телефон не прокинувся	the phone didn't wake up
+телефон не слышит стука	телефон не чує стуку	the phone can't hear the knock
 телефон не смог выполнить «{0}»	телефон не зміг виконати «{0}»	the phone couldn't do “{0}”
 телефон отозвался позже	телефон озвався пізніше	the phone answered late
 телефон пока не выполняет просьбы с компьютера	телефон поки не виконує прохань із комп’ютера	the phone doesn't take requests from the computer yet
