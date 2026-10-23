@@ -95,6 +95,7 @@ fun PointHost(
     onForgetAiKey: (String) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
+    onTheatrePlayed: () -> Unit = {},
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
 
     onToggleCloud: (Boolean) -> Unit = {},
@@ -397,6 +398,9 @@ fun PointHost(
                     onClearFocus = onClearFocus,
 
                     history = { TimelineStrip(path = state.path, onNode = onJumpTo) },
+
+                    theatreStage = com.point.core.ui.theatreStageFor(state.theatrePlayed),
+                    onTheatrePlayed = onTheatrePlayed,
 
                     onHeroTap = when (
                         heroTapOf(

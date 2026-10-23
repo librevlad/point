@@ -31,6 +31,48 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
 
+/**
+ * Длительности движения экрана — одним местом (#209, решение D9).
+ *
+ * Чисел было три набора: дыхание и проход чтения здесь, кольца ожидания в [BusyPortal], и
+ * каждый новый эффект заводил бы четвёртый. Дыхание и проход чтения зависят от вида вещи и
+ * остаются своими функциями ниже, а всё, что от вида не зависит, стоит здесь.
+ */
+object MotionTokens {
+    /** Внешнее кольцо портала: один оборот. */
+    const val PORTAL_SPIN_MS = 9_000
+
+    /** Внутреннее кольцо портала, против часовой. */
+    const val PORTAL_SPIN_BACK_MS = 6_500
+
+    /** Вдох портала. */
+    const val PORTAL_PULSE_MS = 2_200
+
+    /** Метка текущей стадии ожидания. */
+    const val STAGE_BLINK_MS = 700
+
+    /** Свечение кольца вещи без снимка, пока Point её читает. */
+    const val RING_GLOW_MS = 1_100
+
+    /** Аура понимания вокруг вещи — растёт с числом найденного. */
+    const val AURA_MS = 900
+
+    /** Притушить действия, пока одно из них выполняется. */
+    const val ACTIONS_DIM_MS = 200
+
+    /** Полёт найденного значения от вещи в свою строку (#209). */
+    const val FLIGHT_MS = 560
+
+    /** Тот же полёт, когда человек уже привык: короче и тише (D7). */
+    const val QUIET_FLIGHT_MS = 360
+
+    /** Подсветка строки, в которую значение приземлилось. */
+    const val LANDING_MS = 900
+
+    /** Одна волна кольца, когда смотрели и не нашли (D6). */
+    const val WAVE_MS = 1_200
+}
+
 data class BreathSpec(val scale: Float, val periodMs: Int)
 
 fun breathSpecFor(kind: ObjectKind): BreathSpec = when (kind) {
@@ -109,7 +151,7 @@ fun AliveSurface(
     }
     val aura by animateFloatAsState(
         targetValue = understanding.coerceIn(0f, 1f),
-        animationSpec = tween(900),
+        animationSpec = tween(MotionTokens.AURA_MS),
         label = "aura",
     )
 

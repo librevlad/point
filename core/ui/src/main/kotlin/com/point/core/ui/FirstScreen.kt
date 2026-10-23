@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -147,201 +148,241 @@ fun FirstScreen(
 
     /** Путь вещи под её именем — откуда пришла и во что превращалась (макет 19.10.2026). */
     history: (@Composable () -> Unit)? = null,
+
+    /** Сколько театра человеку ещё показывать (#209, D7): с привычкой он короче и тише. */
+    theatreStage: TheatreStage = TheatreStage.FULL,
+
+    /** Полёт сыгран целиком — приложение считает, сколько раз человек его видел. */
+    onTheatrePlayed: () -> Unit = {},
 ) {
 
     val scroll = rememberScrollState()
-    Column(
+    val theatre = rememberTheatre(obj.id)
+    val theatreScope = rememberCoroutineScope()
+    val motion = rememberMotionEnabled()
+    Box(
         modifier = modifier
             .fillMaxSize()
-
-            .verticalScroll(scroll)
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .theatreOrigin(theatre)
+            .theatreStops(theatre),
     ) {
-        val facts = understoodFacts(obj)
-        val verdict = objectVerdict(obj)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
 
-        // Вещь → её смыслы → естественные шаги. Найденное значение приходит со своими
-        // продолжениями — «Телефон · 067 123 4567»: позвонить, написать, сохранить контакт, —
-        // а действия самой вещи и её понимания стоят ниже, после её содержимого.
-        //
-        // Решение владельца 11.08.2026 убрало наверх не значения, а строку «одно действие на
-        // значение, и не то, которое мне надо». Здесь у значения все его продолжения, и
-        // сгруппированы они по значению — ровно то «правильно сгруппированными», о котором
-        // он просил.
-        val sections = if (inputPrompt == null) {
-            actionSections(bubbles, obj.state, thingTitle(obj), thingIsValue(obj), makeTitle(obj))
-        } else {
-            emptyList()
-        }
-        val valueSections = sections.filter { it.topic == SectionTopic.VALUE }
-        val ownSections = sections.filter { it.topic != SectionTopic.VALUE }
-        val sharedReason = com.point.core.flow.sharedUnusableReason(bubbles.map { it.unusableReason })
+                .verticalScroll(scroll)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val facts = understoodFacts(obj)
+            val verdict = objectVerdict(obj)
 
-        // Одно значение — одно место (#696, #747): значение, у которого есть продолжения,
-        // стоит заголовком своего раздела и не повторяется ни строкой знания, ни чипом.
-        val continued = valueSections.mapTo(mutableSetOf()) { understoodKeyOf(it.key) }
-        val continuedValues = valueSections
-            .flatMap { listOfNotNull(rawValueOf(obj, it.key), it.value) }
-            .map(String::trim)
+            // Вещь → её смыслы → естественные шаги. Найденное значение приходит со своими
+            // продолжениями — «Телефон · 067 123 4567»: позвонить, написать, сохранить контакт, —
+            // а действия самой вещи и её понимания стоят ниже, после её содержимого.
+            //
+            // Решение владельца 11.08.2026 убрало наверх не значения, а строку «одно действие на
+            // значение, и не то, которое мне надо». Здесь у значения все его продолжения, и
+            // сгруппированы они по значению — ровно то «правильно сгруппированными», о котором
+            // он просил.
+            val sections = if (inputPrompt == null) {
+                actionSections(bubbles, obj.state, thingTitle(obj), thingIsValue(obj), makeTitle(obj))
+            } else {
+                emptyList()
+            }
+            val valueSections = sections.filter { it.topic == SectionTopic.VALUE }
+            val ownSections = sections.filter { it.topic != SectionTopic.VALUE }
+            val sharedReason = com.point.core.flow.sharedUnusableReason(bubbles.map { it.unusableReason })
 
-        // Найденное живёт внизу, а не строкой действия наверху (решение владельца 11.08.2026:
-        // «сущности вверху имеют одно действие и не то, которое мне надо; хочу видеть их внизу
-        // и правильно сгруппированными»). Наверху блок навязывал по одному действию на
-        // значение — телефону «Сохранить контакт», номеру «Отследить», — и оно почти никогда
-        // не было тем, что человеку нужно. Действия остались там, где им место: у самого
-        // объекта, когда в него входят.
-        val promoted = found.mapNotNullTo(mutableSetOf()) { factKeyFor(it.state.kind) }
+            // Одно значение — одно место (#696, #747): значение, у которого есть продолжения,
+            // стоит заголовком своего раздела и не повторяется ни строкой знания, ни чипом.
+            val continued = valueSections.mapTo(mutableSetOf()) { understoodKeyOf(it.key) }
+            val continuedValues = valueSections
+                .flatMap { listOfNotNull(rawValueOf(obj, it.key), it.value) }
+                .map(String::trim)
 
-        // Объект, который сам и есть значение, не рассказывает о себе второй раз: внутри
-        // телефона «067 636 05 60» строка «Нашёл телефон 067 636 05 60» повторяла заголовок.
-        val own = verdict.headline.trim()
-        val plainFacts = facts
-            .filter { it.key !in promoted && it.key !in continued }
-            .filterNot { sameAsOwnValue(it, own) }
-        // Найденное не повторяет показанное выше (#696, #747): телефон, уже стоящий в
-        // карточке человека, вторым чипом не приходит, и исправленное значение не двоится
-        // со своей же строкой. Правило было отключено при перестройке экрана 11.08.2026 —
-        // строкой `val visibleFound = found`, — и полтора дня жило только в тестах.
-        val shownValues = remember(plainFacts, own, continuedValues) {
-            plainFacts.mapNotNullTo(mutableSetOf()) { it.value?.trim() } + own + continuedValues
-        }
-        // Сделанное — не найденное (P4): результат действия стоит у исходника своим блоком
-        // «Получилось», а у результата — «Сделано из» с дорогой назад. В общем списке
-        // «Нашёл» они значились находками, хотя Point их не нашёл, а сделал.
-        val made = com.point.core.flow.madeOf(obj.id, found, relations)
-        val madeFrom = com.point.core.flow.madeFromOf(obj.id, found, relations)
-        val visibleFound = visibleFoundChips(
-            found.filterNot { node -> node in made || node.id == madeFrom?.id },
-            shownValues,
-        )
+            // Найденное живёт внизу, а не строкой действия наверху (решение владельца 11.08.2026:
+            // «сущности вверху имеют одно действие и не то, которое мне надо; хочу видеть их внизу
+            // и правильно сгруппированными»). Наверху блок навязывал по одному действию на
+            // значение — телефону «Сохранить контакт», номеру «Отследить», — и оно почти никогда
+            // не было тем, что человеку нужно. Действия остались там, где им место: у самого
+            // объекта, когда в него входят.
+            val promoted = found.mapNotNullTo(mutableSetOf()) { factKeyFor(it.state.kind) }
 
-        // Заголовок раздела значения — само значение, с тем, что про него известно. Смысл,
-        // который уже сказан подписью объекта («Встреча · Созвон с Анной»), не повторяется.
-        fun headOf(section: ActionSection<Bubble>): ValueHead {
-            val value = section.value?.takeUnless { it == verdict.headline || it == verdict.subline }
-            val raw = rawValueOf(obj, section.key)
-            return ValueHead(
-                name = section.title,
-                value = value,
-                copy = value?.let { raw ?: it },
-                known = facts.firstOrNull { it.key == understoodKeyOf(section.key) }?.known ?: true,
-                other = otherReadingOf(obj.metadata, section.key),
+            // Объект, который сам и есть значение, не рассказывает о себе второй раз: внутри
+            // телефона «067 636 05 60» строка «Нашёл телефон 067 636 05 60» повторяла заголовок.
+            val own = verdict.headline.trim()
+            val plainFacts = facts
+                .filter { it.key !in promoted && it.key !in continued }
+                .filterNot { sameAsOwnValue(it, own) }
+            // Найденное не повторяет показанное выше (#696, #747): телефон, уже стоящий в
+            // карточке человека, вторым чипом не приходит, и исправленное значение не двоится
+            // со своей же строкой. Правило было отключено при перестройке экрана 11.08.2026 —
+            // строкой `val visibleFound = found`, — и полтора дня жило только в тестах.
+            val shownValues = remember(plainFacts, own, continuedValues) {
+                plainFacts.mapNotNullTo(mutableSetOf()) { it.value?.trim() } + own + continuedValues
+            }
+            // Сделанное — не найденное (P4): результат действия стоит у исходника своим блоком
+            // «Получилось», а у результата — «Сделано из» с дорогой назад. В общем списке
+            // «Нашёл» они значились находками, хотя Point их не нашёл, а сделал.
+            val made = com.point.core.flow.madeOf(obj.id, found, relations)
+            val madeFrom = com.point.core.flow.madeFromOf(obj.id, found, relations)
+            val visibleFound = visibleFoundChips(
+                found.filterNot { node -> node in made || node.id == madeFrom?.id },
+                shownValues,
             )
-        }
 
-        ObjectHeader(
-            obj,
-            thinking = enriching.isNotEmpty() || working,
-            factCount = facts.size,
-            preview = previewBitmap,
-            onTap = onHeroTap,
-            focusEntry = obj.state.kind == ObjectKind.IMAGE,
-        )
+            // Заголовок раздела значения — само значение, с тем, что про него известно. Смысл,
+            // который уже сказан подписью объекта («Встреча · Созвон с Анной»), не повторяется.
+            fun headOf(section: ActionSection<Bubble>): ValueHead {
+                val value = section.value?.takeUnless { it == verdict.headline || it == verdict.subline }
+                val raw = rawValueOf(obj, section.key)
+                return ValueHead(
+                    name = section.title,
+                    value = value,
+                    copy = value?.let { raw ?: it },
+                    known = facts.firstOrNull { it.key == understoodKeyOf(section.key) }?.known ?: true,
+                    other = otherReadingOf(obj.metadata, section.key),
+                )
+            }
 
-        history?.invoke()
+            // Найденное взлетает из вещи в свою строку (#209): одно значение — то, что открывает
+            // главное действие; остальные проявляются на месте. Пришедшее с вещью не взлетает.
+            val theatreValues = valueSections.mapNotNull { section ->
+                headOf(section).value?.let { TheatreValue(section.key, it, section.leads) }
+            }
+            val known = facts.size + found.size + valueSections.size
+            theatre.openOnce(theatreValues.mapTo(mutableSetOf()) { it.key }, known)
+            LaunchedEffect(theatre, theatreValues) {
+                nextFlight(theatre.seen, theatreValues)?.let { value ->
+                    theatre.play(value, theatreStage, motion, theatreScope, onTheatrePlayed)
+                }
+                theatre.seen = theatre.seen + theatreValues.map { it.key }
+            }
+            val looking = enriching.isNotEmpty()
+            LaunchedEffect(theatre, looking) {
+                val nothing = lookedAndFoundNothing(theatre.wasLooking, looking, theatre.knownAtOpen, known)
+                theatre.wasLooking = looking
+                if (nothing && motion && theatreStage != TheatreStage.LANDING) theatre.waveOnce()
+            }
 
-        madeFrom?.let { source ->
-            Spacer(Modifier.height(8.dp))
-            MadeFromRow(source = source, onOpen = { onFound(source) })
-        }
-
-        if (focused) {
-            Spacer(Modifier.height(12.dp))
-            FocusStrip(preview = focusPreview, onClear = onClearFocus)
-        }
-
-        WorkingStage(workingStage)
-
-        OutcomeBanner(message, messageOutcome)
-
-        if (message != null && messageOffer != null) {
-            Spacer(Modifier.height(10.dp))
-            PortalRow(
-                title = messageOffer,
-                onClick = onMessageOffer,
-                icon = bubbleIcon("ai"),
-                accent = bubbleColor("ai"),
-                modifier = Modifier.widthIn(max = PortalColumnWidth),
+            ObjectHeader(
+                obj,
+                theatre = theatre,
+                thinking = enriching.isNotEmpty() || working,
+                factCount = facts.size,
+                preview = previewBitmap,
+                onTap = onHeroTap,
+                focusEntry = obj.state.kind == ObjectKind.IMAGE,
             )
-        }
 
-        if (made.isNotEmpty() && inputPrompt == null) {
-            MadeHere(made = made, onOpen = onFound)
-        }
+            history?.invoke()
 
-        issuedLinkOf(obj.metadata)?.let { link ->
-            Spacer(Modifier.height(16.dp))
-            LinkCard(url = link, title = tr("Ссылка на файл"), warning = issuedLinkWarning(obj.metadata))
-        }
+            madeFrom?.let { source ->
+                Spacer(Modifier.height(8.dp))
+                MadeFromRow(source = source, onOpen = { onFound(source) })
+            }
 
-        if (valueSections.isNotEmpty()) {
-            Spacer(Modifier.height(24.dp))
-            ObjectActions(
-                sections = valueSections,
-                shared = sharedReason,
-                working = working,
-                onBubble = onBubble,
-                appIconFor = appIconFor,
-                head = ::headOf,
-            )
-        }
+            if (focused) {
+                Spacer(Modifier.height(12.dp))
+                FocusStrip(preview = focusPreview, onClear = onClearFocus)
+            }
 
-        UnderstoodSection(facts = plainFacts, enriching = enriching, failed = failed)
+            WorkingStage(workingStage)
 
-        if (visibleFound.isNotEmpty() && inputPrompt == null) {
-            FoundObjects(
-                found = visibleFound,
-                relations = relations,
-                partShownAbove = false,
-                onFound = onFound,
-            )
-        }
+            OutcomeBanner(message, messageOutcome)
 
-        Spacer(Modifier.height(28.dp))
+            if (message != null && messageOffer != null) {
+                Spacer(Modifier.height(10.dp))
+                PortalRow(
+                    title = messageOffer,
+                    onClick = onMessageOffer,
+                    icon = bubbleIcon("ai"),
+                    accent = bubbleColor("ai"),
+                    modifier = Modifier.widthIn(max = PortalColumnWidth),
+                )
+            }
 
-        if (items.isNotEmpty() && inputPrompt == null) {
-            CollectionItems(
-                items = items,
-                total = itemsTotal,
-                atLeast = itemsTotalAtLeast,
-                onItem = onItem,
-                onMove = onMoveItem?.takeIf { reorderablePages(items) },
-                previewFor = itemPreviewFor,
-            )
+            if (made.isNotEmpty() && inputPrompt == null) {
+                MadeHere(made = made, onOpen = onFound)
+            }
+
+            issuedLinkOf(obj.metadata)?.let { link ->
+                Spacer(Modifier.height(16.dp))
+                LinkCard(url = link, title = tr("Ссылка на файл"), warning = issuedLinkWarning(obj.metadata))
+            }
+
+            if (valueSections.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                ObjectActions(
+                    sections = valueSections,
+                    shared = sharedReason,
+                    working = working,
+                    onBubble = onBubble,
+                    appIconFor = appIconFor,
+                    head = ::headOf,
+                    theatre = theatre,
+                )
+            }
+
+            UnderstoodSection(facts = plainFacts, enriching = enriching, failed = failed)
+
+            if (visibleFound.isNotEmpty() && inputPrompt == null) {
+                FoundObjects(
+                    found = visibleFound,
+                    relations = relations,
+                    partShownAbove = false,
+                    onFound = onFound,
+                )
+            }
+
             Spacer(Modifier.height(28.dp))
-        }
 
-        if (textPreview != null && inputPrompt == null) {
-            TextPreview(
-                text = textPreview,
-                markdown = obj.mime == "text/markdown",
-                truncated = textPreviewTruncated,
-            )
-            Spacer(Modifier.height(28.dp))
-        }
+            if (items.isNotEmpty() && inputPrompt == null) {
+                CollectionItems(
+                    items = items,
+                    total = itemsTotal,
+                    atLeast = itemsTotalAtLeast,
+                    onItem = onItem,
+                    onMove = onMoveItem?.takeIf { reorderablePages(items) },
+                    previewFor = itemPreviewFor,
+                )
+                Spacer(Modifier.height(28.dp))
+            }
 
-        if (inputPrompt != null) {
-            AmendmentInput(
-                prompt = inputPrompt,
-                onSubmit = onSubmitInput,
-                onCancel = onCancelInput,
-                suggestions = inputSuggestions,
-            )
-        } else {
+            if (textPreview != null && inputPrompt == null) {
+                TextPreview(
+                    text = textPreview,
+                    markdown = obj.mime == "text/markdown",
+                    truncated = textPreviewTruncated,
+                )
+                Spacer(Modifier.height(28.dp))
+            }
 
-            ObjectActions(
-                sections = ownSections,
-                shared = sharedReason,
-                working = working,
-                onBubble = onBubble,
-                appIconFor = appIconFor,
-            )
-            if (latent.isNotEmpty()) {
-                Spacer(Modifier.height(22.dp))
-                LatentHints(latent)
+            if (inputPrompt != null) {
+                AmendmentInput(
+                    prompt = inputPrompt,
+                    onSubmit = onSubmitInput,
+                    onCancel = onCancelInput,
+                    suggestions = inputSuggestions,
+                )
+            } else {
+
+                ObjectActions(
+                    sections = ownSections,
+                    shared = sharedReason,
+                    working = working,
+                    onBubble = onBubble,
+                    appIconFor = appIconFor,
+                )
+                if (latent.isNotEmpty()) {
+                    Spacer(Modifier.height(22.dp))
+                    LatentHints(latent)
+                }
             }
         }
+
+        TheatreLayer(theatre, theatreStage)
     }
 
     LaunchedEffect(message) { if (message != null) scroll.animateScrollTo(0) }
@@ -988,6 +1029,7 @@ private fun FocusEntryMark(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun ObjectHeader(
     obj: PointObject,
+    theatre: TheatreState? = null,
     thinking: Boolean = false,
     factCount: Int = 0,
     preview: ImageBitmap? = null,
@@ -1008,7 +1050,7 @@ private fun ObjectHeader(
         Box(
             contentAlignment = Alignment.Center,
 
-            modifier = Modifier.clickable(
+            modifier = Modifier.theatreHero(theatre).clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 enabled = onTap != null,
@@ -1116,7 +1158,7 @@ private fun HeroRing(obj: PointObject, thinking: Boolean) {
         rememberInfiniteTransition(label = "ring").animateFloat(
             initialValue = 0.55f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1100, easing = EaseInOutSine), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(tween(MotionTokens.RING_GLOW_MS, easing = EaseInOutSine), RepeatMode.Reverse),
             label = "ring-glow",
         ).value
     } else {
