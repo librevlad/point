@@ -42,7 +42,7 @@ object PageVision {
         detectDocument(rgba, scratch)?.let { binarise(upright(it, scratch), scratch) }
 
     /** Кадр целиком, сведённый к чёрно-белому (#1333): страницы не нашли, но работа не пропадает. */
-    fun processAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = binarise(upright(rgba, scratch), scratch)
+    fun processAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = binarise(rgba, scratch)
 
     /**
      * Выпрямленная и подготовленная страница и её четыре угла — или `null`, страницы не нашлось
@@ -70,7 +70,7 @@ object PageVision {
      * Подготовка кадра без выравнивания (#1333): страницы не нашёл никто, но выбеливание,
      * снятие бликов и увеличение кадру всё равно помогают.
      */
-    suspend fun enhanceAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = prepared(upright(rgba, scratch), scratch)
+    suspend fun enhanceAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = prepared(rgba, scratch)
 
     /**
      * Ровный свет и белая бумага — без выпрямления и без увеличения (#1046).
@@ -90,7 +90,13 @@ object PageVision {
         return upscale(finished, scratch)
     }
 
-    /** Страница, повёрнутая так, чтобы строки шли слева направо сверху вниз (#1044). */
+    /**
+     * Страница, повёрнутая так, чтобы строки шли слева направо сверху вниз (#1044).
+     *
+     * Только найденный лист: кадр целиком остаётся, как человек его снял. На нём кроме
+     * страницы стол, рамка монитора, изгиб — и по строкам целого кадра монитор ложился на
+     * бок, а мятая накладная вверх ногами (кадры 07 и 18 корпуса).
+     */
     private fun upright(mat: Mat, scratch: MutableList<Mat>): Mat =
         PageOrientation.turned(mat, PageOrientation.quarterTurns(mat, scratch), scratch)
 
