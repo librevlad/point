@@ -119,6 +119,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Архив	Архів	Archive
 Архив из фотографий	Архів із фотографій	An archive of photos
 Архив не открылся — он повреждён или обрезан	Архів не відкрився — він пошкоджений або обрізаний	The archive didn't open: it's damaged or cut short
+Без ключа AI телефон переводит на английский, украинский и русский	Без ключа AI телефон перекладає англійською, українською та російською	Without an AI key, the phone translates into English, Ukrainian and Russian
 Без этого доступа не получится	Без цього доступу не вийде	It won't work without this access
 Бесплатный лимит кончился. Подождите несколько минут и нажмите «Проверить и включить» ещё раз — или возьмите ключ у другого сервиса из списка выше и впишите его сюда вместо этого.	Безкоштовний ліміт скінчився. Зачекайте кілька хвилин і натисніть «Перевірити й увімкнути» ще раз — або візьміть ключ в іншого сервісу зі списку вище й впишіть його сюди замість цього.	The free limit is used up. Wait a few minutes and press “Check and turn on” again, or get a key from another service in the list above and enter it here instead.
 Бланк на 	Бланк на 	Form for 
@@ -1075,6 +1076,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Что у вас есть?	Що у вас є?	What do you have?
 Что это?	Що це?	What is this?
 Что-то пошло не так — работа не выполнена	Щось пішло не так — роботу не виконано	Something went wrong; the work wasn't done
+Чтобы переводить без ключа, телефон один раз скачивает язык — нужен интернет	Щоб перекладати без ключа, телефон один раз завантажує мову — потрібен інтернет	To translate without a key, the phone downloads the language once. It needs the internet for that
 Штрихкод	Штрихкод	Barcode
 Эта картинка и так лёгкая — уменьшать нечего	Ця картинка й так легка — зменшувати нічого	This picture is already light; there's nothing to shrink
 Это вакансия	Це вакансія	It's a job posting
@@ -1100,6 +1102,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Этот текст длиннее, чем помещается в QR-код — сократите его	Цей текст довший, ніж уміщається в QR-код — скоротіть його	This text is longer than fits in a QR code. Shorten it
 Этот телефон не слышит стука — откройте Point на телефоне и заберите объект	Цей телефон не чує стуку — відкрийте Point на телефоні й заберіть об’єкт	This phone can't hear the knock. Open Point on the phone and pick up the item
 Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac	Цей формат запису не читається — підійдуть ogg, mp3, m4a, wav, flac	This recording format can't be read. Use ogg, mp3, m4a, wav or flac
+Язык этого текста телефон сам не узнал — с ключом AI переведёт модель	Мову цього тексту телефон сам не впізнав — з ключем AI перекладе модель	The phone couldn't tell this text's language on its own. With an AI key, a model will translate it
 Ячейка {0}×{1}	Клітинка {0}×{1}	Cell {0}×{1}
 Ячейка «{0}» × «{1}»	Клітинка «{0}» × «{1}»	Cell “{0}” × “{1}”
 Ящик открыт, а ссылку на него собрать не вышло	Скриньку відкрито, а посилання на неї скласти не вийшло	The box is open, but a link to it couldn't be made
@@ -1108,6 +1111,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 адрес	адреса	address
 адрес почты	адреса пошти	email address
 адрес, который вы вписали сами	адреса, яку ви вписали самі	an address you entered yourself
+английский	англійська	English
 апр	квіт	Apr
 апреля	квітня	April
 архив	архів	archive
@@ -1325,6 +1329,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 раскрыть ›	розгорнути ›	expand ›
 расшифровать	розшифрувати	transcribe
 расшифровку умеют Groq и OpenAI, но не OpenRouter	розшифровувати вміють Groq і OpenAI, але не OpenRouter	Groq and OpenAI can transcribe, OpenRouter can't
+русский	російська	Russian
 с компьютера	з комп’ютера	from the computer
 с поддержкой аудио	з підтримкою аудіо	that supports audio
 с поддержкой изображений	з підтримкою зображень	that supports pictures
@@ -1390,6 +1395,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 у вас это уже есть — 	у вас це вже є — 	you already have this: 
 уже получено	уже отримано	already received
 уйдёт в сервис	піде в сервіс	goes to a service
+украинский	українська	Ukrainian
 устройств	пристроїв	devices
 устройств пока нет	пристроїв поки немає	no devices yet
 устройства	пристрої	devices
