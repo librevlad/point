@@ -103,7 +103,7 @@ class LearningBubblePolicy @Inject constructor(
                 // Своя ступень здесь одна: приоритет смягчается тем, как часто человек берёт
                 // это действие.
                 { if (intent == null || intent in it.intents(state)) 0 else 1 },
-                { effectivePriority(it, counts) },
+                { effectivePriority(it, state, counts) },
                 { it.id.value },
             ),
         )
@@ -116,8 +116,8 @@ class LearningBubblePolicy @Inject constructor(
             c.meta.network &&
             c.produces(state)?.kind == com.point.core.model.ObjectKind.TEXT
 
-    private fun effectivePriority(c: Capability, counts: Map<CapabilityId, Int>): Int =
-        c.meta.priority - min(counts[c.id] ?: 0, MAX_BOOST)
+    private fun effectivePriority(c: Capability, state: ObjectState, counts: Map<CapabilityId, Int>): Int =
+        c.priority(state) - min(counts[c.id] ?: 0, MAX_BOOST)
 
     private companion object {
 

@@ -22,7 +22,7 @@ fun byIntentThenPriority(
     intent: Intent?,
 ): Comparator<Capability> = compareBy(
     { if (intent == null || intent in it.intents(state)) 0 else 1 },
-    { it.meta.priority },
+    { it.priority(state) },
     { it.id.value },
 )
 

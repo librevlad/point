@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.tr
@@ -16,6 +17,11 @@ class ScanCapability : Capability {
     override val id = ID
     override val icon = "scan"
     override val meta = CapabilityMeta(latency = Latency.FAST)
+
+    // Прочитанный снимок — это бумага или экран с текстом, и главное превращение у него скан
+    // (#1044): на корпусе владельца «Скан» у фото документов прятался за «Показать ещё».
+    // Выше остаются только действия над выделенной человеком областью.
+    override fun priority(state: ObjectState) = if (state.has(Feature.HAS_TEXT)) READ_PAGE_PRIORITY else meta.priority
     override fun label(state: ObjectState) = tr("Скан")
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
@@ -23,7 +29,10 @@ class ScanCapability : Capability {
     override fun yields(state: ObjectState) =
         ActionYield.New(ObjectKind.IMAGE, tr("чёрно-белую страницу"))
 
-    companion object { val ID = CapabilityId("scan") }
+    companion object {
+        val ID = CapabilityId("scan")
+        private const val READ_PAGE_PRIORITY = 14
+    }
 }
 
 class ScanPlusCapability : Capability {
