@@ -39,10 +39,10 @@ object PageVision {
      * успеха. Кадр целиком — отдельная дорога ([processAsIs]), и результат её помечается.
      */
     fun process(rgba: Mat, scratch: MutableList<Mat>): Mat? =
-        detectDocument(rgba, scratch)?.let { binarise(it, scratch) }
+        detectDocument(rgba, scratch)?.let { binarise(upright(it, scratch), scratch) }
 
     /** Кадр целиком, сведённый к чёрно-белому (#1333): страницы не нашли, но работа не пропадает. */
-    fun processAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = binarise(rgba, scratch)
+    fun processAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = binarise(upright(rgba, scratch), scratch)
 
     /**
      * Выпрямленная и подготовленная страница и её четыре угла — или `null`, страницы не нашлось
@@ -57,14 +57,20 @@ object PageVision {
         reportStage(tr("Ищу страницу на снимке"))
         val straight = dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch) { corners = it }
             ?: return null
-        return Page(prepared(straight, scratch), corners?.let(::pageQuadOf))
+
+        // Лист ставится так, чтобы его можно было читать, и углы поворачиваются вместе с ним:
+        // по ним прочитанное возвращается на снимок человека (#1332).
+        val turns = PageOrientation.quarterTurns(straight, scratch)
+        val upright = PageOrientation.turned(straight, turns, scratch)
+        val quad = corners?.let { turnedCorners(it, turns) }?.let(::pageQuadOf)
+        return Page(prepared(upright, scratch), quad)
     }
 
     /**
      * Подготовка кадра без выравнивания (#1333): страницы не нашёл никто, но выбеливание,
      * снятие бликов и увеличение кадру всё равно помогают.
      */
-    suspend fun enhanceAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = prepared(rgba, scratch)
+    suspend fun enhanceAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = prepared(upright(rgba, scratch), scratch)
 
     /**
      * Ровный свет и белая бумага — без выпрямления и без увеличения (#1046).
@@ -82,6 +88,19 @@ object PageVision {
         reportStage(tr("Выбеливаю бумагу"))
         val finished = whitenFinish(straight, scratch)
         return upscale(finished, scratch)
+    }
+
+    /** Страница, повёрнутая так, чтобы строки шли слева направо сверху вниз (#1044). */
+    private fun upright(mat: Mat, scratch: MutableList<Mat>): Mat =
+        PageOrientation.turned(mat, PageOrientation.quarterTurns(mat, scratch), scratch)
+
+    /**
+     * Углы листа после поворота копии на [turns] четвертей по часовой: верхним левым
+     * становится тот угол снимка, что попал в верхний левый угол повёрнутой копии.
+     */
+    internal fun turnedCorners(corners: Array<Point>, turns: Int): Array<Point> {
+        val k = Math.floorMod(turns, 4)
+        return Array(4) { i -> corners[Math.floorMod(i - k, 4)] }
     }
 
     /** Углы, найденные на развёрнутом кадре, — в его же координатах. */
