@@ -38,7 +38,13 @@ class MlKitTranslator @Inject constructor() : OnDeviceTranslator {
 
             // По строкам: переводчик держит короткие куски ровнее, а разбивка текста на
             // абзацы остаётся той же, что у исходника.
-            text.lines().joinToString("\n") { line -> if (line.isBlank()) line else client.translate(line).await() }
+            val lines = text.lines()
+            buildString {
+                lines.forEachIndexed { i, line ->
+                    if (i > 0) append('\n')
+                    append(if (line.isBlank()) line else client.translate(line).await())
+                }
+            }
         } finally {
             client.close()
         }
