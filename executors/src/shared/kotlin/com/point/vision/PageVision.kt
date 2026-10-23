@@ -154,28 +154,33 @@ object PageVision {
         val otsu = Mat().also { scratch += it }
         Imgproc.threshold(flat, otsu, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
         Imgproc.morphologyEx(otsu, otsu, Imgproc.MORPH_OPEN, kernel)
-        var corners = quadFromMask(otsu, frameArea, scratch)
+
+        // Углы, режущие текст, страницей не считаются (#1044): копия без концов строк вышла
+        // бы ровной и молча неполной.
+        val whole: (Array<Point>) -> Boolean = { !PageEdges.cutsText(gray, it, scratch) }
+        var corners = quadFromMask(otsu, frameArea, scratch, whole)
 
         if (corners == null) {
             val median = medianBrightness(blurred)
             val edges = Mat().also { scratch += it }
             Imgproc.Canny(blurred, edges, 0.66 * median, 1.33 * median)
             Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
-            corners = quadFromMask(edges, frameArea, scratch)
+            corners = quadFromMask(edges, frameArea, scratch, whole)
         }
-        val page = if (corners != null) {
-            orderCorners(corners.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray())
-        } else {
-            // Свой ход листа не нашёл — второе слово за обученной моделью углов (#1044). Она
-            // смотрит на тот же уменьшенный кадр.
-            val learned = LearnedCorners.find(small, scratch) ?: return null
-            orderCorners(learned.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray())
-        }
+        // Свой ход листа не нашёл — второе слово за обученной моделью углов (#1044). Она
+        // смотрит на тот же уменьшенный кадр и проверяется так же.
+        val found = corners ?: LearnedCorners.find(small, scratch)?.let(::orderCorners)?.takeIf(whole) ?: return null
+        val page = found.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray()
         onPage(page)
         return warp(rgba, page, scratch)
     }
 
-    private fun quadFromMask(mask: Mat, frameArea: Double, scratch: MutableList<Mat>): Array<Point>? {
+    private fun quadFromMask(
+        mask: Mat,
+        frameArea: Double,
+        scratch: MutableList<Mat>,
+        accept: (Array<Point>) -> Boolean,
+    ): Array<Point>? {
         val contours = ArrayList<MatOfPoint>()
         Imgproc.findContours(
             mask, contours, Mat().also { scratch += it },
@@ -184,7 +189,7 @@ object PageVision {
         return contours
             .sortedByDescending { Imgproc.contourArea(it) }
             .take(6)
-            .firstNotNullOfOrNull { contour -> pageQuad(contour, frameArea) }
+            .firstNotNullOfOrNull { contour -> pageQuad(contour, frameArea)?.let(::orderCorners)?.takeIf(accept) }
     }
 
     private fun medianBrightness(gray: Mat): Double {
