@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 
+import asyncio
 import base64
 import re
 import hashlib
@@ -36,6 +37,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi import Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -134,6 +136,10 @@ def _require_form_parsing() -> None:
 
 
 MAX_READABLE_TEXT = 200_000
+
+# Сколько ящик держит вопрос без письма (#1400): с запасом короче предела ожидания у прокси перед
+# службой и у клиента.
+MAX_MAILBOX_WAIT = 25
 
 GEO_SHAPED = re.compile(r"^-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+$")
 
@@ -781,11 +787,42 @@ def create_app(
             bid = mailbox.push(_blobs_root(d), me.user_id, device_id, data)
         except mailbox.Full as e:
             raise fail(507, "full", t(str(e)))
+        _arrived(me.user_id, device_id).set()
         return PlainTextResponse(bid, headers={"X-Blob-Id": bid})
 
+    # Ожидание письма на сервере (#1400). Компьютер спрашивал ящик каждые 2 секунды: 43 200
+    # запросов в сутки на одно устройство и журнал, почти целиком из них состоящий. С `wait`
+    # ответ держится, пока письмо не придёт или не выйдет срок, — письмо уходит в тот же миг,
+    # а пустых вопросов становится в десять раз меньше. Без `wait` ящик отвечает сразу, как
+    # прежде: старый клиент ничего не замечает.
+    #
+    # Служба — один процесс, поэтому звонок о новом письме — событие в памяти. Ящик всё равно
+    # перечитывается раз в секунду: звонок, пропущенный между проверкой и ожиданием, стоит
+    # секунды, а не письма.
+    #
+    # Событие привязано к циклу, в котором его ждут; у службы цикл один, а у стенда тестов их
+    # бывает несколько — поэтому цикл входит в ключ.
+    _arrivals: dict[tuple[int, str, str], asyncio.Event] = {}
+
+    def _arrived(user_id: str, device_id: str) -> asyncio.Event:
+        key = (id(asyncio.get_running_loop()), user_id, device_id)
+        return _arrivals.setdefault(key, asyncio.Event())
+
     @app.get("/mbx/{device_id}")
-    def mbx_pull(device_id: str, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
-        got = mailbox.pull(_blobs_root(d), me.user_id, device_id)
+    async def mbx_pull(device_id: str, wait: int = 0, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        root = _blobs_root(d)
+        deadline = time.monotonic() + max(0, min(wait, MAX_MAILBOX_WAIT))
+        arrived = _arrived(me.user_id, device_id)
+        while True:
+            arrived.clear()
+            got = await run_in_threadpool(mailbox.pull, root, me.user_id, device_id)
+            left = deadline - time.monotonic()
+            if got or left <= 0:
+                break
+            try:
+                await asyncio.wait_for(arrived.wait(), timeout=min(1.0, left))
+            except asyncio.TimeoutError:
+                pass
         if not got:
             return Response(status_code=204)
         bid, data = got
