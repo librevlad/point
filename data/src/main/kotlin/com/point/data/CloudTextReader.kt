@@ -11,7 +11,13 @@ import com.point.core.flow.allowedBy
 import com.point.core.flow.noTextAnswer
 import com.point.core.model.PointObject
 import com.point.core.model.tr
+import com.point.core.flow.AiFact
+import com.point.core.flow.AiOutcome
+import com.point.core.flow.aiOutcomeOf
+import com.point.core.flow.awakeFirst
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import javax.inject.Singleton
 import com.point.core.flow.summariseCloudErrors
 
 interface CloudTextReader {
@@ -27,11 +33,26 @@ interface CloudTextReader {
     suspend fun read(obj: PointObject): String
 }
 
-class DefaultExternalEye @Inject constructor(
+@Singleton
+class DefaultExternalEye(
     private val readers: List<@JvmSuppressWildcards CloudTextReader>,
     private val privacy: CloudPrivacySettings,
     private val network: NetworkAvailability,
+    private val now: () -> Long,
 ) : ExternalEye {
+
+    @Inject constructor(
+        readers: List<@JvmSuppressWildcards CloudTextReader>,
+        privacy: CloudPrivacySettings,
+        network: NetworkAvailability,
+    ) : this(readers, privacy, network, System::currentTimeMillis)
+
+    /**
+     * Чем кончилось последнее чтение у каждого читателя — память процесса (#433): по ней
+     * недавно молчавший идёт в конец очереди. Ключей и пределов читателей человек не видит,
+     * поэтому и на экран ключей эта память не выходит.
+     */
+    private val lastOutcome = ConcurrentHashMap<String, AiFact>()
 
     override fun available(): Boolean = eyes().isNotEmpty()
 
@@ -39,7 +60,7 @@ class DefaultExternalEye @Inject constructor(
         allowedBy(privacy.level(), readers.filter { it.configured }) { it.privacy }
 
     override suspend fun read(obj: PointObject): ExternalReading {
-        val allowed = eyes()
+        val allowed = awakeFirst(eyes(), now()) { lastOutcome[it.reader] }
         if (allowed.isEmpty()) error(nobodyAllowed())
         val errors = mutableListOf<String>()
         var considered = 0
@@ -57,6 +78,7 @@ class DefaultExternalEye @Inject constructor(
 
             try {
                 val text = eye.read(obj)
+                lastOutcome[eye.reader] = AiFact(AiOutcome.ANSWERED, now())
                 if (!noTextAnswer(text)) {
                     return ExternalReading(text, eye.reader, eye.privacy.where, eye.privacy.promise.what)
                 }
@@ -70,6 +92,7 @@ class DefaultExternalEye @Inject constructor(
                 // metadata `engine` у результата, а не в строке на баннере.
                 errors += com.point.core.flow.PAGE_READ_EMPTY
             } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) lastOutcome[eye.reader] = AiFact(aiOutcomeOf(e), now())
                 failed = true
                 errors += e.message ?: e.javaClass.simpleName
             }
