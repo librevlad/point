@@ -42,6 +42,33 @@ class AiServiceRefusal(
 
 val KEY_NOT_ACCEPTED: String get() = tr("ключ не принят")
 
+/**
+ * Молчащий сервис — в конец очереди (#433).
+ *
+ * Исход каждого обращения уже помнится, а порядок его не читал: сервис, промолчавший минуту
+ * назад, снова шёл первым, и человек снова ждал таймаут. Теперь он стоит последним, пока не
+ * выйдет срок, — но из очереди не выпадает: если больше некому, пробуется и он.
+ *
+ * Срок зависит от того, чем кончилось. Промолчал — это минуты: сеть и сервисы
+ * восстанавливаются быстро. Лимит или непринятый ключ сами не проходят — час.
+ */
+fun benched(fact: AiFact?, now: Long): Boolean {
+    val ago = now - (fact ?: return false).at
+    if (ago < 0) return false
+    return when (fact.outcome) {
+        AiOutcome.SILENT -> ago < SILENT_BENCH_MS
+        AiOutcome.LIMIT, AiOutcome.BAD_KEY -> ago < SPENT_BENCH_MS
+        AiOutcome.ANSWERED -> false
+    }
+}
+
+/** Та же очередь, только недавно молчавшие — в конце; порядок остальных не меняется. */
+fun <T> awakeFirst(queue: List<T>, now: Long, factOf: (T) -> AiFact?): List<T> =
+    queue.sortedBy { benched(factOf(it), now) }
+
+const val SILENT_BENCH_MS = 10 * 60_000L
+const val SPENT_BENCH_MS = 60 * 60_000L
+
 fun aiOutcomeOf(failure: Throwable): AiOutcome =
     if (failure is AiServiceRefusal) {
         aiOutcomeOfStatus(failure.status)

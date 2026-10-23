@@ -20,6 +20,8 @@ class FallbackLlmClient(
      * только те, кто это обещал письменно, — остальные пропускаются с названной причиной.
      */
     private val privacy: CloudPrivacySettings = OPEN_TO_EVERYONE,
+
+    private val now: () -> Long = System::currentTimeMillis,
 ) : LlmClient {
 
     override val configured: Boolean get() = providers.any { it.configured }
@@ -49,7 +51,10 @@ class FallbackLlmClient(
         // заменить: повтор той же моделью лучше отказа.
         val fresh = allowedAll.filter { it.configured && it.serviceId !in avoidServices && it.canHandle(obj) }
         val rotating = avoidServices.isNotEmpty() && fresh.isNotEmpty()
-        val allowed = if (rotating) fresh else allowedAll
+        // Недавно молчавший или упёршийся в лимит — последним (#433): человек не ждёт
+        // таймаут того, кто только что не ответил.
+        val known = runCatching { facts.all() }.getOrDefault(emptyMap())
+        val allowed = awakeFirst(if (rotating) fresh else allowedAll, now()) { known[it.serviceId] }
         val errors = mutableListOf<String>()
 
         // Чужой ответ дословно — для журнала обменов, не для человека (#1236). Цепочка

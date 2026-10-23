@@ -49,6 +49,8 @@ Point не является AI-чатом, менеджером файлов и�
   `python -m pip install -r relay/requirements-dev.txt`, затем `cd relay && python -m pytest tests -q`.
   Зелёными для слияния должны быть обе. Задача `deployed` (`python3 tools/check_server_deployed.py`)
   идёт только на `main` и говорит не про код в репозитории, а про боевую машину (#1231).
+  Так же на `main` и раз в неделю идёт `catalog` (`python3 tools/check_catalog_fresh.py`): называет
+  записи каталога сервисов (`AiProviders.kt`), проверенные больше 90 дней назад (#433).
 - Релиз: тег `v*` → `.github/workflows/release.yml`; перед публикацией обязательны release gates и `tools/release-scan.sh`.
 
 ## Сборка и тесты

@@ -318,4 +318,32 @@ class DefaultExternalEyeTest {
         assertEquals(com.point.core.flow.NO_NETWORK_TEXT, error?.message)
         assertTrue("офлайн ни один читатель не должен получить запрос", calls.isEmpty())
     }
+
+    /** Молчащий читатель — в конец очереди (#433): человек не ждёт его таймаут второй раз. */
+    @Test
+    fun `второй раз первым читает тот, кто ответил, а не тот, кто промолчал`() = runTest {
+        var t = 1_000_000_000L
+        val calls = mutableListOf<String>()
+        var silent = true
+        val chain = DefaultExternalEye(
+            listOf(
+                eye("тихий") { calls += "тихий"; if (silent) error("timeout") else "текст" },
+                eye("живой") { calls += "живой"; "текст" },
+            ),
+            level(PrivacyLevel.FREE_FIRST),
+            NetworkAvailability { true },
+        ) { t }
+
+        chain.read(pageObject)
+        calls.clear()
+        t += 60_000
+        assertEquals("живой", chain.read(pageObject).reader)
+        assertEquals("молчавший снова стоял первым", listOf("живой"), calls)
+
+        calls.clear()
+        silent = false
+        t += com.point.core.flow.SILENT_BENCH_MS
+        assertEquals("тихий", chain.read(pageObject).reader)
+        assertEquals("срок вышел — порядок прежний", listOf("тихий"), calls)
+    }
 }
