@@ -1,4 +1,4 @@
-# Модель углов страницы
+# Модель углов страницы (doccornernet_lean.onnx)
 
 `doccornernet_lean.onnx` — DocCornerNet LEAN, сжатая по каналам SimCC-сеть углов документа
 (архитектура — DocCornerNet, https://github.com/mapo80/DocCornerNet-CoordClass, MIT). Файл взят
