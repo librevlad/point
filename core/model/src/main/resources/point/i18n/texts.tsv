@@ -337,6 +337,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Компьютер просит телефон что-то сделать с объектом	Комп’ютер просить телефон щось зробити з об’єктом	The computer asks the phone to do something with an item
 Компьютер просит: {0}	Комп’ютер просить: {0}	The computer asks: {0}
 Компьютер сейчас не может это сделать	Комп’ютер зараз не може це зробити	The computer can't do this right now
+Компьютер что-то прислал	Комп’ютер щось надіслав	The computer sent something
 Компьютера нет в вашем круге. Запустите «Point для ПК» и войдите в тот же аккаунт.	Комп’ютера немає у вашому колі. Запустіть «Point для ПК» і увійдіть у той самий акаунт.	There's no computer in your circle. Start “Point for PC” and sign in to the same account.
 Контакт	Контакт	Contact
 Контакты и номера	Контакти й номери	Contacts and numbers
@@ -394,6 +395,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Нажмите, чтобы забрать готовое	Натисніть, щоб забрати готове	Tap to pick up the result
 Нажмите, чтобы забрать объект и сделать	Натисніть, щоб забрати об’єкт і зробити	Tap to pick up the item and do it
 Нажмите, чтобы отправить отчёт разработчику.	Натисніть, щоб надіслати звіт розробникові.	Tap to send a report to the developer.
+Нажмите, чтобы посмотреть, что ждёт	Натисніть, щоб подивитися, що чекає	Tap to see what is waiting
 Назад	Назад	Back
 Найти в документе	Знайти в документі	Find in document
 Найти в недавнем	Знайти в нещодавньому	Search recent

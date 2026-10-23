@@ -30,10 +30,10 @@ class KnockMeaningTest {
     }
 
     @Test
-    fun `очередь не прочиталась — молчание говорит об этом`() {
+    fun `очередь не прочиталась — человека всё равно зовут`() {
         val meaning = knockMeaning(word = KNOCK_ABOUT_OUTBOX, linked = true, waiting = null)
 
-        assertEquals(KnockMeaning.Silent("очередь компьютера не прочиталась"), meaning)
+        assertEquals(KnockMeaning.Unread, meaning)
     }
 
     @Test
