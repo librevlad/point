@@ -437,6 +437,7 @@ object PageVision {
         Core.bitwise_and(glare, glareG, glare)
         val dk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0)).also { scratch += it }
         Imgproc.dilate(glare, glare, dk, Point(-1.0, -1.0), 2)
+        keepBlankGlare(gray0, glare, scratch)
         val clean = Mat().also { scratch += it }
         if (Core.countNonZero(glare) > 0) Photo.inpaint(bgr, glare, clean, 5.0, Photo.INPAINT_TELEA) else bgr.copyTo(clean)
 
@@ -544,6 +545,38 @@ object PageVision {
         return outRgba
     }
 
+    /**
+     * Блик — пятно, где бумага пересвечена и текста под ним уже не видно. Светлое пятно, в
+     * котором строки видны, бликом не считается (#1044, кадр 07 корпуса): на снимке монитора
+     * самое светлое место экрана закрашивалось вместе с тонким серым текстом.
+     */
+    private fun keepBlankGlare(gray: Mat, glare: Mat, scratch: MutableList<Mat>) {
+        if (Core.countNonZero(glare) == 0) return
+        val ink = Mat().also { scratch += it }
+        Imgproc.adaptiveThreshold(gray, ink, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY_INV, 15, 12.0)
+        Core.bitwise_and(ink, glare, ink)
+        val labels = Mat().also { scratch += it }
+        val stats = Mat().also { scratch += it }
+        val n = Imgproc.connectedComponentsWithStats(glare, labels, stats, Mat().also { scratch += it })
+        if (n <= 1) return
+        val inked = IntArray(n)
+        val points = MatOfPoint().also { scratch += it }
+        Core.findNonZero(ink, points)
+        val label = IntArray(1)
+        for (p in points.toArray()) {
+            labels.get(p.y.toInt(), p.x.toInt(), label)
+            inked[label[0]]++
+        }
+        for (i in 1 until n) {
+            val area = stats.get(i, Imgproc.CC_STAT_AREA)[0]
+            if (inked[i] > GLARE_MAX_INK * area) {
+                val mask = Mat().also { scratch += it }
+                Core.compare(labels, Scalar(i.toDouble()), mask, Core.CMP_EQ)
+                glare.setTo(Scalar(0.0), mask)
+            }
+        }
+    }
+
     private fun medianOf(chan: Mat): Double {
         val hist = Mat()
         Imgproc.calcHist(listOf(chan), MatOfInt(0), Mat(), hist, MatOfInt(256), MatOfFloat(0f, 256f))
@@ -591,6 +624,9 @@ object PageVision {
     private const val REMAP_DECIMATE = 8
 
     private const val ILLUMINATION_SIGMA = 90.0
+
+    /** Доля различимых чернил, с которой светлое пятно — уже не блик, а страница с текстом. */
+    private const val GLARE_MAX_INK = 0.01
 
     private const val MIN_PAGE_FRACTION = 0.12
 

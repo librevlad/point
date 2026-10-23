@@ -83,6 +83,17 @@ class PageEdgesTest {
     }
 
     @Test
+    fun `лист уходит за кромку снимка — это не разрез`() {
+        assumeTrue("OpenCV для этой машины не загрузилась", PcOpenCv.available)
+
+        // Кадр обрезан по середине строк: лист продолжается за снимком, и это не вина углов.
+        val gray = photo()
+        val shot = gray.submat(0, gray.rows(), 400, gray.cols()).clone()
+        gray.release()
+        assertFalse(cuts(shot, quad(0.0, top, right - 400, bottom)))
+    }
+
+    @Test
     fun `край внутри строк — лист не найден`() {
         assumeTrue("OpenCV для этой машины не загрузилась", PcOpenCv.available)
         assertTrue("отрезано начало строк", cuts(photo(), quad(400.0, top, right, bottom)))
