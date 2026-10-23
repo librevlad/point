@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  # Раз в неделю — только сверки с внешним миром (сервер, каталог): код за неделю без push не
+  # меняется, а мир меняется.
+  schedule:
+    - cron: '0 6 * * 1'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,6 +20,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +58,7 @@ jobs:
   # значило бы поставить Android-сборку в зависимость от pip. Тесты идут без сети и без
   # боевого сервера — вход по Google подменяется фейком того же шва.
   server:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,3 +93,16 @@ jobs:
 
       - name: Боевой сервер и main не должны расходиться
         run: python3 tools/check_server_deployed.py
+
+  # Каталог бесплатных сервисов стареет (#433): бесплатный уровень снимают, условия про
+  # присланное меняют, а дата проверки в `AiProviders.kt` вписана руками. Задача называет
+  # записи старше квартала. Как и `deployed`, она говорит про мир, а не про код, поэтому
+  # идёт только на main и по расписанию и PR не держит.
+  catalog:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Каталог сервисов не устарел
+        run: python3 tools/check_catalog_fresh.py
