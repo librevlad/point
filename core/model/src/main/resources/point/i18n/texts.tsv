@@ -145,7 +145,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 В документе нет ни одной страницы	У документі немає жодної сторінки	The document has no pages
 В записи не слышно речи	У записі не чути мовлення	No speech can be heard in the recording
 В коллекции нет изображений для PDF	У наборі немає зображень для PDF	The set has no pictures for a PDF
-В наборе нет картинок — добавьте снимки, и PDF соберётся	У наборі немає картинок — додайте знімки, і PDF збереться	The set has no pictures — add photos and the PDF will come together
+В наборе нет картинок — добавьте снимки, и PDF соберётся	У наборі немає картинок — додайте знімки, і PDF збереться	The set has no pictures. Add photos and the PDF will come together
 В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста	У наборі немає сторінок для таблиці — ні знімка, ні PDF, ні тексту	The set has no pages for a table: no picture, PDF or text
 В области ничего не нашлось	В області нічого не знайшлося	Nothing was found in the area
 В объекте нет ссылки, которую можно открыть	В об’єкті немає посилання, яке можна відкрити	The item has no link to open
@@ -529,7 +529,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 О чём спросить	Про що спитати	What to ask
 О чём эта запись?	Про що цей запис?	What is this recording about?
 О чём эта ссылка?	Про що це посилання?	What is this link about?
-Обведите мышью место на снимке — его можно взять фрагментом или замазать	Обведіть мишею місце на знімку — його можна взяти фрагментом або замазати	Circle a spot on the photo with the mouse — you can take it as a fragment or hide it
+Обведите мышью место на снимке — его можно взять фрагментом или замазать	Обведіть мишею місце на знімку — його можна взяти фрагментом або замазати	Circle a spot on the photo with the mouse to take it as a fragment or hide it
 Обещали {0} — вышло {1}	Обіцяли {0} — вийшло {1}	Promised {0}, got {1}
 Обрабатываю…	Обробляю…	Working…
 Объединить в PDF	Об’єднати в PDF	Combine into PDF
@@ -554,8 +554,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Ответ остановлен	Відповідь зупинено	Answer stopped
 Ответить	Відповісти	Reply
 Ответь на это	Дай відповідь на це	Reply to this
-Отвечают {0} из {1}	Відповідають {0} з {1}	{0} of {1} answer
-Отвечают все {0}	Відповідають усі {0}	All {0} answer
+Отвечают {0} из {1}	Відповідають {0} з {1}	{0} of {1} respond
+Отвечают все {0}	Відповідають усі {0}	All {0} respond
 Отделяю объект от фона	Відокремлюю об’єкт від фону	Separating the subject from the background
 Отказано на телефоне: наружу объект не отправлен	Відмовлено на телефоні: назовні об’єкт не надіслано	Declined on the phone: the item wasn't sent out
 Отклик	Відгук	Application
@@ -613,7 +613,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Очистить	Очистити	Clear
 Очистить метаданные	Очистити метадані	Remove metadata
 Очистить не вышло	Очистити не вийшло	Couldn't clean it
-Очистить не вышло — этот формат снимка компьютер не открывает	Очистити не вийшло — цей формат знімка комп'ютер не відкриває	Couldn't clean it — the computer can't open this photo format
+Очистить не вышло — этот формат снимка компьютер не открывает	Очистити не вийшло — цей формат знімка комп'ютер не відкриває	Couldn't clean it: the computer can't open this photo format
 Очистить недавнее	Очистити нещодавнє	Clear recent
 Очистить поиск	Очистити пошук	Clear search
 Ошибка AI	Помилка AI	AI error
@@ -912,7 +912,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Собираю список	Складаю список	Making the list
 Собираю таблицу	Збираю таблицю	Putting the table together
 Собираю файл	Збираю файл	Putting the file together
-Собрать PDF не вышло — попробуйте ещё раз или соберите на телефоне	Зібрати PDF не вийшло — спробуйте ще раз або зберіть на телефоні	Couldn't build the PDF — try again or build it on the phone
+Собрать PDF не вышло — попробуйте ещё раз или соберите на телефоне	Зібрати PDF не вийшло — спробуйте ще раз або зберіть на телефоні	Couldn't build the PDF. Try again or build it on the phone
 Собрать данные	Зібрати дані	Collect data
 Собрать скан в PDF не вышло — попробуйте ещё раз	Зібрати скан у PDF не вийшло — спробуйте ще раз	Couldn't build the scanned PDF, please try again
 Событие	Подія	Event
