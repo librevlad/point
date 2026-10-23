@@ -30,6 +30,7 @@ sourceSets.main {
     // Зрение страницы — один код OpenCV на телефон и компьютер (#1379): исходник лежит у
     // телефона и собирается обоими, как значки выше.
     kotlin.srcDir(rootProject.file("executors/src/shared/kotlin"))
+    resources.srcDir(rootProject.file("executors/src/shared/resources"))
 }
 
 /**
