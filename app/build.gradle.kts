@@ -111,6 +111,15 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    // Мёртвый вес (#539): pdfbox тянет Bouncy Castle ради зашифрованных PDF, а с ним — таблицы
+    // постквантовых схем (Picnic, SIKE), ~8 МБ, которыми Point не пользуется. Классы R8 и так
+    // выбрасывает; таблицы — ресурсы, и их приходится исключать руками.
+    packaging {
+        resources {
+            excludes += "org/bouncycastle/pqc/**"
+        }
+    }
 }
 
 kotlin {
