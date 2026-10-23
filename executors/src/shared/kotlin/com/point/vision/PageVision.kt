@@ -144,10 +144,14 @@ object PageVision {
             Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
             corners = quadFromMask(edges, frameArea, scratch)
         }
-        if (corners == null) return null
-
-        val scaledBack = corners.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray()
-        val page = orderCorners(scaledBack)
+        val page = if (corners != null) {
+            orderCorners(corners.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray())
+        } else {
+            // Свой ход листа не нашёл — второе слово за обученной моделью углов (#1044). Она
+            // смотрит на тот же уменьшенный кадр.
+            val learned = LearnedCorners.find(small, scratch) ?: return null
+            orderCorners(learned.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray())
+        }
         onPage(page)
         return warp(rgba, page, scratch)
     }

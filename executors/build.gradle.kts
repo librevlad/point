@@ -26,6 +26,8 @@ android {
     // Зрение страницы — один код OpenCV на телефон и компьютер (#1379): исходник собирается
     // и здесь, и в `:desktop`, тем же швом, что общие значки `core/ui/src/shared` (#849).
     sourceSets["main"].kotlin.srcDir("src/shared/kotlin")
+    // Модель углов страницы (#1044) лежит рядом с общим зрением и едет обоим устройствам.
+    sourceSets["main"].resources.srcDir("src/shared/resources")
 }
 
 kotlin {
