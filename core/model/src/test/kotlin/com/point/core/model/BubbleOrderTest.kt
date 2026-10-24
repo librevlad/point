@@ -65,4 +65,14 @@ class BubbleOrderTest {
 
         assertEquals(listOf("excel", "understand", "open"), order(keepShownOrder(shown, fresh)))
     }
+
+    /** #1044: «Скан» был на первом экране девятым; чтение сказало «это лист» — пока оно идёт, он поднимается. */
+    @Test
+    fun `пока идёт исследование, показанное поднимается своим знанием`() {
+        val shown = listOf(bubble("share-link"), bubble("enhance"), bubble("scan"))
+        val fresh = listOf(bubble("scan"), bubble("share-link"), bubble("enhance"))
+
+        assertEquals(listOf("scan", "share-link", "enhance"), order(keepShownOrder(shown, fresh, settling = true)))
+        assertEquals(listOf("share-link", "enhance", "scan"), order(keepShownOrder(shown, fresh, settling = false)))
+    }
 }

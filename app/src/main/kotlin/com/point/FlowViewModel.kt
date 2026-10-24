@@ -3528,7 +3528,13 @@ class FlowViewModel @Inject constructor(
             null
         }
         val newBubbles = if (newGraph != null) {
-            com.point.core.model.keepShownOrder(frame.bubbles, registry.bubblesFor(newGraph))
+            com.point.core.model.keepShownOrder(
+                frame.bubbles,
+                registry.bubblesFor(newGraph),
+                // Знание, добытое, пока шло исследование, — в том числе последнее, с которым
+                // оно кончается, — ещё может поднять показанное действие.
+                settling = frame.enriching.isNotEmpty(),
+            )
         } else {
             frame.bubbles
         }
