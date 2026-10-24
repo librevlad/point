@@ -5,13 +5,20 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.os.Build
 import com.point.core.flow.Atom
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
+import com.point.core.flow.ORIENTATION_ANGLES
 import com.point.core.flow.atomLabel
+import com.point.core.flow.bestOrientation
+import com.point.core.flow.looksMisoriented
+import com.point.core.flow.orientationProbeStage
+import com.point.core.flow.readingScore
+import com.point.core.flow.reportStage
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -20,6 +27,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
@@ -90,20 +98,69 @@ class PaddleOcrRecognizer @Inject constructor(
         val source = frame.bitmap
 
         try {
-            val lines = runCatching { detect(source) }.getOrElse {
+            val first = runCatching { detect(source) }.getOrElse {
                 return@withContext AtomLayer(emptyList(), incomplete = it.message ?: "detect failed")
             }
-            layerInRawFrame(
-                lines.map { box -> box to runCatching { readLine(source, box) }.getOrNull() },
-                frame.transform,
-            )
+            val base = layerAt(source, frame.transform, 0, first.lines)
+
+            // Лист, снятый боком (#1044, кадр 23 корпуса): строки на снимке стоят столбиками,
+            // склейка строк сводит соседние столбики в одно пятно, и распознаватель отдаёт
+            // обрывки цифр. Пустым такое чтение не бывает, поэтому запасной движок за него не
+            // брался, и автоматическое чтение на телефоне не находило ничего. Строки стоймя
+            // видно уже по детектору — тогда пробуются четверть оборота в обе стороны; просто
+            // плохое чтение пробует все три поворота, как у соседнего движка.
+            val angles = when {
+                first.runsDown -> listOf(90, 270)
+                looksMisoriented(base) -> ORIENTATION_ANGLES
+                else -> emptyList()
+            }
+            if (angles.isEmpty()) return@withContext base
+            val tried = LinkedHashMap<Int, AtomLayer>()
+            for ((index, angle) in angles.withIndex()) {
+                reportStage(orientationProbeStage(index, angles.size))
+                tried[angle] = layerAt(source, frame.transform, angle)
+                ensureActive()
+            }
+            // Строки стоймя — уже знание о повороте: из двух четвертей берётся лучшая, и
+            // запаса в треть, нужного против случайной удачи, здесь не требуется.
+            val best = if (first.runsDown) {
+                (mapOf(0 to base) + tried).maxBy { readingScore(it.value) }.key
+            } else {
+                bestOrientation(base, tried)
+            }
+            tried[best] ?: base
         } finally {
             source.recycle()
         }
     }
 
+    /**
+     * Слой чтения кадра, повёрнутого на [angle] по часовой. Поворот дописывается в перевод
+     * координат, и строки возвращаются на снимок тем же ходом, что и метка камеры.
+     */
+    private fun layerAt(source: Bitmap, transform: FrameTransform, angle: Int, lines: List<Box>? = null): AtomLayer {
+        val image = if (angle == 0) {
+            source
+        } else {
+            Bitmap.createBitmap(source, 0, 0, source.width, source.height, Matrix().apply { postRotate(angle.toFloat()) }, true)
+        }
+        try {
+            val found = lines ?: runCatching { detect(image).lines }.getOrElse { return AtomLayer(emptyList()) }
+            val turned = transform.copy(
+                rotationDegrees = (transform.rotationDegrees + angle) % 360,
+                uprightWidth = image.width,
+                uprightHeight = image.height,
+            )
+            return layerInRawFrame(found.map { box -> box to runCatching { readLine(image, box) }.getOrNull() }, turned)
+        } finally {
+            if (image !== source) image.recycle()
+        }
+    }
+
+    private class Detection(val lines: List<Box>, val runsDown: Boolean)
+
     /** Детектор DB: карта вероятностей текста → прямоугольники строк. */
-    private fun detect(source: Bitmap): List<Box> {
+    private fun detect(source: Bitmap): Detection {
         val scale = minOf(1.0f, DET_SIDE.toFloat() / maxOf(source.width, source.height))
         val width = ((source.width * scale).toInt() / 32).coerceAtLeast(1) * 32
         val height = ((source.height * scale).toInt() / 32).coerceAtLeast(1) * 32
@@ -118,10 +175,12 @@ class PaddleOcrRecognizer @Inject constructor(
                 (result[0].value as Array<Array<Array<FloatArray>>>)[0][0]
             }
         }
-        return textRows(blobs(out))
+        val found = blobs(out)
+        val lines = textRows(found)
             .map { grown(it, out.firstOrNull()?.size ?: 0, out.size) }
             .map { it.scaled(source.width.toFloat() / width, source.height.toFloat() / height) }
             .sortedWith(compareBy({ it.top }, { it.left }))
+        return Detection(lines, linesRunDown(found))
     }
 
     /**
@@ -393,6 +452,25 @@ private fun sameRow(a: Box, b: Box): Boolean {
 }
 
 /**
+ * Строки стоят столбиками — лист снят боком.
+ *
+ * Пятна детектора — куски строк: на стоящем листе они вытянуты вдоль строки, то есть вширь.
+ * Решает большинство по площади, а не по счёту: отдельные знаки и цифры почти квадратные и
+ * голоса не имеют, а вертикальная линия рамки одна против десятков строк.
+ */
+internal fun linesRunDown(blobs: List<Box>): Boolean {
+    // Пятно — пиксели карты включительно: в одну точку оно шириной в пиксель, а не в ноль.
+    val long = blobs.filter { maxOf(it.w, it.h) >= RUN_ASPECT * minOf(it.w, it.h) }
+    val down = long.filter { it.h > it.w }
+    if (down.size < MIN_RUNS_DOWN) return false
+    return down.sumOf { it.w * it.h } > RUNS_DOWN_SHARE * long.sumOf { it.w * it.h }
+}
+
+private val Box.w: Double get() = width + 1.0
+
+private val Box.h: Double get() = height + 1.0
+
+/**
  * Как Android называет папку с библиотеками для этого процессора.
  *
  * Совпала с той, откуда взяты библиотеки, — машина своя; не совпала — работает трансляция.
@@ -414,3 +492,9 @@ private const val ROW_OVERLAP = 0.5f
 private const val ROW_SPREAD = 0.6f
 
 private const val ROW_GAP = 0.8f
+
+private const val RUN_ASPECT = 2f
+
+private const val MIN_RUNS_DOWN = 3
+
+private const val RUNS_DOWN_SHARE = 0.6
