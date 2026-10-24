@@ -60,6 +60,7 @@ class ScanCapabilityOnPhone @Inject constructor() : Capability {
     override val id get() = inner.id
     override val icon get() = inner.icon
     override val meta get() = inner.meta
+    override fun priority(state: ObjectState): Int = inner.priority(state)
     override fun label(state: ObjectState): String = inner.label(state)
     override fun label(graph: com.point.core.flow.GraphState): String = inner.label(graph)
     override fun accepts(state: ObjectState): Boolean = inner.accepts(state)

@@ -74,6 +74,7 @@ class TranslateCapabilityOnPhone @Inject constructor(
     override fun produces(state: ObjectState): ObjectState? = inner.produces(state)
     override fun yields(state: ObjectState): ActionYield = inner.yields(state)
     override fun intents(state: ObjectState): Set<Intent> = inner.intents(state)
+    override fun missing(state: ObjectState): String? = inner.missing(state)
 }
 
 class TranslateRealizerOnPhone @Inject constructor(
