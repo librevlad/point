@@ -45,6 +45,15 @@ class OneLimitForBothDevicesTest {
     }
 
     @Test
+    fun `кадр для обработки не крупнее предела — 12 Мп при пределе 2048 вдвое мельче`() {
+        assertEquals(2, sampleSizeAtMost(4000, 3000, 2048))
+        assertEquals(2, sampleSizeAtMost(4000, 3000, 2600))
+        assertEquals(1, sampleSizeAtMost(2048, 1536, 2048))
+        assertEquals(2, sampleSizeAtMost(2049, 1000, 2048))
+        assertEquals(1, sampleSizeAtMost(4000, 3000, 0))
+    }
+
+    @Test
     fun `без предела и без сторон уменьшать нечего`() {
         assertEquals(1, sampleSizeFor(0, 0, 96))
         assertEquals(1, sampleSizeFor(4000, 3000, 0))

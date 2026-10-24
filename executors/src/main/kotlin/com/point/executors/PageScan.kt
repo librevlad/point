@@ -53,7 +53,7 @@ internal class OpenCvPageScan(private val store: ObjectStore) : PageScan {
 
     override suspend fun scan(imagePath: String): ScannedPage? {
         reportStage(tr("Читаю снимок"))
-        val src = Bitmaps.decodeUpright(imagePath, Bitmaps.SCAN_PLUS_MAX_PX)
+        val src = Bitmaps.workFrame(imagePath, Bitmaps.SCAN_PLUS_MAX_PX)?.bitmap
             ?: error(tr("Не удалось прочитать изображение"))
         try {
             OpenCvScan.enhance(src)?.let { return saved(it, wholeFrame = false) }

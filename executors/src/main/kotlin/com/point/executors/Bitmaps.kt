@@ -19,17 +19,27 @@ object Bitmaps {
     fun decodeThumbnail(path: String, maxPx: Int): Bitmap? = uprightFrame(path, maxPx)?.bitmap
 
     /**
+     * Кадр для обработки OpenCV: длинная сторона не больше [maxPx] (#1044). Десятки матриц
+     * размером с кадр на 12 Мп поднимали Point до 3 ГБ.
+     */
+    fun workFrame(path: String, maxPx: Int): UprightFrame? = uprightFrame(path, maxPx, atMost = true)
+
+    /**
      * Тот же развёрнутый кадр — и то, что с ним по дороге сделали (#1046).
      *
      * Во сколько раз кадр мельче файла и на сколько его развернули, знает только декодер. Тот,
      * кто возвращает прочитанное на снимок человека, обязан спросить это здесь, а не считать
      * заново своей копией той же логики: своя копия и забыла про метку камеры.
      */
-    fun uprightFrame(path: String, maxPx: Int): UprightFrame? {
+    fun uprightFrame(path: String, maxPx: Int, atMost: Boolean = false): UprightFrame? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        val shrink = sampleSize(bounds.outWidth, bounds.outHeight, maxPx)
+        val shrink = if (atMost) {
+            com.point.core.flow.sampleSizeAtMost(bounds.outWidth, bounds.outHeight, maxPx)
+        } else {
+            sampleSize(bounds.outWidth, bounds.outHeight, maxPx)
+        }
         val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = shrink })
             ?: return null
         val degrees = runCatching {

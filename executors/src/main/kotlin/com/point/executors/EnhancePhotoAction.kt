@@ -40,7 +40,7 @@ class EnhancePhotoCapabilityOnPhone @Inject constructor() : Capability {
 internal class OpenCvPhotoEnhancer(private val store: ObjectStore) : PhotoEnhancer {
 
     override suspend fun enhance(imagePath: String): ScratchRef {
-        val src = Bitmaps.decodeUpright(imagePath, Bitmaps.SCAN_PLUS_MAX_PX)
+        val src = Bitmaps.workFrame(imagePath, Bitmaps.SCAN_PLUS_MAX_PX)?.bitmap
             ?: error(tr("Не удалось прочитать изображение"))
         val rgba = Mat()
         val scratch = mutableListOf(rgba)
