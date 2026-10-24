@@ -29,7 +29,7 @@ class MlKitEntityExtractor(
         val client = clients.getOrPut(lang) {
             EntityExtraction.getClient(EntityExtractorOptions.Builder(lang).build())
         }
-        client.downloadModelIfNeeded().await()
+        client.downloadModelIfNeeded().awaitModel()
         val params = EntityExtractionParams.Builder(text).build()
         val raw = client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
             annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
