@@ -69,7 +69,10 @@ internal object LearnedCorners {
         blob.put(intArrayOf(0, 0, 0, 0), pixels)
         model.setInput(blob, INPUT)
         val outs = ArrayList<Mat>()
-        model.forward(outs, listOf(COORDS, SCORE))
+        // Имена выходов уходят в нативный код как есть, и он зовёт у списка методы
+        // java.util.ArrayList: неизменяемый `listOf` ронял телефон на кадре 18 корпуса
+        // (CheckJNI, SIGABRT), в release поведение не определено.
+        model.forward(outs, arrayListOf(COORDS, SCORE))
         scratch += outs
 
         val coords = FloatArray(8)
