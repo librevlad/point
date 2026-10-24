@@ -34,7 +34,7 @@ class ScanFrameIsUprightTest {
     private val rawDecode = Regex("""BitmapFactory\.decode""")
 
     /** Общий декодер, который метку применяет. */
-    private val uprightDecode = Regex("""Bitmaps\.(decodeUpright|uprightFrame)\(""")
+    private val uprightDecode = Regex("""Bitmaps\.(decodeUpright|uprightFrame|workFrame)\(""")
 
     private fun callers(): List<File> = sources.walkTopDown()
         .filter { it.isFile && it.name.endsWith(".kt") && it.name != "OpenCvScan.kt" }

@@ -34,7 +34,7 @@ class OpenCvStraightFrame(private val store: ObjectStore) : StraightFrame {
 
     override suspend fun of(path: String): StraightenedFrame? = withContext(Dispatchers.IO) {
         if (!OpenCvScan.available) return@withContext null
-        val upright = Bitmaps.uprightFrame(path, Bitmaps.SCAN_PLUS_MAX_PX) ?: return@withContext null
+        val upright = Bitmaps.workFrame(path, Bitmaps.SCAN_PLUS_MAX_PX) ?: return@withContext null
         val src = upright.bitmap
         val toFile = FrameTransform(
             sample = upright.shrink,

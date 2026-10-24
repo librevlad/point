@@ -29,7 +29,7 @@ class OpenCvPaperWhitener(private val store: ObjectStore) : PaperWhitener {
             // горизонтальными прогонами, а у снимка с рук метка обычно стоит «повернуть на
             // 90°». Боковой лист остался бы без защиты вовсе, и полоса вдоль краёв стёрла бы
             // в белое шапку, дату, итог и подписи — ровно то, ради чего документ снимали.
-            val frame = Bitmaps.uprightFrame(path, READING_FRAME_PX) ?: return@runCatching null
+            val frame = Bitmaps.workFrame(path, READING_FRAME_PX) ?: return@runCatching null
             val white = try {
                 OpenCvScan.whiten(frame.bitmap)
             } finally {
