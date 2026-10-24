@@ -41,7 +41,7 @@ object OpenCvScan {
      * молчание: по нему кадр обрабатывается целиком ([enhanceAsIs]) и результат помечается
      * [com.point.core.flow.META_WHOLE_FRAME], а не выдаётся за выпрямленную страницу.
      */
-    suspend fun enhance(src: Bitmap): Bitmap? = straightened(src)?.bitmap
+    suspend fun enhance(src: Bitmap, readTurns: Int? = null): Bitmap? = straightened(src, readTurns)?.bitmap
 
     /**
      * То же выпрямление — и четыре угла страницы, из которых копия родилась (#1332).
@@ -54,10 +54,10 @@ object OpenCvScan {
      * (`PageVision.dewarpByTps`), и обратного хода у неё нет — тогда углов нет: `null` честнее
      * четырёхугольника, которого не было.
      */
-    suspend fun straightened(src: Bitmap): Straightened? {
+    suspend fun straightened(src: Bitmap, readTurns: Int? = null): Straightened? {
         var quad: PageQuad? = null
         val out = onMat(src) { rgba, scratch ->
-            PageVision.straightened(rgba, scratch)?.let { page -> quad = page.quad; page.mat }
+            PageVision.straightened(rgba, scratch, readTurns)?.let { page -> quad = page.quad; page.mat }
         } ?: return null
         return Straightened(out, quad)
     }

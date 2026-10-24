@@ -27,6 +27,7 @@ import com.point.core.flow.INCOMPLETE_TIMEOUT
 import com.point.core.flow.META_READ_PREPARED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.META_READ_TURN
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.OCR_READ_BUDGET_MS
 import com.point.core.flow.OcrClock
@@ -194,6 +195,10 @@ class OcrInvestigationRealizer @Inject constructor(
 
         val mode = layer.takeIf { it.incomplete == null }?.let { readingModeOf(it) }
 
+        // Поворот называет только чтение самого снимка: у выбеленной копии геометрия та же,
+        // но слой собран заново и поворота не знает, а выпрямленная копия уже стоит иначе.
+        val turn = onFrame.turn?.takeIf { won == null }
+
         val zoom = layer.transform?.upscale?.takeIf { it > 1 }?.toString()
         val evidenceOnly = Findings(
 
@@ -202,6 +207,7 @@ class OcrInvestigationRealizer @Inject constructor(
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
+                turn?.let { put(META_READ_TURN, it.toString()) }
 
                 // Пометки о подготовке кадра здесь не бывает: сюда приходит только чтение,
                 // признанное плохим, а второй заход годным чтением и становится (#1041, #1046).
@@ -250,6 +256,7 @@ class OcrInvestigationRealizer @Inject constructor(
                 putAll(receiptFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
+                turn?.let { put(META_READ_TURN, it.toString()) }
                 won?.let { put(META_READ_PREPARED, it.prep) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }

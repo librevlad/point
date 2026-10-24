@@ -52,7 +52,7 @@ object PageVision {
      * ([dewarpByTps]), и обратного хода у неё нет — тогда углов нет: `null` честнее
      * четырёхугольника, которого не было.
      */
-    suspend fun straightened(rgba: Mat, scratch: MutableList<Mat>): Page? {
+    suspend fun straightened(rgba: Mat, scratch: MutableList<Mat>, readTurns: Int? = null): Page? {
         var corners: Array<Point>? = null
         reportStage(tr("Ищу страницу на снимке"))
         val straight = dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch) { corners = it }
@@ -60,7 +60,13 @@ object PageVision {
 
         // Лист ставится так, чтобы его можно было читать, и углы поворачиваются вместе с ним:
         // по ним прочитанное возвращается на снимок человека (#1332).
-        val turns = PageOrientation.quarterTurns(straight, scratch)
+        //
+        // Прочитанный снимок уже знает, как стоит текст ([readTurns]): чтение сравнивало
+        // повороты по прочитанному, а угадыватель — только по тому, как лежат строки, и на
+        // плотной таблице верха от низа не отличал (#1044, кадр 23: лист выходил вверх ногами).
+        // Выпрямление ставит лист так, как он лежал на кадре, поэтому поворот кадра — это и
+        // поворот листа.
+        val turns = readTurns ?: PageOrientation.quarterTurns(straight, scratch)
         val upright = PageOrientation.turned(straight, turns, scratch)
         val quad = corners?.let { turnedCorners(it, turns) }?.let(::pageQuadOf)
         return Page(prepared(upright, scratch), quad)

@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.ScanPlusCapability
+import com.point.core.flow.META_READ_TURN
 import com.point.core.flow.META_WHOLE_FRAME
 import com.point.core.flow.wholeFrameNote
 import com.point.core.model.ActionResult
@@ -67,8 +68,25 @@ class WholeFrameIsNotAPageTest {
         assertTrue("отказ неисправимый — переснять уже не позовут", (result as ActionResult.Failure).recoverable)
     }
 
+    @Test
+    fun `как стоит текст по чтению, так скан и ставит лист`() = runTest {
+        var asked: Int? = -1
+        val eyes = object : PageScan {
+            override suspend fun scan(imagePath: String, readTurns: Int?): ScannedPage {
+                asked = readTurns
+                return ScannedPage(READY, wholeFrame = false)
+            }
+        }
+
+        PageScanRealizer(SCAN_PLUS, "scan-plus", eyes).perform(photo().copy(metadata = mapOf(META_READ_TURN to "270")), null)
+        assertEquals(3, asked)
+
+        PageScanRealizer(SCAN_PLUS, "scan-plus", eyes).perform(photo(), null)
+        assertNull("снимок не читали, а поворот назван", asked)
+    }
+
     private fun eyes(page: ScannedPage? = null, nothing: Boolean = false) = object : PageScan {
-        override suspend fun scan(imagePath: String): ScannedPage? = if (nothing) null else page
+        override suspend fun scan(imagePath: String, readTurns: Int?): ScannedPage? = if (nothing) null else page
     }
 
     private fun photo() = PointObject("id", "image/jpeg", ScratchRef(PHOTO), ObjectState(ObjectKind.IMAGE))

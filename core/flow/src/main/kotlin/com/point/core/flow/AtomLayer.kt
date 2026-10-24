@@ -37,7 +37,22 @@ class AtomLayer(
     val transform: FrameTransform? = null,
 
     val incomplete: String? = null,
+
+    /**
+     * На сколько градусов по часовой читатель повернул кадр сверх метки камеры, чтобы строки
+     * прочлись (#1044); `null` — читатель об этом не сказал.
+     *
+     * Это знание о самом листе: как стоит на нём текст. Чтение сравнивает повороты по
+     * прочитанному, а угадыватель страницы скана — только по тому, как лежат строки, и на
+     * плотной таблице он верх от низа не отличал: прочитанный лист выходил из «Скана» вверх
+     * ногами.
+     */
+    val turn: Int? = null,
 ) {
+
+    /** Тот же слой с названным поворотом чтения. */
+    fun turnedBy(degrees: Int): AtomLayer =
+        AtomLayer(atoms, readerText = readerText, transform = transform, incomplete = incomplete, turn = Math.floorMod(degrees, 360))
 
     fun atomsIn(region: Box): List<Atom> =
         atoms.filter { region.contains(it.box.centerX, it.box.centerY) }

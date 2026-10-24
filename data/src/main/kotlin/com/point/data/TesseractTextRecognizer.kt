@@ -87,8 +87,9 @@ class TesseractTextRecognizer @Inject constructor(
                 },
             )
             if (planned.angleDegrees != 0) Log.i(TAG, "OCR orientation: +${planned.angleDegrees}°")
-            dumpForAcceptance(planned.layer)
-            done(planned.layer, budget)
+            val layer = planned.layer.turnedBy(planned.angleDegrees)
+            dumpForAcceptance(layer)
+            done(layer, budget)
         } catch (stopped: kotlinx.coroutines.CancellationException) {
 
             // Отмена — не ошибка чтения (#1242): она идёт дальше как была. Проглоченная, она

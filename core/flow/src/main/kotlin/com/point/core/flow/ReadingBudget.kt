@@ -109,7 +109,7 @@ val FALLBACK_STAGE: String get() = tr("Страница большая — чи�
 val REREAD_STAGE: String get() = tr("Нашёл, как лежит страница — перечитываю")
 
 private fun AtomLayer.cutShort(): AtomLayer =
-    AtomLayer(atoms, readerText = readerText, transform = transform, incomplete = INCOMPLETE_TIMEOUT)
+    AtomLayer(atoms, readerText = readerText, transform = transform, incomplete = INCOMPLETE_TIMEOUT, turn = turn)
 
 fun ocrDoneLine(layer: AtomLayer, spentMs: Long): String {
     val note = layer.incomplete?.let { " ($it)" } ?: ""

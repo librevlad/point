@@ -36,8 +36,13 @@ internal class ScannedPage(val ref: ScratchRef, val wholeFrame: Boolean)
  */
 internal interface PageScan {
 
-    /** Готовый снимок или `null` — обработать не вышло совсем. */
-    suspend fun scan(imagePath: String): ScannedPage?
+    /**
+     * Готовый снимок или `null` — обработать не вышло совсем.
+     *
+     * [readTurns] — как стоит текст по чтению снимка, четвертями по часовой (#1044); `null` —
+     * снимок не читали, и как поставить лист, решает зрение само.
+     */
+    suspend fun scan(imagePath: String, readTurns: Int? = null): ScannedPage?
 }
 
 /**
@@ -51,12 +56,12 @@ internal interface PageScan {
  */
 internal class OpenCvPageScan(private val store: ObjectStore) : PageScan {
 
-    override suspend fun scan(imagePath: String): ScannedPage? {
+    override suspend fun scan(imagePath: String, readTurns: Int?): ScannedPage? {
         reportStage(tr("Читаю снимок"))
         val src = Bitmaps.workFrame(imagePath, Bitmaps.SCAN_PLUS_MAX_PX)?.bitmap
             ?: error(tr("Не удалось прочитать изображение"))
         try {
-            OpenCvScan.enhance(src)?.let { return saved(it, wholeFrame = false) }
+            OpenCvScan.enhance(src, readTurns)?.let { return saved(it, wholeFrame = false) }
 
             // Страницы не нашли. Кадр всё равно стоит выбелить: снимок уже обрезанного или
             // снятого в упор листа своё зрение страницей не считает, и отказ отнял бы у
@@ -104,7 +109,7 @@ class PageScanRealizer internal constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val done = eyes.scan(input.uri.value)
+                val done = eyes.scan(input.uri.value, com.point.core.flow.readQuarterTurns(input.metadata))
                     ?: return@runCatching ActionResult.Failure(SCAN_FAILED, recoverable = true)
                 ActionResult.Success(
                     ResultObject(ObjectKind.IMAGE, "image/jpeg", done.ref, marks(done)),
