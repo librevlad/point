@@ -107,6 +107,7 @@ private fun isProcessNote(key: String): Boolean = key in PROCESS_NOTES
 
 private val PROCESS_NOTES: Set<String> = setOf(
     META_READING_MODE, META_READ_UPSCALE, META_READING_DOUBT, META_READ_CHARS, META_READ_TOTAL_CHARS,
+    META_READ_TURN,
 
     // Каким кадром смотрели — выбеленным, выпрямленным или тем, что дал человек (#1041,
     // #1046): тот же след работы, что и увеличение. Сам по себе он ничего не рассказывает о

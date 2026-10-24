@@ -114,7 +114,7 @@ class PaddleOcrRecognizer @Inject constructor(
                 looksMisoriented(base) -> ORIENTATION_ANGLES
                 else -> emptyList()
             }
-            if (angles.isEmpty()) return@withContext base
+            if (angles.isEmpty()) return@withContext base.turnedBy(0)
             val tried = LinkedHashMap<Int, AtomLayer>()
             for ((index, angle) in angles.withIndex()) {
                 reportStage(orientationProbeStage(index, angles.size))
@@ -128,7 +128,7 @@ class PaddleOcrRecognizer @Inject constructor(
             } else {
                 bestOrientation(base, tried)
             }
-            tried[best] ?: base
+            (tried[best] ?: base).turnedBy(best)
         } finally {
             source.recycle()
         }
