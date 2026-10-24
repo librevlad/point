@@ -18,6 +18,8 @@ class MlKitEntityExtractor(
 
     private val clients = HashMap<String, com.google.mlkit.nl.entityextraction.EntityExtractor>()
 
+    private val downloads = HashMap<String, com.google.android.gms.tasks.Task<Void>>()
+
     /**
      * Пустой список — только честный итог отработавшего движка: «посмотрели, сущностей нет».
      *
@@ -29,7 +31,12 @@ class MlKitEntityExtractor(
         val client = clients.getOrPut(lang) {
             EntityExtraction.getClient(EntityExtractorOptions.Builder(lang).build())
         }
-        client.downloadModelIfNeeded().awaitModel()
+        // Загрузка, которая уже раз не уложилась в срок, ждётся заново только тогда, когда
+        // кончилась: без сети каждое чтение иначе стояло бы лишние 20 секунд (#1044).
+        val pending = downloads[lang]
+        if (pending != null && !pending.isComplete) error(MODEL_NOT_READY)
+        val download = pending?.takeIf { it.isSuccessful } ?: client.downloadModelIfNeeded().also { downloads[lang] = it }
+        download.awaitModel()
         val params = EntityExtractionParams.Builder(text).build()
         val raw = client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
             annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
