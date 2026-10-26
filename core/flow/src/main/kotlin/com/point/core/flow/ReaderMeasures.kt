@@ -33,8 +33,19 @@ data class ReaderMeasure(
     val share: Double get() = if (of == 0) 0.0 else read.toDouble() / of
 }
 
-/** Последний замер. Пополняется выводом `freeprobe.py --point`, а не руками. */
-val READER_MEASURES: List<ReaderMeasure> = listOf()
+/**
+ * Последний замер. Пополняется выводом `freeprobe.py --point`, а не руками.
+ *
+ * Кадры 01, 04, 06, 18, 23, по три попытки. Кадр 01 (миниатюра таблицы на снимке экрана) не
+ * прочитал никто. OCR.space ответил на 5 попыток из 15 — дальше демо-ключ упёрся в свой предел,
+ * 5 запросов за два часа. `mistral-ocr` замера нет: ключ отвечал 429 на все 25 попыток в двух
+ * прогонах, и про его чтение прогон не узнал ничего. Он стоит после измеренных, пока не
+ * ответит на прогоне.
+ */
+val READER_MEASURES: List<ReaderMeasure> = listOf(
+    ReaderMeasure(reader = "ocr-space", read = 100, of = 120, medianMs = 8300, measuredAt = "26.10.2026"),
+    ReaderMeasure(reader = "ovh-qwen-vl", read = 244, of = 360, medianMs = 41600, measuredAt = "26.10.2026"),
+)
 
 /**
  * Очередь читателей по замеру: лучшая доля прочитанного — первой, при равной — более быстрый.

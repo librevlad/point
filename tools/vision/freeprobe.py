@@ -213,7 +213,10 @@ def point_measures(ctx, rows, day):
     import statistics
     out = []
     for label, reader in POINT_READERS.items():
-        mine = [r for r in rows if r["label"] == label and r["ok"]]
+        tried = [r for r in rows if r["label"] == label]
+        if not tried:
+            continue
+        mine = [r for r in tried if r["ok"]]
         if not mine:
             out.append(f"    // {reader}: ни одного ответа — замера нет")
             continue
