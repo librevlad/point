@@ -39,6 +39,7 @@ import com.point.core.flow.QrEncoder
 import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetReader
+import com.point.core.flow.inMeasuredOrder
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.CloudPrivacySettings
@@ -625,7 +626,7 @@ abstract class DataModule {
             frames: OutboundFrames,
             userKeys: UserKeyStore,
             facts: AiFacts,
-        ): List<@JvmSuppressWildcards CloudTextReader> = listOf(
+        ): List<@JvmSuppressWildcards CloudTextReader> = inMeasuredOrder(listOf(
             MistralOcrReader(
                 http, frames,
 
@@ -644,7 +645,7 @@ abstract class DataModule {
                 BuildConfig.OVH_BASE_URL,
                 BuildConfig.OVH_MODEL,
             ),
-        )
+        )) { it.reader }
 
         @Provides
         fun geminiClient(
