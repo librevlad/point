@@ -5,6 +5,8 @@
 У каждого сервиса в `AI_PROVIDERS` записано, когда проверяли его бесплатность (`checkedAt`) и
 его обещание про присланное (`promiseCheckedAt`). Записано руками и забывается так же: сервис
 снимает бесплатный уровень или меняет условия, а Point продолжает обещать человеку прежнее.
+Тем же сроком стареет замер читателей страницы (`ReaderMeasure.measuredAt`): по нему стоит их
+очередь, и замер полугодовой давности ставит первым того, кто давно читает хуже.
 
 Здесь дата сверяется с сегодняшним днём. Запись старше срока роняет прогон и называется
 поимённо. Это не проверка кода, а напоминание людям, поэтому идёт на main и раз в неделю,
@@ -23,12 +25,16 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CATALOG = os.path.join(ROOT, "core/flow/src/main/kotlin/com/point/core/flow/AiProviders.kt")
+MEASURES = os.path.join(ROOT, "core/flow/src/main/kotlin/com/point/core/flow/ReaderMeasures.kt")
 
 # Сколько живёт проверка. Бесплатные уровни меняются раз в несколько месяцев; квартал —
 # достаточно часто, чтобы не обещать устаревшего, и достаточно редко, чтобы не привыкнуть.
 MAX_AGE_DAYS = 90
 
-FIELDS = ("checkedAt", "promiseCheckedAt")
+FIELDS = ("checkedAt", "promiseCheckedAt", "measuredAt")
+
+# Запись каталога → поле, которым она себя называет.
+RECORDS = {"AiProvider(": "name", "ReaderMeasure(": "reader"}
 
 
 def parse_day(text: str) -> datetime.date:
@@ -45,8 +51,11 @@ def parse_day(text: str) -> datetime.date:
 def entries(source: str) -> list[tuple[str, str, str]]:
     """(сервис, поле, дата) по каждой записи каталога."""
     found = []
-    for block in source.split("AiProvider(")[1:]:
-        name = re.search(r'\bname\s*=\s*"([^"]+)"', block)
+    # Запись кончается там, где начинается следующая любого рода: иначе дата замера читателя
+    # приписалась бы последнему сервису каталога.
+    parts = re.split("(" + "|".join(map(re.escape, RECORDS)) + ")", source)
+    for record, block in zip(parts[1::2], parts[2::2]):
+        name = re.search(rf'\b{RECORDS[record]}\s*=\s*"([^"]+)"', block)
         if not name:
             continue
         for field in FIELDS:
@@ -66,8 +75,10 @@ def stale(source: str, today: datetime.date) -> list[str]:
 
 def main(argv: list[str]) -> int:
     today = datetime.date.fromisoformat(argv[1]) if len(argv) > 1 else datetime.date.today()
-    with open(CATALOG, encoding="utf-8") as f:
-        source = f.read()
+    source = ""
+    for path in (CATALOG, MEASURES):
+        with open(path, encoding="utf-8") as f:
+            source += f.read()
     if not entries(source):
         print("в каталоге не нашлось ни одной даты — проверка ослепла")
         return 1

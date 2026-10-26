@@ -13,6 +13,14 @@
 
   --expect  — файл с контрольными кусками текста, по одному на строку; счёт = сколько
               из них дословно нашлось в ответе.
+  --truth   — ИМЯ=эталон корпуса (`tools/corpus/NN.expected.tsv`): контрольные куски этой
+              картинки — ячейки её таблицы. Так меряется очередь читателей Point (#433).
+  --point   — в конце напечатать `ReaderMeasure` для читателей, которые стоят в цепочке
+              телефона, — готовые строки в `core/flow/.../ReaderMeasures.kt`.
+
+    python tools/vision/freeprobe.py --point --only-point \
+        --images 04=кадры/04.jpg 18=кадры/18.jpg \
+        --truth 04=tools/corpus/04.expected.tsv 18=tools/corpus/18.expected.tsv
   --reps    — повторов на каждую пару (кандидат, картинка). Повторяемость — половина
               ответа: одиночный удачный прогон прячет лимит провайдера.
 
@@ -51,7 +59,7 @@ def load_keys(props="local.properties"):
 class Ctx:
     """Картинки, ключи и счёт — всё, что нужно вызовам провайдеров."""
 
-    def __init__(self, images, expect, keys):
+    def __init__(self, images, expect, keys, truths=None):
         self.k = keys
         self.b64, self.mime, self.data = {}, {}, {}
         for name, path in images.items():
@@ -59,13 +67,36 @@ class Ctx:
             self.b64[name] = base64.b64encode(raw).decode()
             self.mime[name] = mimetypes.guess_type(path)[0] or "image/png"
             self.data[name] = f"data:{self.mime[name]};base64," + self.b64[name]
-        self.expect = [l.strip() for l in open(expect, encoding="utf-8") if l.strip()]
+        common = [l.strip() for l in open(expect, encoding="utf-8") if l.strip()] if expect else []
+        self.expect = {name: common for name in images}
+        for name, path in (truths or {}).items():
+            self.expect[name] = truth_fragments(path)
 
-    def score(self, txt):
+    def score(self, txt, img):
         t = re.sub(r"\s+", " ", txt.replace(" ", " ").replace(" ", " ")
                    .replace(" ", " ")).lower()
-        hit = [g for g in self.expect if re.sub(r"\s+", " ", g).lower() in t]
-        return len(hit), len(self.expect), [g for g in self.expect if g not in hit]
+        expect = self.expect[img]
+        hit = [g for g in expect if re.sub(r"\s+", " ", g).lower() in t]
+        return len(hit), len(expect), [g for g in expect if g not in hit]
+
+
+def truth_fragments(path):
+    """Ячейки таблицы эталона корпуса — контрольные куски.
+
+    Ячейка короче трёх знаков («1», «5») нашлась бы в любом ответе с цифрами и меряла бы
+    удачу, а не чтение; номер строки по той же причине не берётся.
+    """
+    rows, body = [], False
+    for line in open(path, encoding="utf-8"):
+        line = line.rstrip("\n")
+        if line.startswith("#") or not line.strip():
+            continue
+        if line.strip() == "--":
+            body = True
+            continue
+        if body:
+            rows.append([c.strip() for c in line.split("\t")])
+    return [c for row in rows for c in row[1:] if len(c) >= 3]
 
 
 def post(url, payload, headers, timeout=120):
@@ -163,12 +194,45 @@ CANDIDATES = [
     ("OCR.space engine 3", "OCR.space", lambda c, i: ocrspace(c, i)),
 ]
 
+# Кто из кандидатов стоит в цепочке читателей телефона, под каким именем (`CloudTextReader.reader`).
+POINT_READERS = {
+    "Mistral OCR mistral-ocr-latest": "mistral-ocr",
+    "OCR.space engine 3": "ocr-space",
+    "OVH Qwen2.5-VL-72B (без ключа)": "ovh-qwen-vl",
+}
+
+
+def point_measures(ctx, rows, day):
+    """`ReaderMeasure` на каждого читателя Point: прочитано из ОТВЕЧЕННЫХ попыток.
+
+    Отказ (429, таймаут) — не чтение, а живость, и её в приложении уже держит память исходов
+    (`awakeFirst`): сервис, упёршийся в лимит, и так идёт в конец очереди. Засчитай отказ здесь
+    нулём — и лимит нашего же прогона навсегда записался бы читателю в плохое чтение.
+    Не ответивший ни разу замера не получает: про его чтение прогон не узнал ничего.
+    """
+    import statistics
+    out = []
+    for label, reader in POINT_READERS.items():
+        tried = [r for r in rows if r["label"] == label]
+        if not tried:
+            continue
+        mine = [r for r in tried if r["ok"]]
+        if not mine:
+            out.append(f"    // {reader}: ни одного ответа — замера нет")
+            continue
+        read = sum(r["hit"] for r in mine)
+        of = sum(r["of"] for r in mine)
+        ms = int(statistics.median(r["sec"] for r in mine) * 1000)
+        out.append(f'    ReaderMeasure(reader = "{reader}", read = {read}, of = {of}, '
+                   f'medianMs = {ms}, measuredAt = "{day}"),')
+    return out
+
 
 def run_one(ctx, label, fn, img):
     t0 = time.time()
     try:
         txt = fn(ctx, img)
-        hit, of, miss = ctx.score(txt)
+        hit, of, miss = ctx.score(txt, img)
         return {"label": label, "img": img, "sec": round(time.time() - t0, 1),
                 "ok": True, "hit": hit, "of": of, "miss": miss, "text": txt}
     except urllib.error.HTTPError as e:
@@ -208,7 +272,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--images", nargs="+", required=True, metavar="ИМЯ=ПУТЬ")
-    ap.add_argument("--expect", required=True, help="контрольные куски текста, по одному на строку")
+    ap.add_argument("--expect", help="контрольные куски текста, по одному на строку")
+    ap.add_argument("--truth", nargs="*", default=[], metavar="ИМЯ=ЭТАЛОН",
+                    help="эталон корпуса на картинку: её контрольные куски — ячейки таблицы")
+    ap.add_argument("--point", action="store_true", help="напечатать ReaderMeasure для Point")
+    ap.add_argument("--only-point", action="store_true", help="мерить только читателей Point")
+    ap.add_argument("--pace", nargs="*", default=[], metavar="ПРОВАЙДЕР=СЕК",
+                    help="своя пауза между запросами провайдера, если его лимит строже записанного")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--only", default="", help="подстрока метки: мерить только совпавших")
     ap.add_argument("--props", default="local.properties")
@@ -216,12 +286,17 @@ def main():
     a = ap.parse_args()
 
     images = dict(kv.split("=", 1) for kv in a.images)
-    ctx = Ctx(images, a.expect, load_keys(a.props))
-    print(f"картинок {len(images)}, контрольных кусков {len(ctx.expect)}, повторов {a.reps}")
+    PACE.update({k: float(v) for k, v in (kv.split("=", 1) for kv in a.pace)})
+    truths = dict(kv.split("=", 1) for kv in a.truth)
+    if not a.expect and set(images) - set(truths):
+        sys.exit("картинке без --truth нужен --expect: иначе мерить не по чему")
+    ctx = Ctx(images, a.expect, load_keys(a.props), truths)
+    pieces = ", ".join(f"{n} {len(e)}" for n, e in ctx.expect.items())
+    print(f"картинок {len(images)}, контрольных кусков: {pieces}, повторов {a.reps}")
 
     by_prov = {}
     for label, prov, fn in CANDIDATES:
-        if a.only.lower() in label.lower():
+        if a.only.lower() in label.lower() and (not a.only_point or label in POINT_READERS):
             by_prov.setdefault(prov, []).append((label, fn))
     if not by_prov:
         sys.exit("под --only никто не подошёл")
@@ -246,6 +321,9 @@ def main():
         list(ex.map(worker, by_prov))
     json.dump(rows, open(a.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     summarise(rows)
+    if a.point:
+        print("\nReaderMeasures.kt:")
+        print("\n".join(point_measures(ctx, rows, time.strftime("%d.%m.%Y"))))
     print(f"\nготово за {time.time() - t0:.0f} c, замеров {len(rows)} -> {a.out}")
 
 
