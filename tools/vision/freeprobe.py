@@ -203,17 +203,23 @@ POINT_READERS = {
 
 
 def point_measures(ctx, rows, day):
-    """`ReaderMeasure` на каждого читателя Point: прочитано из всех попыток, молчание — нулём."""
+    """`ReaderMeasure` на каждого читателя Point: прочитано из ОТВЕЧЕННЫХ попыток.
+
+    Отказ (429, таймаут) — не чтение, а живость, и её в приложении уже держит память исходов
+    (`awakeFirst`): сервис, упёршийся в лимит, и так идёт в конец очереди. Засчитай отказ здесь
+    нулём — и лимит нашего же прогона навсегда записался бы читателю в плохое чтение.
+    Не ответивший ни разу замера не получает: про его чтение прогон не узнал ничего.
+    """
     import statistics
     out = []
     for label, reader in POINT_READERS.items():
-        mine = [r for r in rows if r["label"] == label]
+        mine = [r for r in rows if r["label"] == label and r["ok"]]
         if not mine:
+            out.append(f"    // {reader}: ни одного ответа — замера нет")
             continue
-        read = sum(r["hit"] for r in mine if r["ok"])
-        of = sum(len(ctx.expect[r["img"]]) for r in mine)
-        secs = [r["sec"] for r in mine if r["ok"]]
-        ms = int(statistics.median(secs) * 1000) if secs else 0
+        read = sum(r["hit"] for r in mine)
+        of = sum(r["of"] for r in mine)
+        ms = int(statistics.median(r["sec"] for r in mine) * 1000)
         out.append(f'    ReaderMeasure(reader = "{reader}", read = {read}, of = {of}, '
                    f'medianMs = {ms}, measuredAt = "{day}"),')
     return out
@@ -268,6 +274,8 @@ def main():
                     help="эталон корпуса на картинку: её контрольные куски — ячейки таблицы")
     ap.add_argument("--point", action="store_true", help="напечатать ReaderMeasure для Point")
     ap.add_argument("--only-point", action="store_true", help="мерить только читателей Point")
+    ap.add_argument("--pace", nargs="*", default=[], metavar="ПРОВАЙДЕР=СЕК",
+                    help="своя пауза между запросами провайдера, если его лимит строже записанного")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--only", default="", help="подстрока метки: мерить только совпавших")
     ap.add_argument("--props", default="local.properties")
@@ -275,6 +283,7 @@ def main():
     a = ap.parse_args()
 
     images = dict(kv.split("=", 1) for kv in a.images)
+    PACE.update({k: float(v) for k, v in (kv.split("=", 1) for kv in a.pace)})
     truths = dict(kv.split("=", 1) for kv in a.truth)
     if not a.expect and set(images) - set(truths):
         sys.exit("картинке без --truth нужен --expect: иначе мерить не по чему")
