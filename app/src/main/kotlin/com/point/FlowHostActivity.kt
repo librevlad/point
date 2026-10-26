@@ -92,6 +92,12 @@ abstract class FlowHostActivity : ComponentActivity() {
             PointTheme {
                 com.point.core.ui.PointScreen {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
+
+                    // Действия над объектом на экране — это и есть «открылся» (#539). Первый кадр
+                    // системы — заставка, а не действия, и по нему скорость не судится.
+                    if (state.frame?.bubbles?.isNotEmpty() == true) {
+                        androidx.compose.runtime.LaunchedEffect(Unit) { reportFullyDrawn() }
+                    }
                     PointFlow(
                         state = state,
                         viewModel = viewModel,
