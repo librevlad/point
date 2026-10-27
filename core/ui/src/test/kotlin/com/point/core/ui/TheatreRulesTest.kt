@@ -50,4 +50,23 @@ class TheatreRulesTest {
         assertTrue(MotionTokens.QUIET_FLIGHT_MS < MotionTokens.FLIGHT_MS)
         assertTrue("полёт дольше секунды задерживает взгляд на пути", MotionTokens.FLIGHT_MS < 1_000)
     }
+
+    @Test fun `новое значение спрятано с первого кадра, а не появляется дважды`() {
+        val theatre = TheatreState()
+        theatre.openOnce(setOf("phone"), known = 1)
+
+        assertFalse("пришедшее с вещью видно сразу", theatre.hidden("phone"))
+        assertTrue("найденное ждёт своего полёта невидимым", theatre.hidden("parcel"))
+
+        theatre.seen = theatre.seen + "parcel"
+        assertFalse("полёт не назначен — значение на месте", theatre.hidden("parcel"))
+    }
+
+    @Test fun `без полёта новое значение не прячется`() {
+        val theatre = TheatreState()
+        theatre.openOnce(emptySet(), known = 0)
+        theatre.flies = false
+
+        assertFalse(theatre.hidden("parcel"))
+    }
 }

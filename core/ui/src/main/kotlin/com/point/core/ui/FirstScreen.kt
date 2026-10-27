@@ -253,6 +253,7 @@ fun FirstScreen(
             }
             val known = facts.size + found.size + valueSections.size
             theatre.openOnce(theatreValues.mapTo(mutableSetOf()) { it.key }, known)
+            theatre.flies = motion && theatreStage != TheatreStage.LANDING
             LaunchedEffect(theatre, theatreValues) {
                 nextFlight(theatre.seen, theatreValues)?.let { value ->
                     theatre.play(value, theatreStage, motion, theatreScope, onTheatrePlayed)
