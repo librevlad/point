@@ -63,4 +63,20 @@ class OfflineSaysWhyTest {
 
         assertTrue(bubbles.all { it.unusableReason == null })
     }
+
+    @Test fun `про сеть список спрашивает систему один раз, а не каждое действие`() {
+        var asked = 0
+        val registry = DefaultCapabilityRegistry(
+            capabilities = setOf(cap("understand", network = true), cap("translate", network = true), cap("scan", network = false)),
+            policy = object : com.point.core.flow.BubblePolicy {
+                override fun rank(state: ObjectState, candidates: List<Capability>) = candidates
+            },
+            network = NetworkAvailability { asked++; false },
+        )
+
+        val bubbles = registry.bubblesFor(state)
+
+        assertEquals(1, asked)
+        assertEquals(2, bubbles.count { it.unusableReason != null })
+    }
 }
