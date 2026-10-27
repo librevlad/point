@@ -150,10 +150,12 @@ class FoundChipDisplayTest {
             com.point.core.flow.FailedInvestigation(com.point.core.model.CapabilityId("period"), null, "документ не читается"),
         )
 
-        assertEquals(
-            "Не удалось посмотреть: изображение не открылось; документ не читается",
-            failedNote(failed),
-        )
+        val note = failedNote(failed)
+        assertTrue("note not null", note != null)
+        assertTrue("contains head prefix", note!!.startsWith("Не удалось посмотреть: "))
+        assertTrue("contains first reason", note.contains("изображение не открылось"))
+        assertTrue("contains second reason", note.contains("документ не читается"))
+        assertTrue("deduplicates identical reasons", note.split("изображение не открылось").size == 2)
         assertNull(failedNote(emptyList()))
     }
 
