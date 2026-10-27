@@ -4,6 +4,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -35,6 +39,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /**
@@ -91,7 +96,7 @@ fun lookedAndFoundNothing(wasLooking: Boolean, looking: Boolean, knownAtOpen: In
 @Stable
 internal class TheatreState {
     /** Значения, которые уже стояли на экране; пришедшее вместе с вещью сюда попадает сразу. */
-    var seen: Set<String> = emptySet()
+    var seen by mutableStateOf<Set<String>>(emptySet())
 
     /** Сколько знания было на экране при открытии — по нему видно, нашлось ли что-то ещё. */
     var knownAtOpen = 0
@@ -99,6 +104,19 @@ internal class TheatreState {
     private var opened = false
     var flying by mutableStateOf<TheatreValue?>(null)
         private set
+
+    /**
+     * Значение, которому полёт уже назначен, но которое ещё не взлетело: ждёт, пока его строка
+     * встанет на место. Всё это время строка держит его невидимым — иначе оно на кадр
+     * показывалось на месте, гасло и только потом взлетало из вещи: двойное появление (#209).
+     */
+    private var due by mutableStateOf<String?>(null)
+
+    /**
+     * Полёт сейчас вообще играется: не привычка и движение в системе не выключено. Пишется при
+     * каждой композиции экрана — от него зависит, прятать ли новое значение до взлёта.
+     */
+    var flies = true
 
     /** Строка, в которую значение приземлилось последним; она коротко подсвечивается. */
     var landed by mutableStateOf<String?>(null)
@@ -124,7 +142,16 @@ internal class TheatreState {
         knownAtOpen = known
     }
 
-    fun hidden(key: String): Boolean = flying?.key == key
+    /**
+     * Строка держит значение невидимым, пока оно в воздухе или вот-вот взлетит. Новое значение
+     * прячется с первого же кадра, в котором появилось: решение о полёте принимается после
+     * кадра, и без этого его успевали увидеть на месте.
+     */
+    fun hidden(key: String): Boolean {
+        val inAir = flying?.key == key
+        val waiting = due == key
+        return inAir || waiting || (flies && key !in seen && landed != key)
+    }
 
     fun lit(key: String): Boolean = landed == key
 
@@ -137,24 +164,37 @@ internal class TheatreState {
             land(value.key)
             return
         }
+        due = value.key
         flight = scope.launch {
-            val to = withTimeoutOrNull(MotionTokens.FLIGHT_MS.toLong()) {
-                snapshotFlow { targets[value.key] }.filterNotNull().first()
-            }
-            if (hero == null || to == null) {
-                land(value.key)
-                return@launch
-            }
-            flying = value
             try {
+                val to = withTimeoutOrNull(MotionTokens.FLIGHT_MS.toLong()) { settledTarget(value.key) }
+                if (hero == null || to == null) return@launch
+                flying = value
                 progress.snapTo(0f)
                 val ms = if (stage == TheatreStage.QUIET) MotionTokens.QUIET_FLIGHT_MS else MotionTokens.FLIGHT_MS
                 progress.animateTo(1f, tween(ms, easing = FastOutSlowInEasing))
                 onPlayed()
             } finally {
                 flying = null
+                due = null
                 land(value.key)
             }
+        }
+    }
+
+    /**
+     * Место посадки, когда строка перестала ехать. Вместе с находкой сверху вставляется
+     * карточка вещи и сдвигает список вниз; полёт, начатый раньше, целил в старое место и
+     * садился на подпись раздела, а не на значение (#209).
+     */
+    private suspend fun settledTarget(key: String): Offset {
+        var last = snapshotFlow { targets[key] }.filterNotNull().first()
+        while (true) {
+            withFrameNanos { }
+            withFrameNanos { }
+            val now = targets[key] ?: continue
+            if (now == last) return now
+            last = now
         }
     }
 
@@ -239,7 +279,9 @@ internal fun TheatreLayer(theatre: TheatreState, stage: TheatreStage) {
                     val to = theatre.targets[value.key] ?: from
                     val at = lerp(from, to, p) - theatre.origin
                     // Взлетает из середины вещи, а садится началом строки — как стоит в заголовке.
-                    val x = at.x - placeable.width * (1f - p) / 2f
+                    // Подложка выступает за текст на свой отступ: садится текст, а не она.
+                    val pad = FLIGHT_PAD.toPx()
+                    val x = at.x - pad - (placeable.width - 2 * pad) * (1f - p) / 2f
                     val y = at.y - placeable.height / 2f
                     placeable.place(x.roundToInt(), y.roundToInt())
                 }
@@ -250,9 +292,15 @@ internal fun TheatreLayer(theatre: TheatreState, stage: TheatreStage) {
                 scaleX = scale
                 scaleY = scale
                 alpha = (if (quiet) 0.7f else 0.95f) * (0.4f + 0.6f * p)
-            },
+            }
+            // Летящее идёт поверх строк экрана; без подложки два текста читались один сквозь
+            // другой (#209). Подложка — земля экрана, она растворяется вместе с текстом.
+            .background(PointPalette.canvas, RoundedCornerShape(8.dp))
+            .padding(horizontal = FLIGHT_PAD, vertical = 2.dp),
     )
 }
+
+private val FLIGHT_PAD = 6.dp
 
 /** Одна волна кольца и тишина: смотрели, не нашли (D6). */
 internal suspend fun TheatreState.waveOnce() {

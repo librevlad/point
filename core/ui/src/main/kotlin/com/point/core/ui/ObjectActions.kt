@@ -172,7 +172,12 @@ private fun ValueHeader(head: ValueHead, theatre: TheatreState? = null, key: Str
     ) {
         SectionLabel(head.name)
         head.value?.let { value ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Пока значение в воздухе, прячется вся строка: одинокая галочка без значения
+            // читалась как пустой ответ (#209).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.graphicsLayer { alpha = if (hidden) 0f else 1f },
+            ) {
                 Text(
                     text = if (head.known) "✓" else "·",
                     style = PointText.rowTitle.copy(fontSize = PointText.rowTitle.fontSize * 1.1f),
@@ -186,9 +191,7 @@ private fun ValueHeader(head: ValueHead, theatre: TheatreState? = null, key: Str
                     color = if (copied) PointPalette.violet else PointPalette.text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .theatreTarget(theatre, key)
-                        .graphicsLayer { alpha = if (hidden) 0f else 1f },
+                    modifier = Modifier.theatreTarget(theatre, key),
                 )
             }
         }
