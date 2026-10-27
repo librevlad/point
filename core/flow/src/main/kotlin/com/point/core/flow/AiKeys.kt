@@ -33,9 +33,14 @@ data class UserAiKeys(val entries: List<UserAiKey> = emptyList()) {
 
     fun keyFor(providerId: String): String = of(providerId)?.apiKey?.trim().orEmpty()
 
-    /** Свои ключи в том порядке, в каком Point обращается к сервисам. */
-    val mine: List<UserAiKey>
-        get() = entries.filter { it.apiKey.isNotBlank() }.sortedBy { order(it.providerId) }
+    /**
+     * Свои ключи в том порядке, в каком Point обращается к сервисам.
+     *
+     * Считается один раз: набор неизменяем, а спрашивают его внутри сортировки действий (#539).
+     */
+    val mine: List<UserAiKey> by lazy {
+        entries.filter { it.apiKey.isNotBlank() }.sortedBy { order(it.providerId) }
+    }
 
     fun with(key: UserAiKey): UserAiKeys {
         val clean = key.copy(

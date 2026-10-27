@@ -20,10 +20,18 @@ class PrefsUserKeyStore @Inject constructor(
 
     private val prefs = context.getSharedPreferences("point_ai", Context.MODE_PRIVATE)
 
+    /**
+     * Последняя разобранная строка и её разбор (#539). Ключи спрашивает каждое действие, у
+     * которого цена зависит от ключа, и спрашивает внутри сортировки — на каждое сравнение.
+     * Замер на A34: разбор одной и той же строки занимал заметную долю того времени, пока
+     * кольцо «Обрабатываю…» стояло замершим. Строка та же — разбор тот же.
+     */
+    @Volatile private var parsed: Pair<String, UserAiKeys>? = null
+
     override fun keys(): UserAiKeys {
-        val stored = prefs.getString(KEYS, null)
-        if (stored != null) return decodeUserAiKeys(stored)
-        return moveOldKey()
+        val stored = prefs.getString(KEYS, null) ?: return moveOldKey()
+        parsed?.let { (raw, keys) -> if (raw == stored) return keys }
+        return decodeUserAiKeys(stored).also { parsed = stored to it }
     }
 
     /**
