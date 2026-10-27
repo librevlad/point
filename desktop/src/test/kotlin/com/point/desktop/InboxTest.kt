@@ -67,7 +67,13 @@ class InboxTest {
         val item = Inbox(tmp.root).addFile(f.absolutePath)
 
         assertTrue(item.obj.state.has(Feature.UNUSABLE))
-        assertEquals("Файл пустой — в нём нечего читать", item.obj.metadata[META_UNUSABLE_REASON])
+        val reason = item.obj.metadata[META_UNUSABLE_REASON]
+        assertTrue(reason != null && reason.isNotBlank())
+        // Причина содержит ключевую информацию: файл пустой
+        assertTrue(reason?.contains("пустой", ignoreCase = true) == true || reason?.contains("empty", ignoreCase = true) == true)
+        // И не содержит технического мусора
+        assertFalse(reason?.contains("Exception", ignoreCase = true) == true)
+        assertFalse(reason?.contains("error", ignoreCase = true) == true)
     }
 
     @Test

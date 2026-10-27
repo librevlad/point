@@ -90,12 +90,12 @@
 2 desktop/src/test/kotlin/com/point/desktop/ArchiveActionsTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/ChainOnPcTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/CloudConsentTest.kt
-8 desktop/src/test/kotlin/com/point/desktop/DesktopJournalTest.kt
+1 desktop/src/test/kotlin/com/point/desktop/DesktopJournalTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/DesktopRegistryTest.kt
 2 desktop/src/test/kotlin/com/point/desktop/DesktopStateTest.kt
 2 desktop/src/test/kotlin/com/point/desktop/DropIntoWindowTest.kt
-6 desktop/src/test/kotlin/com/point/desktop/InboxTest.kt
-16 desktop/src/test/kotlin/com/point/desktop/JournalTest.kt
+5 desktop/src/test/kotlin/com/point/desktop/InboxTest.kt
+1 desktop/src/test/kotlin/com/point/desktop/JournalTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/OfficeToPdfTest.kt
 2 desktop/src/test/kotlin/com/point/desktop/OpenAgainTest.kt
 2 desktop/src/test/kotlin/com/point/desktop/OutboxTest.kt
@@ -106,7 +106,7 @@
 2 desktop/src/test/kotlin/com/point/desktop/RelayRequestsTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/SettingsKeepWhatTheyDoNotKnowTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/SlowPcActionTest.kt
-2 desktop/src/test/kotlin/com/point/desktop/SmartActionsTest.kt
+1 desktop/src/test/kotlin/com/point/desktop/SmartActionsTest.kt
 1 desktop/src/test/kotlin/com/point/desktop/UnifiedActionsTest.kt
 10 executors/src/test/kotlin/com/point/executors/ActionsSayTheirPriceTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/AiChatResponderImplTest.kt
