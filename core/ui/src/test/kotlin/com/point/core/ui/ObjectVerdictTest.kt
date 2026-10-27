@@ -27,6 +27,9 @@ class ObjectVerdictTest {
         mime: String = "mime",
     ) = PointObject("id", mime, ScratchRef("/x"), ObjectState(kind, features), metadata)
 
+    private val purchase get() = objectVerdict(obj(features = setOf(Feature.IS_PURCHASE))).headline
+    private val parcel get() = objectVerdict(obj(metadata = mapOf(META_SEMANTIC_TYPE to TYPE_PARCEL))).headline
+
     @Test
     fun `falls back to the kind label when nothing is understood`() {
         val o = obj(kind = ObjectKind.IMAGE)
@@ -87,8 +90,8 @@ class ObjectVerdictTest {
         val o = obj(features = setOf(Feature.IS_PURCHASE), metadata = mapOf(META_SEMANTIC_TYPE to TYPE_PARCEL))
 
         val headline = objectVerdict(o).headline
-        assertTrue("headline not empty", headline.isNotBlank())
-        assertNotEquals("Посылка", headline)
+        assertEquals(purchase, headline)
+        assertNotEquals(parcel, headline)
     }
 
     @Test
@@ -96,6 +99,29 @@ class ObjectVerdictTest {
         val o = obj(kind = ObjectKind.PDF, metadata = mapOf(META_SEMANTIC_TYPE to "cmr"))
 
         assertEquals(kindLabel(ObjectKind.PDF), objectVerdict(o).headline)
+    }
+
+    /**
+     * Каждая находка называется своим именем (#584): без точной фразы тест иначе пропустил бы
+     * покупку, названную «Визиткой». Все имена разные и ни одно не равно имени вида.
+     */
+    @Test
+    fun `разные находки называются по-разному`() {
+        val names = listOf(
+            purchase,
+            parcel,
+            objectVerdict(obj(features = setOf(Feature.HAS_VCARD))).headline,
+            objectVerdict(obj(features = setOf(Feature.IS_RECIPE))).headline,
+            objectVerdict(
+                obj(
+                    kind = ObjectKind.OFFICE,
+                    mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
+            ).headline,
+        )
+
+        assertEquals(names.toString(), names.size, names.toSet().size)
+        ObjectKind.entries.forEach { kind -> assertTrue(names.toString(), kindLabel(kind) !in names) }
     }
 
     @Test
@@ -137,7 +163,7 @@ class ObjectVerdictTest {
         val measure = objectVerdict(o).measure!!
         assertTrue("measure not empty", measure.isNotBlank())
         assertTrue("measure contains минут", measure.contains("мин"))
-        assertTrue("measure contains number", measure.any { it.isDigit() })
+        assertTrue("три минуты названы числом", Regex("""\b3\b""").containsMatchIn(measure))
     }
 
     @Test
@@ -154,8 +180,8 @@ class ObjectVerdictTest {
         val m40m = measureOf(40 * 60)
 
         assertNotEquals("40 сек и 40 мин должны давать разные надписи", m40s, m40m)
-        assertTrue("40 сек содержит 'сек'", m40s.contains("сек"))
-        assertTrue("40 мин содержит 'мин'", m40m.contains("мин"))
+        assertTrue("40 сек содержит 'сек'", m40s.contains("сек") && m40s.contains("40"))
+        assertTrue("40 мин содержит 'мин'", m40m.contains("мин") && m40m.contains("40"))
     }
 
     @Test
@@ -169,7 +195,7 @@ class ObjectVerdictTest {
         val measure = objectVerdict(o).measure!!
         assertTrue("measure not empty", measure.isNotBlank())
         assertTrue("measure contains МБ", measure.contains("МБ"))
-        assertTrue("measure contains number", measure.any { it.isDigit() })
+        assertTrue("пять мегабайт названы числом", Regex("""\b5\b""").containsMatchIn(measure))
     }
 
     @Test
@@ -253,7 +279,6 @@ class ObjectVerdictTest {
         )
 
         val headline = objectVerdict(o).headline
-        assertTrue("headline not empty", headline.isNotBlank())
-        assertNotEquals(kindLabel(ObjectKind.OFFICE), headline)
+        assertEquals(parcel, headline)
     }
 }
