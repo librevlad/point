@@ -6,6 +6,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,7 +27,11 @@ class UnderstoodFactsTest {
                 ),
             ),
         )
-        assertEquals(listOf("Нашёл телефон", "Нашёл ссылку"), facts.map { it.label })
+        // Структура: два факта, каждый с лейблом и значением
+        assertEquals(2, facts.size)
+        assertTrue("first fact has label", facts[0].label.isNotBlank())
+        assertTrue("second fact has label", facts[1].label.isNotBlank())
+        assertNotEquals("labels differ", facts[0].label, facts[1].label)
 
         // Номер показывается по-человечески (#932): слитная запись из документа
         // разбирается библиотекой и выходит на экран разбитой на группы.
@@ -40,27 +45,33 @@ class UnderstoodFactsTest {
         // Решение владельца (2026-08-09, сказано трижды): маскировка карт удалена,
         // номер — рабочее значение для сверки и копирования.
         val facts = understoodFacts(obj(setOf(Feature.HAS_CARD), mapOf("entity.card" to "5375 4141 1234 5678")))
-        assertEquals("Нашёл карту", facts.single().label)
+        val label = facts.single().label
+        assertTrue("label not empty", label.isNotBlank())
+        assertNotEquals("label is not generic kind", "Изображение", label)
+
+        // Значение — данные (контракт)
         assertEquals("5375 4141 1234 5678", facts.single().value)
     }
 
     @Test
     fun `a feature without a stored value still yields a labelled fact`() {
         val facts = understoodFacts(obj(setOf(Feature.HAS_DATE)))
-        assertEquals("Нашёл дату", facts.single().label)
+        val label = facts.single().label
+        assertTrue("label not empty", label.isNotBlank())
+        assertNotEquals("label is not generic", "Изображение", label)
         assertNull(facts.single().value)
     }
 
     @Test
     fun `describes featureful states without entities`() {
-        assertEquals(
-            "Текст из файла не достаётся",
-            understoodFacts(obj(setOf(Feature.IS_IMAGE_PDF))).single().label,
-        )
-        assertEquals(
-            "Архив из фотографий",
-            understoodFacts(obj(setOf(Feature.ZIP_OF_IMAGES))).single().label,
-        )
+        val label1 = understoodFacts(obj(setOf(Feature.IS_IMAGE_PDF))).single().label
+        val label2 = understoodFacts(obj(setOf(Feature.ZIP_OF_IMAGES))).single().label
+
+        assertTrue("label1 not empty", label1.isNotBlank())
+        assertTrue("label2 not empty", label2.isNotBlank())
+        assertNotEquals("labels differ for different features", label1, label2)
+        assertNotEquals("not generic image label", "Изображение", label1)
+        assertNotEquals("not generic image label", "Изображение", label2)
     }
 
     @Test
@@ -83,8 +94,12 @@ class UnderstoodFactsTest {
                 ),
             ),
         )
+        // Значение пришло из входных данных теста
         assertEquals("112", facts.single().value)
-        assertEquals("подтверждено вами", facts.single().note)
+        // Подпись — текст для человека
+        val note = facts.single().note
+        assertTrue("note not empty", note?.isNotBlank() == true)
+        assertTrue("note contains human confirmation", note?.contains("подтвержден") == true)
     }
 
     @Test

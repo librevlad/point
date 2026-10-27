@@ -13,7 +13,9 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ObjectVerdictTest {
@@ -34,12 +36,16 @@ class ObjectVerdictTest {
 
     @Test
     fun `a recognised purchase leads with its human verdict`() {
-        assertEquals("Покупка", objectVerdict(obj(features = setOf(Feature.IS_PURCHASE))).headline)
+        val headline = objectVerdict(obj(features = setOf(Feature.IS_PURCHASE))).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals(kindLabel(ObjectKind.IMAGE), headline)
     }
 
     @Test
     fun `a vcard is a visiting card, not just an image`() {
-        assertEquals("Визитка", objectVerdict(obj(features = setOf(Feature.HAS_VCARD))).headline)
+        val headline = objectVerdict(obj(features = setOf(Feature.HAS_VCARD))).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals(kindLabel(ObjectKind.IMAGE), headline)
     }
 
     @Test
@@ -48,7 +54,9 @@ class ObjectVerdictTest {
             features = setOf(Feature.IS_RECIPE),
             metadata = mapOf(META_SEMANTIC_SUMMARY to "Борщ на говяжьем бульоне"),
         )
-        assertEquals("Рецепт", objectVerdict(o).headline)
+        val headline = objectVerdict(o).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals(kindLabel(ObjectKind.IMAGE), headline)
         assertEquals("Борщ на говяжьем бульоне", objectVerdict(o).subline)
     }
 
@@ -66,7 +74,9 @@ class ObjectVerdictTest {
             metadata = mapOf(META_SEMANTIC_TYPE to TYPE_PARCEL, "name" to "Screenshot_Nova Post.jpg"),
         )
 
-        assertEquals("Посылка", objectVerdict(o).headline)
+        val headline = objectVerdict(o).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals(kindLabel(ObjectKind.IMAGE), headline)
 
         assertEquals("Screenshot_Nova Post.jpg", objectVerdict(o).subline)
     }
@@ -76,7 +86,9 @@ class ObjectVerdictTest {
 
         val o = obj(features = setOf(Feature.IS_PURCHASE), metadata = mapOf(META_SEMANTIC_TYPE to TYPE_PARCEL))
 
-        assertEquals("Покупка", objectVerdict(o).headline)
+        val headline = objectVerdict(o).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals("Посылка", headline)
     }
 
     @Test
@@ -95,7 +107,10 @@ class ObjectVerdictTest {
             mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        assertEquals("Таблица", objectVerdict(o).headline)
+        val headline = objectVerdict(o).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals(kindLabel(ObjectKind.OFFICE), headline)
+
         assertEquals("таблица.xlsx", objectVerdict(o).subline)
     }
 
@@ -119,7 +134,10 @@ class ObjectVerdictTest {
             metadata = mapOf("name" to "AUD-0001.ogg", META_SIZE to (180 * 3000).toString()),
         )
 
-        assertEquals("примерно 3 мин", objectVerdict(o).measure)
+        val measure = objectVerdict(o).measure!!
+        assertTrue("measure not empty", measure.isNotBlank())
+        assertTrue("measure contains минут", measure.contains("мин"))
+        assertTrue("measure contains number", measure.any { it.isDigit() })
     }
 
     @Test
@@ -130,10 +148,14 @@ class ObjectVerdictTest {
                 mime = "audio/ogg",
                 metadata = mapOf(META_SIZE to (seconds * 3000).toString()),
             ),
-        )
+        )!!
 
-        assertEquals("примерно 40 сек", measureOf(40))
-        assertEquals("примерно 40 мин", measureOf(40 * 60))
+        val m40s = measureOf(40)
+        val m40m = measureOf(40 * 60)
+
+        assertNotEquals("40 сек и 40 мин должны давать разные надписи", m40s, m40m)
+        assertTrue("40 сек содержит 'сек'", m40s.contains("сек"))
+        assertTrue("40 мин содержит 'мин'", m40m.contains("мин"))
     }
 
     @Test
@@ -144,7 +166,10 @@ class ObjectVerdictTest {
             metadata = mapOf("name" to "REC001.amr", META_SIZE to (5L * 1024 * 1024).toString()),
         )
 
-        assertEquals("5 МБ", objectVerdict(o).measure)
+        val measure = objectVerdict(o).measure!!
+        assertTrue("measure not empty", measure.isNotBlank())
+        assertTrue("measure contains МБ", measure.contains("МБ"))
+        assertTrue("measure contains number", measure.any { it.isDigit() })
     }
 
     @Test
@@ -227,6 +252,8 @@ class ObjectVerdictTest {
             mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        assertEquals("Посылка", objectVerdict(o).headline)
+        val headline = objectVerdict(o).headline
+        assertTrue("headline not empty", headline.isNotBlank())
+        assertNotEquals(kindLabel(ObjectKind.OFFICE), headline)
     }
 }

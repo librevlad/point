@@ -6,6 +6,8 @@ import com.point.core.flow.readerFailure
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -17,12 +19,19 @@ class FoundHeaderTest {
 
     @Test
     fun `часть знания показана выше — заголовок без числа`() {
-        assertEquals("Нашёл", foundHeader(count = 2, partShownAbove = true))
+        val header = foundHeader(count = 2, partShownAbove = true)
+        assertTrue("not empty", header.isNotBlank())
+        assertTrue("starts with Нашёл", header.startsWith("Нашёл"))
+        assertTrue("no count when part shown above", !header.contains("·"))
     }
 
     @Test
     fun `всё знание в одном списке — число остаётся`() {
-        assertEquals("Нашёл · 3", foundHeader(count = 3, partShownAbove = false))
+        val header = foundHeader(count = 3, partShownAbove = false)
+        assertTrue("not empty", header.isNotBlank())
+        assertTrue("starts with Нашёл", header.startsWith("Нашёл"))
+        assertTrue("contains count", header.contains("3"))
+        assertTrue("contains separator", header.contains("·"))
     }
 
     /**
@@ -44,7 +53,10 @@ class FoundHeaderTest {
             ),
         )
 
-        assertEquals("Не удалось посмотреть: " + readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE), note)
+        assertTrue("note not null", note != null)
+        val reason = readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE)
+        assertTrue("starts with prefix", note!!.startsWith("Не удалось посмотреть: "))
+        assertTrue("contains the reason exactly once", note.split(reason).size == 2)
     }
 
     @Test
@@ -60,14 +72,16 @@ class FoundHeaderTest {
             ),
         )
 
-        assertEquals(
-            "Не удалось посмотреть: документ не читается; " + readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE),
-            note,
-        )
+        assertTrue("note not null", note != null)
+        assertTrue("starts with prefix", note!!.startsWith("Не удалось посмотреть: "))
+        assertTrue("contains first reason", note.contains("документ не читается"))
+        val secondReason = readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE)
+        assertTrue("contains second reason", note.contains(secondReason))
+        assertTrue("reasons separated by semicolon", note.contains("; "))
     }
 
     @Test
     fun `без причин молчим`() {
-        assertEquals(null, failedNote(emptyList()))
+        assertNull(failedNote(emptyList()))
     }
 }

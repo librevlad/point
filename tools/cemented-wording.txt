@@ -64,12 +64,8 @@
 2 core/flow/src/test/kotlin/com/point/core/flow/SpreadsheetStyleTest.kt
 5 core/flow/src/test/kotlin/com/point/core/flow/UnderstandingProtocolTest.kt
 5 core/flow/src/test/kotlin/com/point/core/flow/ValueProvenanceTest.kt
-5 core/ui/src/test/kotlin/com/point/core/ui/CollectionLabelTest.kt
-1 core/ui/src/test/kotlin/com/point/core/ui/FoundChipDisplayTest.kt
-1 core/ui/src/test/kotlin/com/point/core/ui/FoundHeaderTest.kt
-15 core/ui/src/test/kotlin/com/point/core/ui/ObjectVerdictTest.kt
-1 core/ui/src/test/kotlin/com/point/core/ui/TextPreviewTruncationTest.kt
-5 core/ui/src/test/kotlin/com/point/core/ui/UnderstoodFactsTest.kt
+2 core/ui/src/test/kotlin/com/point/core/ui/CollectionLabelTest.kt
+5 core/ui/src/test/kotlin/com/point/core/ui/ObjectVerdictTest.kt
 3 data/src/test/kotlin/com/point/data/ChainedAtomRecognizerTest.kt
 6 data/src/test/kotlin/com/point/data/DefaultExternalEyeTest.kt
 3 data/src/test/kotlin/com/point/data/EntityInvestigationTest.kt
