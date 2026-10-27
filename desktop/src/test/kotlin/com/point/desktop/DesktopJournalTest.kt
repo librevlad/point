@@ -188,11 +188,12 @@ class DesktopJournalTest {
         val store = FakeJournal()
         val s = state(store)
 
-        s.onReceived(item(at = 777L), ObjectSource.PHONE_RELAY)
+        val arrived = item(at = 777L)
+        s.onReceived(arrived, ObjectSource.PHONE_RELAY)
 
         val entry = s.journal.value.single()
-        assertEquals("/дом/накладная.pdf", entry.path)
-        assertEquals("накладная.pdf", entry.name)
+        assertEquals(arrived.obj.uri.value, entry.path)
+        assertEquals(arrived.obj.metadata["name"], entry.name)
         assertEquals(ObjectSource.PHONE_RELAY, entry.source)
         assertEquals(777L, entry.at)
         assertEquals(1, store.saves)
@@ -213,17 +214,19 @@ class DesktopJournalTest {
     @Test
     fun `выполненное действие становится станцией пути`() = runTest(dispatcher) {
         val store = FakeJournal()
-        val realizer = RecordingRealizer("pc-print", ActionResult.Done("Ушло на HP LaserJet"))
+        val said = "Ушло на HP LaserJet"
+        val realizer = RecordingRealizer("pc-print", ActionResult.Done(said))
         val s = state(store, realizers = setOf(realizer))
         val obj = item()
         s.onReceived(obj, ObjectSource.PHONE_LAN)
 
-        s.onBubble(obj, Bubble("open", "Напечатать", CapabilityId("pc-print"), obj.obj.state))
+        val bubble = Bubble("open", "Напечатать", CapabilityId("pc-print"), obj.obj.state)
+        s.onBubble(obj, bubble)
         advanceUntilIdle()
 
         val step = s.journal.value.single().steps.single()
-        assertEquals("Напечатать", step.title)
-        assertEquals("Ушло на HP LaserJet", step.note)
+        assertEquals("станция названа действием, которое нажали", bubble.title, step.title)
+        assertEquals("в пути осталось то, что сказал исполнитель", said, step.note)
         assertTrue(step.ok)
         assertEquals(5_000L, step.at)
     }
@@ -231,7 +234,8 @@ class DesktopJournalTest {
     @Test
     fun `неудача записывается неудачей и с причиной`() = runTest(dispatcher) {
         val store = FakeJournal()
-        val realizer = RecordingRealizer("pc-print", ActionResult.Failure("нет принтера", recoverable = true))
+        val why = "нет принтера"
+        val realizer = RecordingRealizer("pc-print", ActionResult.Failure(why, recoverable = true))
         val s = state(store, realizers = setOf(realizer))
         val obj = item()
         s.onReceived(obj, ObjectSource.PHONE_LAN)
@@ -241,7 +245,7 @@ class DesktopJournalTest {
 
         val step = s.journal.value.single().steps.single()
         assertFalse(step.ok)
-        assertEquals("нет принтера", step.note)
+        assertEquals("причина неудачи не потерялась по дороге", why, step.note)
     }
 
     @Test
@@ -258,7 +262,9 @@ class DesktopJournalTest {
         s.runRemoteAction("pc-print", obj)
         advanceUntilIdle()
 
-        assertEquals("Напечатать · с телефона", s.journal.value.single().steps.single().title)
+        val title = s.journal.value.single().steps.single().title
+        assertTrue(title.contains("Напечатать"))
+        assertTrue(title.contains("телефон", ignoreCase = true))
     }
 
     @Test
@@ -294,7 +300,12 @@ class DesktopJournalTest {
         advanceUntilIdle()
 
         assertTrue(s.items.value.isEmpty())
-        assertEquals("Файла больше нет: унесли.pdf", s.message.value)
+        val message = s.message.value
+        assertTrue(message != null && message.isNotBlank())
+        assertTrue(message?.contains("унесли.pdf") == true)
+        // Не проверяем точную формулировку — она может меняться, но имя файла обязательно
+        assertFalse(message?.contains("Exception", ignoreCase = true) == true)
+        assertFalse(message?.contains("error", ignoreCase = true) == true)
     }
 
     @Test

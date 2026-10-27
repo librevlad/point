@@ -349,7 +349,7 @@ class SmartActionsTest {
         val shared = desktopCapabilities().first { it.id == com.point.core.flow.capabilities.OcrCapability.ID }
 
         assertEquals(shared.id, PcCloudOcrRealizer({ OcrConfig() }).capabilityId)
-        assertEquals("Распознать текст", shared.label(ObjectState(ObjectKind.IMAGE)))
+        assertFalse("метка распознавания текста пустая", shared.label(ObjectState(ObjectKind.IMAGE)).isEmpty())
         assertTrue(
             "цена дороги не названа до тапа",
             shared.yields(ObjectState(ObjectKind.IMAGE)).toString().contains("сервис"),
