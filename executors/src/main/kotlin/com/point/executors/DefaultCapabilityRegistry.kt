@@ -61,9 +61,11 @@ class DefaultCapabilityRegistry @Inject constructor(
      * объекта иначе молча перестало бы считаться стоящим — и знание, которое вернуло бы ему
      * чтения, не пришло бы никогда. Человеку двери считает [bubblesFor] по графу.
      */
-    override fun bubblesFor(state: ObjectState): List<Bubble> =
-        policy.rank(state, offered.filter { it.accepts(state) && blockerFor(it) == null })
-            .map { c -> bubbleOf(c, state) }
+    override fun bubblesFor(state: ObjectState): List<Bubble> {
+        val online = onlineOnce()
+        return policy.rank(state, offered.filter { it.accepts(state) && blockerFor(it) == null })
+            .map { c -> bubbleOf(c, state, online = online) }
+    }
 
     override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> {
         val reason = graph.unusableReason()
@@ -71,12 +73,22 @@ class DefaultCapabilityRegistry @Inject constructor(
         // Действие, возвращающее исходник, из которого объект получен, не прячется, а уходит
         // вниз и говорит об этом (#925).
         val source = com.point.core.flow.inverseSourceKind(graph)
+        val online = onlineOnce()
         return policy.rank(graph, offeredTo(graph.state, graph.facts) { it.accepts(graph) })
             .map { c ->
                 val back = source?.takeIf { com.point.core.flow.givesBackTheSource(c, graph, it) }
-                bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) }, graph)
+                bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) }, graph, online)
             }
     }
+
+    /**
+     * Есть ли сеть — один ответ на весь список (#539). Вопрос системе не бесплатен: на A34 он,
+     * заданный каждым сетевым действием при каждом пересчёте, занимал заметную долю главного
+     * потока, пока кольцо «Обрабатываю…» стояло. И спрашивается только тогда, когда в списке
+     * есть сетевое действие.
+     */
+    private fun onlineOnce(): Lazy<Boolean> =
+        lazy(LazyThreadSafetyMode.NONE) { runCatching { network.isAvailable() }.getOrDefault(true) }
 
     /**
      * Исследования человеку не предлагаются- их выбирает Discovery, а не Planner (ADR-0001 §11).
@@ -104,6 +116,7 @@ class DefaultCapabilityRegistry @Inject constructor(
 
         // Имя действия видит знание (#1010): «Понять» после успеха зовётся «Понять сильнее».
         graph: com.point.core.flow.GraphState? = null,
+        online: Lazy<Boolean> = onlineOnce(),
     ) = Bubble(
         icon = c.icon,
         title = graph?.let { c.label(it) } ?: c.label(state),
@@ -116,7 +129,7 @@ class DefaultCapabilityRegistry @Inject constructor(
             if (!com.point.core.flow.promiseNamesHere(promise)) promise
             else com.point.core.flow.promiseOfChosen(promise, runCatching { chosen.chosenFor(c.id, state) }.getOrNull())
         },
-        unusableReason = unusableReason ?: offlineReason(c),
+        unusableReason = unusableReason ?: offlineReason(c, online),
 
         // Какое найденное значение действие продолжает — по нему экран кладёт действие к
         // значению, а не в группу вида функции.
@@ -124,9 +137,9 @@ class DefaultCapabilityRegistry @Inject constructor(
     )
 
     /** Про сеть спрашиваем один раз на список, а не у каждого действия. */
-    private fun offlineReason(c: Capability): String? = when {
+    private fun offlineReason(c: Capability, online: Lazy<Boolean>): String? = when {
         !c.meta.network -> null
-        !runCatching { network.isAvailable() }.getOrDefault(true) -> NO_INTERNET
+        !online.value -> NO_INTERNET
 
         // Своё устройство — не «наружу»: «На компьютер» уносит объект на компьютер того же
         // человека, и режим приватности к нему не относится.
