@@ -9,6 +9,7 @@ Android отдаёт https-ссылку приложению, только ес�
 
 NEW_RELEASE = "5A:51:00:AD:C6:34:2C:D3:4F:90:57:61:A7:A6:CC:47:63:9A:5C:64:53:DE:92:23:B7:75:42:42:4E:1A:6B:09"
 LOST_RELEASE = "A9:55:88:14:C0:C1:BC:30:FB:BD:CE:7C:5E:7C:55:50:A7:AB:3D:1D:C4:BE:9A:7F:53:A0:D0:DC:6A:5C:E3:19"
+PLAY_SIGNING = "11:1A:34:78:A8:7C:92:A0:8C:95:E6:3A:5F:56:3F:E8:5B:C8:1D:9C:D2:DC:11:44:F8:A5:BD:12:94:BA:8F:1F"
 DEBUG_STAND = "F3:D9:DF:F6:D8:96:66:BE:F8:79:37:A4:A9:AF:3F:AF:B2:C7:F6:1C:D3:0D:BE:87:8A:FA:7C:27:90:08:20:F3"
 
 
@@ -28,7 +29,8 @@ def _prints(point, package):
 def test_ссылку_открывает_point_из_google_play_и_стенд(point):
     prints = _prints(point, "app.leerio.point")
 
-    assert NEW_RELEASE in prints, "Point из Play и с сайта отдал бы ссылку браузеру"
+    assert PLAY_SIGNING in prints, "Point, поставленный из Google Play, отдал бы ссылку браузеру"
+    assert NEW_RELEASE in prints, "Point с сайта отдал бы ссылку браузеру"
     assert DEBUG_STAND in prints, "стенд перестал бы открывать ссылки"
 
 

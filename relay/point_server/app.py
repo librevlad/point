@@ -224,17 +224,19 @@ def _readable_text(mime: str, data: bytes) -> bool:
 # Отпечатки SHA-256 сертификатов подписи — публичные, не секрет.
 
 # Ключ релиза с 2026-11-26: прежний потерян при переезде на новый компьютер. Им подписаны
-# сборки с сайта и выпуск в Google Play (свой ключ подписи через PEPK, `docs/PLAY-0.3.md`). Если
-# в Play подписывать станет ключ Google, его SHA-256 из консоли дописывается к пакету Play.
+# сборки с сайта; в Google Play он только ключ загрузки.
 RELEASE_KEY = "5A:51:00:AD:C6:34:2C:D3:4F:90:57:61:A7:A6:CC:47:63:9A:5C:64:53:DE:92:23:B7:75:42:42:4E:1A:6B:09"
 # Потерянный ключ релиза: им подписаны v0.3.7 и прежние сборки с сайта.
 LOST_RELEASE_KEY = "A9:55:88:14:C0:C1:BC:30:FB:BD:CE:7C:5E:7C:55:50:A7:AB:3D:1D:C4:BE:9A:7F:53:A0:D0:DC:6A:5C:E3:19"
+# Ключ подписи Google Play (решение владельца 2026-11-26: «Ключ Google»): им Play подписывает
+# Point, который ставят из магазина. Отпечаток — из Play Console, «Подписи приложений».
+PLAY_SIGNING_KEY = "11:1A:34:78:A8:7C:92:A0:8C:95:E6:3A:5F:56:3F:E8:5B:C8:1D:9C:D2:DC:11:44:F8:A5:BD:12:94:BA:8F:1F"
 # Debug-ключ стенда.
 DEBUG_STAND_KEY = "F3:D9:DF:F6:D8:96:66:BE:F8:79:37:A4:A9:AF:3F:AF:B2:C7:F6:1C:D3:0D:BE:87:8A:FA:7C:27:90:08:20:F3"
 
 APP_LINK_TARGETS = {
     # Пакет Point с 2026-11-26: в Google Play `com.point` занят чужим приложением.
-    "app.leerio.point": (RELEASE_KEY, DEBUG_STAND_KEY),
+    "app.leerio.point": (PLAY_SIGNING_KEY, RELEASE_KEY, DEBUG_STAND_KEY),
     # Прежний пакет: так подписаны и так называются сборки, которые уже стоят у людей. Остаётся,
     # пока они есть, — иначе у них ссылка уйдёт в браузер, хотя Point установлен.
     "com.point": (RELEASE_KEY, LOST_RELEASE_KEY, DEBUG_STAND_KEY),
