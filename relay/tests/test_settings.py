@@ -20,7 +20,7 @@ from conftest import Clock, FakeGoogle
 from point_server import app as app_mod, db
 from point_server.config import Settings
 
-SECRET = "sk-test-0123456789abcdef"
+SECRET = "тайна-человека-для-проверки"
 SETTINGS = f"at=1000\nai.groq={SECRET}\nai.groq.at=1000\nprivacy=ASK"
 
 
