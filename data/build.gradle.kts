@@ -24,11 +24,11 @@ android {
 
         buildConfigField("String", "RELAY_URL", "\"\"")
 
-        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-flash-latest,gemini-flash-lite-latest,gemini-pro-latest"))
+        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-flash-latest,gemini-flash-lite-latest"))
 
         buildConfigField("String", "ANTHROPIC_API_KEY", "\"\"")
         buildConfigField("String", "ANTHROPIC_BASE_URL", prop("ANTHROPIC_BASE_URL", "https://api.anthropic.com"))
-        buildConfigField("String", "CLAUDE_MODEL", prop("CLAUDE_MODEL", "claude-opus-4-8"))
+        buildConfigField("String", "CLAUDE_MODEL", prop("CLAUDE_MODEL", "claude-opus-5-5"))
 
         buildConfigField("String", "OPENAI_API_KEY", "\"\"")
         buildConfigField("String", "OPENAI_BASE_URL", prop("OPENAI_BASE_URL", "https://api.openai.com/v1"))
@@ -36,11 +36,11 @@ android {
 
         buildConfigField("String", "OPENROUTER_API_KEY", "\"\"")
         buildConfigField("String", "OPENROUTER_BASE_URL", prop("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
-        buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free"))
+        buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "nvidia/nemotron-3.5-super-vl:free,google/gemma-4-26b-a4b-it:free,google/gemma-4-31b-it:free"))
         buildConfigField("String", "GROQ_API_KEY", "\"\"")
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
 
-        buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant,qwen/qwen3.6-27b"))
+        buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "qwen/qwen3.8-27b,openai/gpt-oss-120b"))
 
         buildConfigField("String", "GROQ_WHISPER_MODEL", prop("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"))
         buildConfigField("String", "MISTRAL_API_KEY", "\"\"")
@@ -71,12 +71,12 @@ android {
         // и первый ответ может ждать минуту, мелкие отвечают сразу.
         buildConfigField("String", "NVIDIA_API_KEY", "\"\"")
         buildConfigField("String", "NVIDIA_BASE_URL", prop("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"))
-        buildConfigField("String", "NVIDIA_MODELS", prop("NVIDIA_MODELS", "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct"))
+        buildConfigField("String", "NVIDIA_MODELS", prop("NVIDIA_MODELS", "nvidia/nemotron-3.5-super-vl-120b-a12b,nvidia/nemotron-3-ultra-550b-a55b"))
 
         // Домен важен: .cn отвечает на токен 401, международный .ai — работает.
         buildConfigField("String", "MODELSCOPE_API_KEY", "\"\"")
         buildConfigField("String", "MODELSCOPE_BASE_URL", prop("MODELSCOPE_BASE_URL", "https://api-inference.modelscope.ai/v1"))
-        buildConfigField("String", "MODELSCOPE_MODELS", prop("MODELSCOPE_MODELS", "Qwen/Qwen3-VL-235B-A22B-Instruct,Qwen/Qwen3-VL-8B-Instruct"))
+        buildConfigField("String", "MODELSCOPE_MODELS", prop("MODELSCOPE_MODELS", "Qwen/Qwen3.8-27B,OpenGVLab/InternVL3_5-241B-A28B"))
 
 
         buildConfigField("String", "OVH_API_KEY", "\"\"")

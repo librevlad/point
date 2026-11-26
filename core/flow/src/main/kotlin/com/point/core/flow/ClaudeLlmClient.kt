@@ -112,7 +112,7 @@ class ClaudeLlmClient(
     }
 
     private companion object {
-        const val DEFAULT_MODEL = "claude-opus-4-8"
+        const val DEFAULT_MODEL = "claude-opus-5-5"
         const val DEFAULT_BASE_URL = "https://api.anthropic.com"
         const val ANTHROPIC_VERSION = "2023-06-01"
         const val MAX_TOKENS = 8192

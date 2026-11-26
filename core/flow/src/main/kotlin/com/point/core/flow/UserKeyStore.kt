@@ -18,7 +18,7 @@ data class UserAiConfig(
         val DEFAULT = UserAiConfig(
             apiKey = "",
             baseUrl = "https://openrouter.ai/api/v1",
-            model = "google/gemma-4-31b-it:free",
+            model = "nvidia/nemotron-3.5-super-vl:free",
         )
     }
 }
