@@ -15,7 +15,7 @@
 set -eu
 
 cd "$(cd "$(dirname "$0")/.." && { pwd -W 2>/dev/null || pwd; })"
-export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Android/Android Studio/jbr}"
+export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Eclipse Adoptium/jdk-21.0.13.9-hotspot}"
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true
