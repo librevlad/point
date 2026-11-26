@@ -45,10 +45,16 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIde
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     # Установка в Program Files требует прав администратора: перезапускаем себя с ними.
+    # Путь к MSI — полным до перезапуска: процесс с правами стартует в System32, и
+    # относительный путь там молча превращался в «MSI не найден» (2026-11-26).
+    if ($Msi -and (Test-Path $Msi)) { $Msi = (Resolve-Path $Msi).ProviderPath }
     $args = @('-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
     if ($Msi) { $args += @('-Msi', $Msi) }
     if ($NoStart) { $args += '-NoStart' }
-    $p = Start-Process powershell -Verb RunAs -ArgumentList $args -Wait -PassThru
+    # Ждём сам процесс, а не `-Wait`: тот ждёт всё дерево, а последним шагом скрипт с правами
+    # запускает Point — и обёртка висела, пока человек не закроет Point (2026-11-26).
+    $p = Start-Process powershell -Verb RunAs -ArgumentList $args -PassThru
+    $p.WaitForExit()
     exit $p.ExitCode
 }
 
