@@ -59,7 +59,7 @@ fi
 # из чего угодно и с чем угодно внутри.
 step "Релизная сборка"
 if [ "$build" -eq 1 ]; then
-    export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Android/Android Studio/jbr}"
+    export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Eclipse Adoptium/jdk-21.0.13.9-hotspot}"
     # Собирается и bundle: в Play уезжает именно он, и проверять надо то, что уедет,
     # а не его APK-двойника (#513).
     if (cd "$root" && ./gradlew --quiet clean :app:assembleRelease :app:bundleRelease >/tmp/release-gate-build.log 2>&1); then
