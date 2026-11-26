@@ -41,9 +41,21 @@ class OpenAiProviderTest {
         assertTrue(isVisionModel("pixtral-12b-2409"))
     }
 
+    /** Живой запрос 26.11.2026: каждая из них дословно прочитала накладную на картинке. */
+    @Test
+    fun `models of the refreshed catalog that read a picture count as vision`() {
+        assertTrue(isVisionModel("qwen/qwen3.8-27b"))
+        assertTrue(isVisionModel("nvidia/nemotron-3.5-super-vl:free"))
+        assertTrue(isVisionModel("nvidia/nemotron-3.5-super-vl-120b-a12b"))
+        assertTrue(isVisionModel("command-a-vision-07-2025"))
+        assertTrue(isVisionModel("gemini-flash-lite-latest"))
+    }
+
     @Test
     fun `a text-only model still keeps photos out`() {
         assertFalse(isVisionModel("gpt-oss-120b"))
         assertFalse(isVisionModel("llama-3.3-70b-versatile"))
+        assertFalse(isVisionModel("nvidia/nemotron-3-ultra-550b-a55b"))
+        assertFalse(isVisionModel("command-a-03-2025"))
     }
 }

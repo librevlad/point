@@ -25,7 +25,7 @@ class ConsentSaysWhatLeavesTest {
     private val pickedByPoint = listOf(
         "Mistral", "OCR.space", "OVH", "Groq", "Gemini", "Qwen", "SambaNova", "Cerebras",
         "Tesseract", "Whisper", "OpenRouter", "Zhipu", "NVIDIA", "ModelScope", "Cloudflare",
-        "OpenAI", "Anthropic",
+        "Cohere", "OpenAI", "Anthropic",
     )
 
     private val consentSources = listOf(

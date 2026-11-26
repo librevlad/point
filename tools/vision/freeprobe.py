@@ -183,7 +183,7 @@ CANDIDATES = [
     ("Gemini gemini-flash-latest", "Gemini", lambda c, i: gemini(c, "gemini-flash-latest", i)),
     ("Gemini gemini-flash-lite-latest", "Gemini", lambda c, i: gemini(c, "gemini-flash-lite-latest", i)),
     ("Gemini gemma-4-31b-it", "Gemini", lambda c, i: gemini(c, "gemma-4-31b-it", i)),
-    ("Groq qwen/qwen3.6-27b", "Groq", _oai(GROQ, "GROQ_API_KEY", "qwen/qwen3.6-27b")),
+    ("Groq qwen/qwen3.8-27b", "Groq", _oai(GROQ, "GROQ_API_KEY", "qwen/qwen3.8-27b")),
     ("Cerebras gemma-4-31b", "Cerebras", _oai(CEREBRAS, "CEREBRAS_API_KEY", "gemma-4-31b")),
     ("SambaNova gemma-4-31B-it", "SambaNova", _oai(SAMBA, "SAMBANOVA_API_KEY", "gemma-4-31B-it")),
     ("OpenRouter gemma-4-26b-a4b-it:free", "OpenRouter", _oai(OPENROUTER, "OPENROUTER_API_KEY", "google/gemma-4-26b-a4b-it:free")),

@@ -1125,16 +1125,14 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 бесплатная дневная норма у сети, которая рядом с человеком	безкоштовна денна норма в мережі, що поруч із людиною	free daily allowance on a network close to you
 бесплатная квота в сутки	безкоштовна квота на добу	free daily quota
 бесплатная модель, лимит не назван	безкоштовна модель, ліміт не названо	free model, no stated limit
-бесплатно после регистрации, суточный предел вызовов	безкоштовно після реєстрації, добова межа викликів	free after sign-up, daily call limit
+бесплатно после подтверждения аккаунта, суточный предел вызовов	безкоштовно після підтвердження акаунта, добова межа викликів	free after verifying the account, daily call limit
 бесплатное чтение на сегодня закончилось	безкоштовне читання на сьогодні скінчилося	free reading is used up for today
 бесплатные вызовы после регистрации, предел не назван	безкоштовні виклики після реєстрації, межу не названо	free calls after sign-up, no stated limit
 бесплатные модели есть	є безкоштовні моделі	has free models
 бесплатный	безкоштовний	toll-free
-бесплатный уровень	безкоштовний рівень	free tier
-бесплатный уровень после подтверждения телефона	безкоштовний рівень після підтвердження телефону	free tier after confirming a phone number
 бесплатный уровень с лимитом в минуту	безкоштовний рівень з лімітом на хвилину	free tier with a per-minute limit
 бланк {0}.xlsx	бланк {0}.xlsx	form {0}.xlsx
-большие Qwen3-VL даром — читает фото документа целиком	великі Qwen3-VL безкоштовно — читає фото документа цілком	large Qwen3-VL for free; reads a photo of a document in full
+большие открытые модели даром — Qwen и InternVL	великі відкриті моделі безкоштовно — Qwen та InternVL	large open models for free: Qwen and InternVL
 буквы двух алфавитов в одном слове — обычная подмена при чтении	літери двох алфавітів в одному слові — звичайна підміна під час читання	letters from two alphabets in one word, a common reading mix-up
 был на связи {0} назад	був на зв’язку {0} тому	last online {0} ago
 быстрый текст, картинки не понимает	швидкий текст, картинок не розуміє	fast text, doesn't understand pictures
@@ -1144,6 +1142,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 ваш ключ {0}	ваш ключ {0}	your key {0}
 взят из буфера	взято з буфера	taken from the clipboard
 видит картинки, но часто отвечает «занят»	бачить картинки, але часто відповідає «зайнятий»	sees pictures but often answers “busy”
+видит фотографии и документы, отвечает быстро	бачить фотографії та документи, відповідає швидко	sees photos and documents, answers fast
 возможно	можливо	maybe
 войдите в аккаунт на компьютере	увійдіть в акаунт на комп’ютері	sign in on the computer
 всё, что оставалось	усе, що лишалося	everything that was left
@@ -1216,7 +1215,6 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 компьютер не смог принять объект — отправьте его ещё раз	комп’ютер не зміг прийняти об’єкт — надішліть його ще раз	the computer couldn't take the item. Send it again
 координаты	координати	coordinates
 лимит исчерпан	ліміт вичерпано	limit reached
-лучше всех бесплатных читает фото документа — им Point разбирает страницу	найкраще з безкоштовних читає фото документа — ним Point розбирає сторінку	reads photos of documents best among the free ones; Point uses it to read pages
 любой сервис AI — по вашему ключу	будь-який сервіс AI — за вашим ключем	any AI service, with your key
 мар	бер	Mar
 марта	березня	March
@@ -1318,6 +1316,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 приём файла — подтвердить приём	приймання файлу — підтвердити приймання	receiving a file: confirm receipt
 приём файла — положить файл на устройство	приймання файлу — покласти файл на пристрій	receiving a file: save it on the device
 про обучение на присланном не сказал ничего	про навчання на надісланому нічого не сказав	said nothing about learning from what it gets
+пробный ключ бесплатно, не для коммерческого использования	пробний ключ безкоштовно, не для комерційного використання	free trial key, not for commercial use
 проверено начало — {0} из {1} символов	перевірено початок — {0} з {1} символів	checked the beginning: {0} of {1} characters
 проверьте ocr.key в ~/.point-pc/config	перевірте ocr.key у ~/.point-pc/config	check ocr.key in ~/.point-pc/config
 проверьте ocr.url там же	перевірте ocr.url там само	check ocr.url in the same place
@@ -1412,6 +1411,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 фев	лют	Feb
 февраля	лютого	February
 хорошо понимает фотографии	добре розуміє фотографії	understands photos well
+хорошо читает фото документа — им Point разбирает страницу	добре читає фото документа — ним Point розбирає сторінку	reads photos of documents well; Point uses it to read pages
 час	годину	hour
 часа	години	hours
 часов	годин	hours

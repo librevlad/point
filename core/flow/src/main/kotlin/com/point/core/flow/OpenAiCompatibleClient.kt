@@ -49,6 +49,11 @@ private val VISION_MODEL_HINTS = listOf(
     "mistral-small", "mistral-medium", "ministral",
 
     "qwen3.6",
+
+    // Живой запрос 26.11.2026: накладную на картинке дословно прочитали qwen3.8-27b у Groq и
+    // flash-lite у Gemini. Без этой приметы Gemini, который «хорошо понимает фотографии», для
+    // Point был слепым и не предлагался, когда ключ нужен ради снимка.
+    "qwen3.8", "gemini",
 )
 
 fun isMeasuredStrongVision(model: String): Boolean {
