@@ -23,7 +23,10 @@ pdfbox = "2.0.27"
 commonsCompress = "1.27.1"
 tukaaniXz = "1.10"
 junrar = "7.5.5"
-tesseract4android = "4.9.0"
+# Это и есть 4.9.0, только по коммиту тега (15c534717b). У JitPack сборка версии «4.9.0» к
+# 2026-11-26 в состоянии Error и не скачивается, а сборка того же коммита — «ok»: без этого
+# чистая машина и CI без кэша не собирают :data.
+tesseract4android = "15c534717b"
 opencv = "4.14.0"
 opencvJvm = "4.9.0-0"
 onnxruntime = "1.28.0"
