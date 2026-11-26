@@ -19,6 +19,8 @@ set -u
 export ANDROID_HOME="${ANDROID_HOME:-C:/Users/User/AppData/Local/Android/Sdk}"
 export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 A="$ANDROID_HOME/platform-tools/adb.exe"
+# Пакет приложения на телефоне: с 2026-11-26 — `app.leerio.point` (в Google Play `com.point` занят).
+PKG="${POINT_PKG:-app.leerio.point}"
 
 TAP=""
 TABLE=""
@@ -140,16 +142,16 @@ for img in "$@"; do
   echo "### $name" >> "$OUT/report.md"
 
   "$A" push "$img" /data/local/tmp/c.jpg > /dev/null 2>&1
-  "$A" shell "run-as com.point cp /data/local/tmp/c.jpg files/c.jpg"
-  "$A" shell am force-stop com.point > /dev/null 2>&1
-  "$A" shell rm -f /sdcard/Android/data/com.point/files/atoms-last.tsv > /dev/null 2>&1
+  "$A" shell "run-as $PKG cp /data/local/tmp/c.jpg files/c.jpg"
+  "$A" shell am force-stop $PKG > /dev/null 2>&1
+  "$A" shell rm -f /sdcard/Android/data/$PKG/files/atoms-last.tsv > /dev/null 2>&1
   # Таблица прошлого кадра из scratch убирается ДО прогона: иначе «самый свежий .xlsx» окажется
   # чужим, и метрика посчитает предыдущий кадр, ничем себя не выдав.
-  [ -z "$TABLE" ] || "$A" shell "run-as com.point sh -c 'rm -f files/scratch/*.xlsx'" > /dev/null 2>&1
+  [ -z "$TABLE" ] || "$A" shell "run-as $PKG sh -c 'rm -f files/scratch/*.xlsx'" > /dev/null 2>&1
   "$A" logcat -c
   "$A" shell am start -a android.intent.action.SEND -t image/jpeg \
-    --eu android.intent.extra.STREAM "file:///data/user/0/com.point/files/c.jpg" \
-    -n com.point/.ShareActivity > /dev/null 2>&1
+    --eu android.intent.extra.STREAM "file:///data/user/0/$PKG/files/c.jpg" \
+    -n "$PKG/com.point.ShareActivity" > /dev/null 2>&1
 
   # OCR на софтверном эмуляторе идёт десятками секунд — ждём строку в логе, не «на глаз».
   # Сколько именно ждали, пишется рядом с пределом: без этих двух чисел «строки нет» читается
@@ -181,7 +183,7 @@ for img in "$@"; do
         waited=0
         idle=0
         while [ "$waited" -lt "$TABLE_WAIT" ]; do
-          x=$("$A" shell "run-as com.point ls files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]xlsx$')
+          x=$("$A" shell "run-as $PKG ls files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]xlsx$')
           [ -n "$x" ] && break
           sleep 5
           waited=$((waited + 5))
@@ -210,13 +212,13 @@ for img in "$@"; do
   fi
 
   # Слой атомов — фикстурный канал движка v3 (#257): слово+bbox+conf дословно.
-  "$A" exec-out cat /sdcard/Android/data/com.point/files/atoms-last.tsv > "$OUT/$name.atoms.tsv" 2>/dev/null
+  "$A" exec-out cat /sdcard/Android/data/$PKG/files/atoms-last.tsv > "$OUT/$name.atoms.tsv" 2>/dev/null
   [ -s "$OUT/$name.atoms.tsv" ] || rm -f "$OUT/$name.atoms.tsv"
 
   # Дословный текст из scratch (самый свежий .txt).
-  f=$("$A" shell "run-as com.point ls -t files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]txt$')
+  f=$("$A" shell "run-as $PKG ls -t files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]txt$')
   if [ -n "$f" ]; then
-    "$A" exec-out run-as com.point cat "files/scratch/$f" > "$OUT/$name.txt" 2>/dev/null
+    "$A" exec-out run-as $PKG cat "files/scratch/$f" > "$OUT/$name.txt" 2>/dev/null
     echo '```' >> "$OUT/report.md"
     head -c 1200 "$OUT/$name.txt" >> "$OUT/report.md"
     echo '' >> "$OUT/report.md"
@@ -226,7 +228,7 @@ for img in "$@"; do
   fi
 
   # Журнал флоу: метаданные объекта — вход метрики «действие без правок» (actionReadiness).
-  "$A" exec-out run-as com.point cat files/flow-snapshot.json > "$OUT/$name.flow.json" 2>/dev/null
+  "$A" exec-out run-as $PKG cat files/flow-snapshot.json > "$OUT/$name.flow.json" 2>/dev/null
   [ -s "$OUT/$name.flow.json" ] || rm -f "$OUT/$name.flow.json"
 
   # Результат «В Excel»: сам файл, а не рассказ о нём. Отсутствие файла — тоже результат, и он
@@ -235,9 +237,9 @@ for img in "$@"; do
     # Файл прошлого прогона ЭТОГО кадра — тоже чужой результат: не сотрёшь, и `-s` ниже
     # посчитает вчерашнюю таблицу как сегодняшнюю.
     rm -f "$OUT/$name.xlsx" "$OUT/$name.tsv"
-    x=$("$A" shell "run-as com.point ls -t files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]xlsx$')
+    x=$("$A" shell "run-as $PKG ls -t files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]xlsx$')
     if [ -n "$x" ]; then
-      "$A" exec-out run-as com.point cat "files/scratch/$x" > "$OUT/$name.xlsx" 2>/dev/null
+      "$A" exec-out run-as $PKG cat "files/scratch/$x" > "$OUT/$name.xlsx" 2>/dev/null
     fi
     if [ -s "$OUT/$name.xlsx" ]; then
       bash "$(dirname "$0")/table-score.sh" "$OUT/$name.xlsx" "$TABLE" "$OUT/report.md" \

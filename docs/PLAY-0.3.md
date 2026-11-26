@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| Пакет | `com.point` |
+| Пакет | `app.leerio.point` с 2026-11-26: в Google Play `com.point` и `com.point.app` заняты чужими приложениями. Пакеты кода остаются `com.point`; прежние сборки `com.point` встают рядом отдельным приложением |
 | Версия | `versionName` = `pointVersion` из `gradle.properties`; `versionCode` выводится из неё: 0.3.8 → 3008 (#1470). Первый закрытый тест идёт с 0.3.8: GitHub-релиз v0.3.7 собран из более старого кода, и одинаковый номер у разных сборок путал бы отзывы |
 | Что грузить в Play | `app/build/outputs/bundle/release/app-release.aab` |
 | SDK | `minSdk 26`, `targetSdk 36`, `compileSdk 36` |

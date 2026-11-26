@@ -222,16 +222,23 @@ def _readable_text(mime: str, data: bytes) -> bool:
 
 # Чьи сборки Point вправе открывать ссылки `/d/…` (`/.well-known/assetlinks.json`, #1083).
 # Отпечатки SHA-256 сертификатов подписи — публичные, не секрет.
-APP_SIGNING_FINGERPRINTS = (
-    # Ключ релиза с 2026-11-26: прежний потерян при переезде на новый компьютер. Им подписаны
-    # сборки с сайта и выпуск в Google Play (свой ключ подписи через PEPK, `docs/PLAY-0.3.md`).
-    "5A:51:00:AD:C6:34:2C:D3:4F:90:57:61:A7:A6:CC:47:63:9A:5C:64:53:DE:92:23:B7:75:42:42:4E:1A:6B:09",
-    # Потерянный ключ релиза: им подписаны v0.3.7 и прежние сборки с сайта. Остаётся, пока они
-    # стоят у людей, — иначе у них ссылка уйдёт в браузер, хотя Point установлен.
-    "A9:55:88:14:C0:C1:BC:30:FB:BD:CE:7C:5E:7C:55:50:A7:AB:3D:1D:C4:BE:9A:7F:53:A0:D0:DC:6A:5C:E3:19",
-    # Debug-ключ стенда.
-    "F3:D9:DF:F6:D8:96:66:BE:F8:79:37:A4:A9:AF:3F:AF:B2:C7:F6:1C:D3:0D:BE:87:8A:FA:7C:27:90:08:20:F3",
-)
+
+# Ключ релиза с 2026-11-26: прежний потерян при переезде на новый компьютер. Им подписаны
+# сборки с сайта и выпуск в Google Play (свой ключ подписи через PEPK, `docs/PLAY-0.3.md`). Если
+# в Play подписывать станет ключ Google, его SHA-256 из консоли дописывается к пакету Play.
+RELEASE_KEY = "5A:51:00:AD:C6:34:2C:D3:4F:90:57:61:A7:A6:CC:47:63:9A:5C:64:53:DE:92:23:B7:75:42:42:4E:1A:6B:09"
+# Потерянный ключ релиза: им подписаны v0.3.7 и прежние сборки с сайта.
+LOST_RELEASE_KEY = "A9:55:88:14:C0:C1:BC:30:FB:BD:CE:7C:5E:7C:55:50:A7:AB:3D:1D:C4:BE:9A:7F:53:A0:D0:DC:6A:5C:E3:19"
+# Debug-ключ стенда.
+DEBUG_STAND_KEY = "F3:D9:DF:F6:D8:96:66:BE:F8:79:37:A4:A9:AF:3F:AF:B2:C7:F6:1C:D3:0D:BE:87:8A:FA:7C:27:90:08:20:F3"
+
+APP_LINK_TARGETS = {
+    # Пакет Point с 2026-11-26: в Google Play `com.point` занят чужим приложением.
+    "app.leerio.point": (RELEASE_KEY, DEBUG_STAND_KEY),
+    # Прежний пакет: так подписаны и так называются сборки, которые уже стоят у людей. Остаётся,
+    # пока они есть, — иначе у них ссылка уйдёт в браузер, хотя Point установлен.
+    "com.point": (RELEASE_KEY, LOST_RELEASE_KEY, DEBUG_STAND_KEY),
+}
 
 # Отпечаток выложенного кода (#1231): его кладёт рядом с кодом `tools/deploy-server.sh`.
 DEPLOYED_FILE = "deployed.txt"
@@ -384,10 +391,11 @@ def create_app(
                     "relation": ["delegate_permission/common.handle_all_urls"],
                     "target": {
                         "namespace": "android_app",
-                        "package_name": "com.point",
-                        "sha256_cert_fingerprints": list(APP_SIGNING_FINGERPRINTS),
+                        "package_name": package,
+                        "sha256_cert_fingerprints": list(prints),
                     },
-                },
+                }
+                for package, prints in APP_LINK_TARGETS.items()
             ],
         )
 

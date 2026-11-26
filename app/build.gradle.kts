@@ -33,7 +33,10 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.point"
+        // Пакет в Google Play — `app.leerio.point` (решение владельца 2026-11-26): `com.point` и
+        // `com.point.app` там заняты чужими приложениями. Пакеты кода остаются `com.point`
+        // (`namespace` выше). Прежние сборки `com.point` встают рядом отдельным приложением.
+        applicationId = "app.leerio.point"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
 
