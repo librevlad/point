@@ -147,6 +147,23 @@ TEXTS: dict[str, tuple[str, str]] = {
         "address your computer uses to wake your phone, and when it last checked in, so you "
         "can see your circle and switch off what you don't need.",
     ),
+    "Ваши настройки": ("Ваші налаштування", "Your settings"),
+    "Ключи сервисов, которые вы добавили сами (AI, распознавание речи и текста), выбор, "
+    "куда можно отправлять объекты, и звук — чтобы на каждом вашем устройстве они были "
+    "те же и вводить их заново не пришлось. Сервер эти настройки читает, иначе не смог бы "
+    "отдать их новому устройству. На его диске они лежат зашифрованными. Удаление аккаунта "
+    "стирает их сразу.": (
+        "Ключі сервісів, які ви додали самі (AI, розпізнавання мовлення й тексту), вибір, куди "
+        "можна надсилати об’єкти, і звук — щоб на кожному вашому пристрої вони були ті самі й не "
+        "довелося вводити їх знову. Сервер ці налаштування читає, інакше не зміг би віддати їх "
+        "новому пристрою. На його диску вони лежать зашифрованими. Видалення акаунта стирає їх "
+        "одразу.",
+        "Keys for services you added yourself (AI, speech and text recognition), your choice of "
+        "where things may be sent, and sound — so they are the same on every device and you never "
+        "type them twice. The server reads these settings, otherwise it could not hand them to a "
+        "new device. On its disk they are stored encrypted. Deleting the account erases them at "
+        "once.",
+    ),
     "То, что вы пересылаете между своими устройствами": (
         "Те, що ви пересилаєте між своїми пристроями",
         "What you send between your devices",
@@ -282,13 +299,14 @@ TEXTS: dict[str, tuple[str, str]] = {
     ),
     "Как удалить": ("Як видалити", "How to delete"),
     "В приложении: «Мои устройства» → «Удалить аккаунт». Учётная запись, круг устройств, "
-    "ваши ссылки и всё, что лежит на сервере недоставленным, исчезают сразу и навсегда. "
+    "настройки и ключи сервисов, ваши ссылки и всё, что лежит на сервере недоставленным, "
+    "исчезают сразу и навсегда. "
     "Объекты на самих устройствах остаются вашими — сервер к ним отношения не имеет.": (
         "У застосунку: «Мої пристрої» → «Видалити акаунт». Обліковий запис, коло пристроїв, "
-        "ваші посилання і все, що лежить на сервері недоставленим, зникають одразу й назавжди. "
+        "налаштування й ключі сервісів, ваші посилання і все, що лежить на сервері недоставленим, зникають одразу й назавжди. "
         "Об’єкти на самих пристроях лишаються вашими — сервер до них не має стосунку.",
         "In the app: “My devices” → “Delete account”. The account, the circle of devices, your "
-        "links and everything waiting undelivered on the server disappear at once and for good. "
+        "settings and service keys, your links and everything waiting undelivered on the server disappear at once and for good. "
         "Things on the devices themselves stay yours; the server has nothing to do with them.",
     ),
     'Подробнее — на странице <a class="go" href="/delete-account">Удаление аккаунта</a>.': (
@@ -304,13 +322,14 @@ TEXTS: dict[str, tuple[str, str]] = {
     ),
     "Что исчезает сразу": ("Що зникає одразу", "What disappears at once"),
     "Учётная запись Point и связь с вашим аккаунтом Google. Все ваши устройства в круге. "
+    "Ваши настройки и ключи сервисов, которые хранились за аккаунтом. "
     "Всё, что лежало на сервере недоставленным между устройствами. Все ссылки, по которым "
     "вы отдали объект другим людям, и все ссылки на приём файлов.": (
         "Обліковий запис Point і зв’язок із вашим акаунтом Google. Усі ваші пристрої в колі. "
-        "Усе, що лежало на сервері недоставленим між пристроями. Усі посилання, за якими ви "
+        "Ваші налаштування й ключі сервісів, що зберігалися за акаунтом. Усе, що лежало на сервері недоставленим між пристроями. Усі посилання, за якими ви "
         "віддали об’єкт іншим людям, і всі посилання для приймання файлів.",
         "Your Point account and its link to your Google account. All your devices in the circle. "
-        "Everything left undelivered on the server between devices. All links through which you "
+        "Your settings and service keys kept with the account. Everything left undelivered on the server between devices. All links through which you "
         "handed something to other people, and all links for receiving files.",
     ),
     "Что остаётся": ("Що лишається", "What stays"),

@@ -104,7 +104,6 @@ class DesktopAccount(
 
                 runCatching { client.enroll(account, keys.keys().publicKey) }
                 refreshCircle()
-                syncSettings()
             }
         }
     }
@@ -132,13 +131,15 @@ class DesktopAccount(
         val account = store.current() ?: return
 
         scope.launch { runCatching { client.enroll(account, keys.keys().publicKey) } }
+        // Настройки — за аккаунтом, а не за кругом (владелец 26.11.2026): сводятся сами по
+        // себе, что бы сервер ни ответил о круге.
+        syncSettings()
         scope.launch {
             val answer = runCatching { client.circle(account) }.getOrDefault(CircleAnswer.Unreachable)
             when (answer) {
                 is CircleAnswer.Circle -> {
                     _error.value = null
                     _circle.value = answer.devices
-                    syncSettings()
                 }
                 CircleAnswer.Unreachable -> _error.value = tr("Не удалось спросить сервер о ваших устройствах")
 
@@ -148,13 +149,13 @@ class DesktopAccount(
     }
 
     /**
-     * Свести настройки с общими (#610). Молча: обмен предпочтениями — не событие для
-     * человека, а его отсутствие не повод для сообщения об ошибке.
+     * Свести настройки с теми, что лежат за аккаунтом (#610). Молча: обмен предпочтениями —
+     * не событие для человека, а его отсутствие не повод для сообщения об ошибке.
      */
     fun syncSettings() {
         val account = store.current() ?: return
         scope.launch {
-            val merged = runCatching { settingsSync.sync(account, keys.keys(), mySettings()) }.getOrNull()
+            val merged = runCatching { settingsSync.sync(account, mySettings()) }.getOrNull()
             merged?.let(onSettings)
         }
     }

@@ -42,6 +42,7 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import db, google as google_mod, i18n, ids, mailbox, pages, push as push_mod, store, upload_page
+from . import vault as vault_mod
 from .i18n import t
 from .config import Settings, settings_from_env
 
@@ -62,6 +63,8 @@ class Deps:
     now: Callable[[], int]
     # Кому стучать в телефон (#817). `None` — стучать нечем, и это рабочее состояние.
     knocker: object = None
+    # Чем настройки аккаунта зашифрованы на диске.
+    vault: vault_mod.SettingsVault | None = None
 
 
 # --- тела запросов ---------------------------------------------------------------------
@@ -84,10 +87,10 @@ class StartRequest(BaseModel):
     handoff: bool = False
 
 
-class SettingsRequest(BaseModel):
-    """Запечатанные настройки. Для сервера это строка и ничего больше (#610)."""
+class AccountSettingsRequest(BaseModel):
+    """Настройки аккаунта строками «ключ=значение»; сервер достаёт из них только `at`."""
 
-    sealed: str = Field(default="", max_length=64_000)
+    settings: str = Field(default="", max_length=64_000)
 
 
 class EnrollRequest(BaseModel):
@@ -300,6 +303,7 @@ def create_app(
         google=google,
         now=now or (lambda: int(time.time())),
         knocker=knocker,
+        vault=vault_mod.SettingsVault(vault_mod.load_or_create_key(settings.settings_key_file)),
     )
 
     def deps(request: Request) -> Deps:
@@ -649,35 +653,42 @@ def create_app(
             "device": device_json(row, me, d.now(), d.settings.online_window),
         }
 
-    # --- настройки аккаунта в закрытом виде (#610) ---------------------------------
+    # --- настройки аккаунта ----------------------------------------------------------
+    # Едут за человеком, а не за кругом: любое устройство, вошедшее в аккаунт, получает
+    # их сразу, без участия других устройств (владелец 26.11.2026 — «оно должно зависеть
+    # только от аккаунта, не от круга»).
 
-    @app.get("/settings")
-    def get_settings(
-        conn: sqlite3.Connection = Depends(conn_of),
-        me: store.Caller = Depends(caller),
-    ):
-        row = store.settings(conn, me.user_id)
-        return {"sealed": row["sealed"] if row else "", "at": row["at"] if row else 0}
-
-    @app.put("/settings")
-    def put_settings(
-        body: SettingsRequest,
+    @app.get("/account/settings")
+    def get_account_settings(
         conn: sqlite3.Connection = Depends(conn_of),
         me: store.Caller = Depends(caller),
         d: Deps = Depends(deps),
     ):
-        sealed = (body.sealed or "").strip()
-        if not sealed:
-            raise fail(400, "no_settings", t("Настройки приехали пустыми."))
+        row = store.account_settings(conn, me.user_id)
+        text = d.vault.open(me.user_id, row["data"]) if row else None
+        if text is None:
+            # Нет строки или её нечем открыть (ключ сервера пропал) — для устройства это
+            # «настроек ещё нет»: оно положит свои, и всё поедет дальше.
+            return {"settings": "", "at": 0}
+        return {"settings": text, "at": row["at"]}
 
-        # Число «когда запечатано» сервер достаёт из конверта, не заглядывая в содержимое:
-        # оно и есть единственное, что ему нужно знать, чтобы не положить старое поверх нового.
+    @app.put("/account/settings")
+    def put_account_settings(
+        body: AccountSettingsRequest,
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
+    ):
+        text = (body.settings or "").strip()
+        if not text:
+            raise fail(400, "no_settings", t("Настройки приехали пустыми."))
         at = 0
-        for line in sealed.splitlines():
+        for line in text.splitlines():
             if line.startswith("at="):
                 at = int(line[3:]) if line[3:].isdigit() else 0
                 break
-        if not store.put_settings(conn, user_id=me.user_id, sealed=sealed, at=at, now=d.now()):
+        data = d.vault.seal(me.user_id, text)
+        if not store.put_account_settings(conn, user_id=me.user_id, data=data, at=at, now=d.now()):
             raise fail(409, "stale_settings", t("На сервере лежат более новые настройки."))
         return {"ok": True, "at": at}
 

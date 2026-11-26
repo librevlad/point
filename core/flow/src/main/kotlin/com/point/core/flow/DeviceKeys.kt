@@ -24,7 +24,7 @@ object DeviceKeys {
 
     /**
      * Общий секрет с чужим устройством. [context] разводит назначения: один и тот же ключ
-     * устройства не должен запечатывать и связку, и настройки одним и тем же секретом (#610).
+     * устройства не должен давать один и тот же секрет для разных дел.
      */
     fun sharedSecret(
         privateKey: String,
@@ -44,9 +44,6 @@ object DeviceKeys {
     }.getOrNull()
 
     const val PC_CONTEXT = "point-pc"
-
-    /** Назначение «настройки аккаунта»: секрет связки для них не годится по построению. */
-    const val SETTINGS_CONTEXT = "point-settings"
 
     internal fun base64Of(bytes: ByteArray): String = base64(bytes)
 

@@ -277,28 +277,30 @@ def revoke_device(conn: sqlite3.Connection, *, user_id: str, device_id: str, now
     return cur.rowcount
 
 
-# --- настройки аккаунта в закрытом виде (#610) -----------------------------------------
+# --- настройки аккаунта --------------------------------------------------------------
 
 
-def settings(conn: sqlite3.Connection, user_id: str) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,)).fetchone()
+def account_settings(conn: sqlite3.Connection, user_id: str) -> sqlite3.Row | None:
+    """Строка как лежит: `data` зашифровано (`vault.py`), открывает его вызывающий."""
+    return conn.execute("SELECT * FROM account_settings WHERE user_id = ?", (user_id,)).fetchone()
 
 
-def put_settings(conn: sqlite3.Connection, *, user_id: str, sealed: str, at: int, now: int) -> bool:
+def put_account_settings(
+    conn: sqlite3.Connection, *, user_id: str, data: str, at: int, now: int
+) -> bool:
     """Кладёт настройки, если присланные не старее лежащих.
 
     Старое поверх нового не ложится: два устройства правят настройки независимо, и
     победить должно то, что человек сделал позже, — иначе правка молча пропадает.
-    Разбирать содержимое сервер не может: он его не читает и читать не должен.
     """
-    row = settings(conn, user_id)
+    row = account_settings(conn, user_id)
     if row is not None and at < row["at"]:
         return False
     conn.execute(
-        "INSERT INTO settings (user_id, sealed, at, updated_at) VALUES (?, ?, ?, ?)"
-        " ON CONFLICT(user_id) DO UPDATE SET sealed = excluded.sealed,"
+        "INSERT INTO account_settings (user_id, data, at, updated_at) VALUES (?, ?, ?, ?)"
+        " ON CONFLICT(user_id) DO UPDATE SET data = excluded.data,"
         " at = excluded.at, updated_at = excluded.updated_at",
-        (user_id, sealed, at, now),
+        (user_id, data, at, now),
     )
     return True
 
@@ -311,5 +313,5 @@ def delete_account(conn: sqlite3.Connection, user_id: str) -> None:
     )
     conn.execute("DELETE FROM devices WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM logins WHERE user_id = ?", (user_id,))
-    conn.execute("DELETE FROM settings WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM account_settings WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM users WHERE id = ?", (user_id,))

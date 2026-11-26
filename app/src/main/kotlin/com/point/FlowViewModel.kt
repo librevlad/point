@@ -1679,7 +1679,13 @@ class FlowViewModel @Inject constructor(
                 }
             },
             onSignedIn = { syncAccountSettings() },
-            onCircleLearned = ::rememberPc,
+            onCircleLearned = { devices ->
+                rememberPc(devices)
+                // Сервер ответил — заодно свести настройки: так телефон, вошедший в аккаунт
+                // после компьютера, получает ключи при следующем же открытии Point, а не
+                // только в момент входа или правки (найдено 26.11.2026: «1 из 12»).
+                syncAccountSettings()
+            },
             onForgotten = {
 
                 // Связка с компьютером принадлежит аккаунту и уходит вместе с ним (#1076).
@@ -1749,7 +1755,8 @@ class FlowViewModel @Inject constructor(
 
     /**
      * Настройки едут за человеком через аккаунт (#610): ключи сервисов, «куда можно
-     * отправлять» и звук. Сервер получает их запечатанными и прочитать не может.
+     * отправлять» и звук. Их хранит сервер, за аккаунтом, а не за кругом устройств: любое
+     * вошедшее устройство получает их сразу (владелец 26.11.2026).
      *
      * [justChanged] — человек прямо сейчас что-то поменял, и это новее общего. Без правки
      * своя отметка берётся у ключей: перезапуск приложения не должен выигрывать спор с
@@ -1769,7 +1776,7 @@ class FlowViewModel @Inject constructor(
                     settingsFlow.keysChangedAt()
                 },
             )
-            val merged = runCatching { settingsSync.sync(account, accountFlow.keys(), mine) }
+            val merged = runCatching { settingsSync.sync(account, mine) }
                 .getOrNull() ?: return@launch
             applyAccountSettings(merged, mine)
         }
