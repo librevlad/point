@@ -39,12 +39,21 @@ Point не является AI-чатом, менеджером файлов и�
 
 ## Операционная модель
 
-- **`go`** = переход верхнего issue с `Up next` → `In progress`. Не начинать срез без явного `go`.
-- Существенные изменения — отдельная ветка `<type>/<issue#>-<slug>` и PR.
+- Рабочая информация — в заметках JARVIS, папка `Проекты/Point` (на компьютере —
+  `C:\Users\exbla\Documents\JARVIS`): доска `Задачи.base`, `Состояние.md`, `Решения.md`, `HANDOFF.md`,
+  `Point.md` (процесс, где лежат секреты, папки рядом). Вход — сервер памяти `jarvis-memory`
+  (имя `Point`): начинать сессию с `memory_brief`, итог работы — `memory_handoff`. Как устроена
+  общая память — `Проекты/JARVIS/Память для ИИ.md`.
+- Доска: Inbox → Бэклог → Ждёт владельца → Очередь → В работе → На проверке → Готово. Мысль
+  владельца — в Inbox его словами; порядок в «Очереди» ставит только владелец.
+- **`go`** = верхняя карточка «Очереди» → «В работе». Не начинать срез без явного `go`.
+- Существенные изменения — отдельная ветка `<type>/<slug>` и PR.
 - Тривиальные `docs:` / `chore:` вне `src/main` можно делать прямо в `main`.
 - Squash-merge только при зелёном CI.
-- PR-title = Conventional-Commit subject + `Closes #N`.
-- Трекер: GitHub Issues + Projects.
+- PR-title = Conventional-Commit subject; в описании — название карточки (и `Closes #N`, если у неё
+  есть прежний issue).
+- GitHub Issues — история до 2026-11-26: на номера `#N` ссылаются код, тесты и документы. Новых
+  issue не заводить; открытые перенесены карточками со свойством `issue`.
 - CI (`.github/workflows/ci.yml`) — задача `build`: `./gradlew test assembleDebug`; задача `server`:
   `python -m pip install -r relay/requirements-dev.txt`, затем `cd relay && python -m pytest tests -q`.
   Зелёными для слияния должны быть обе. Задача `deployed` (`python3 tools/check_server_deployed.py`)
@@ -56,9 +65,11 @@ Point не является AI-чатом, менеджером файлов и�
 ## Сборка и тесты
 
 - Gradle wrapper: `8.14.3`.
-- CLI JDK: `C:\Program Files\Android\Android Studio\jbr`.
-- Установщик Windows (`:desktop:packageMsi`) этим JDK **не собирается**: в JBR нет `jpackage.exe`.
-  Для него `JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot` (Temurin 17).
+- CLI JDK: `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot` (Temurin 21). JBR нынешней
+  Android Studio — Java 25, Gradle 8.14.3 на ней не запускается (падает с «What went wrong: 25.0.4»).
+- Установщик Windows (`:desktop:packageMsi`) нужен JDK с `jpackage.exe`: в JBR его нет, в Temurin 21
+  есть. Раньше собирали Temurin 17 (`jdk-17.0.17.10-hotspot`), на этом компьютере его нет; сборка
+  MSI на Temurin 21 ещё не проверялась.
 - Ставить MSI на компьютер — только `tools/install-desktop.ps1`: он останавливает работающий
   Point, а после установки проверяет очередь удалений Windows и версию. Сам MSI тоже закрывает
   работающий Point перед снятием старой версии (`desktop/msi/close-point-before-upgrade.ps1`):
@@ -70,7 +81,7 @@ Point не является AI-чатом, менеджером файлов и�
 - `local.properties` — git-ignored.
 
 ```bash
-export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
+export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.13.9-hotspot"
 ./gradlew test assembleDebug
 ./gradlew :app:installDebug
 ./gradlew test
