@@ -32,6 +32,9 @@ class Settings:
     # Ключ служебной учётки Firebase — им сервер стучит в телефон (#817). Пуст —
     # значит стука нет, и это рабочее состояние: просьба разбирается при открытии Point.
     fcm_key_path: str = ""
+    # Файл ключа, которым настройки аккаунта зашифрованы на диске (`vault.py`). Пусто —
+    # `settings.key` в корне службы; файла нет — сервер создаёт ключ сам.
+    settings_key_path: str = ""
     login_ttl: int = LOGIN_TTL_SECONDS
     poll_interval: int = POLL_INTERVAL_SECONDS
     online_window: int = ONLINE_WINDOW_SECONDS
@@ -40,6 +43,10 @@ class Settings:
     @property
     def redirect_uri(self) -> str:
         return self.public_url.rstrip("/") + "/auth/callback"
+
+    @property
+    def settings_key_file(self) -> str:
+        return self.settings_key_path or os.path.join(self.root, "settings.key")
 
     @property
     def google_configured(self) -> bool:
@@ -62,4 +69,5 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         google_client_secret=env.get("POINT_GOOGLE_CLIENT_SECRET", ""),
         login_ttl=int(env.get("POINT_LOGIN_TTL", LOGIN_TTL_SECONDS)),
         fcm_key_path=env.get("POINT_FCM_KEY", ""),
+        settings_key_path=env.get("POINT_SETTINGS_KEY_FILE", ""),
     )

@@ -63,12 +63,12 @@ CREATE TABLE IF NOT EXISTS logins (
 );
 CREATE INDEX IF NOT EXISTS logins_by_state ON logins(state);
 
--- Настройки аккаунта в закрытом виде (#610). Сервер для этих байтов — почтовый ящик,
--- а не читатель: содержимое зашифровано на устройстве, ключ вложен в конверт под
--- публичную часть каждого устройства круга. Расшифровать сервер не может и не должен.
-CREATE TABLE IF NOT EXISTS settings (
+-- Настройки аккаунта: ключи AI-сервисов, речи, распознавания текста, приватность, звук.
+-- Сервер их отдаёт любому устройству человека, поэтому читает; на диске они лежат
+-- зашифрованными ключом из отдельного файла (`vault.py`) и привязаны к своему человеку.
+CREATE TABLE IF NOT EXISTS account_settings (
   user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  sealed     TEXT NOT NULL,
+  data       TEXT NOT NULL,
   at         INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -111,8 +111,17 @@ def init(path: str) -> None:
         conn.close()
 
 
+#: Таблицы, которых в схеме больше нет. Живая база их помнит, пока их не уберут явно.
+DROPPED_TABLES = [
+    # Настройки, запечатанные под устройства круга (#610). Новое устройство их открыть не
+    # могло; заменены настройками аккаунта (`account_settings`). Конверты без ключей
+    # устройств ничего не стоят — переносить нечего.
+    "settings",
+]
+
+
 def migrate(conn: sqlite3.Connection) -> None:
-    """Довезти колонки, которых нет в уже существующей базе.
+    """Довезти колонки, которых нет в уже существующей базе, и убрать выбывшие таблицы.
 
     SQLite не умеет `ADD COLUMN IF NOT EXISTS`, поэтому наличие проверяется списком колонок.
     Дешевле и честнее номеров версий: список выше и есть описание того, чего не хватает.
@@ -122,3 +131,5 @@ def migrate(conn: sqlite3.Connection) -> None:
         for name, decl in columns:
             if name not in have:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    for table in DROPPED_TABLES:
+        conn.execute(f"DROP TABLE IF EXISTS {table}")

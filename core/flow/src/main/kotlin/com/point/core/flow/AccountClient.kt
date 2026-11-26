@@ -17,13 +17,17 @@ interface AccountClient {
     suspend fun deleteAccount(account: PointAccount): Boolean
 
     /**
-     * Настройки аккаунта в закрытом виде (#610). Сервер хранит нечитаемое и расшифровать
-     * не может: он для этих байтов — почтовый ящик, а не читатель.
+     * Настройки аккаунта — те, что лежат на сервере за человеком, а не за кругом его
+     * устройств: любое вошедшее устройство получает их сразу.
+     *
+     * `null` — спросить не вышло (сеть, отзыв пропуска). Пустые настройки — на сервере
+     * ещё ничего нет. Путать эти два ответа нельзя: «не спросили» за «пусто» положило бы
+     * своё поверх чужого.
      */
-    suspend fun settings(account: PointAccount): SealedSettings? = null
+    suspend fun settings(account: PointAccount): AccountSettings? = null
 
-    /** `false` — не сохранилось: сеть, отзыв пропуска или чужие настройки оказались новее. */
-    suspend fun saveSettings(account: PointAccount, sealed: SealedSettings): Boolean = false
+    /** `false` — не сохранилось: сеть, отзыв пропуска или на сервере оказались новее. */
+    suspend fun saveSettings(account: PointAccount, settings: AccountSettings): Boolean = false
 
     /**
      * Сказать серверу, куда стучать в это устройство (#817).

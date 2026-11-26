@@ -146,18 +146,20 @@ class HttpAccountClient(
         request(path = "/account", method = "DELETE", token = account.deviceToken).status == 200
     }
 
-    override suspend fun settings(account: PointAccount): SealedSettings? = io {
+    override suspend fun settings(account: PointAccount): AccountSettings? = io {
         val reply = request(path = SETTINGS, method = "GET", token = account.deviceToken)
         if (reply.status != 200) return@io null
-        parseJson(reply.body ?: "").str("sealed")?.let(SealedSettings::decode)
+        // Пустая строка — «на сервере ничего нет»; поля нет вовсе — ответ не тот, и
+        // считать его пустым значило бы положить своё поверх неизвестного.
+        parseJson(reply.body ?: "").str("settings")?.let(AccountSettings::decode)
     }
 
-    override suspend fun saveSettings(account: PointAccount, sealed: SealedSettings): Boolean = io {
+    override suspend fun saveSettings(account: PointAccount, settings: AccountSettings): Boolean = io {
         request(
             path = SETTINGS,
             method = "PUT",
             token = account.deviceToken,
-            body = jsonObject("sealed" to sealed.encode()),
+            body = jsonObject("settings" to settings.encode()),
         ).status == 200
     }
 
@@ -198,7 +200,7 @@ class HttpAccountClient(
 
     private companion object {
 
-        const val SETTINGS = "/settings"
+        const val SETTINGS = "/account/settings"
     }
 }
 
