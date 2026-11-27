@@ -44,6 +44,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import db, google as google_mod, i18n, ids, mailbox, pages, push as push_mod, store, upload_page
 from . import vault as vault_mod
 from . import ai as ai_mod
+from . import bodylimit as bodylimit_mod
 from .i18n import t
 from .config import Settings, settings_from_env
 
@@ -99,6 +100,32 @@ class AiChatRequest(BaseModel):
 
 # Запрос пробы до ~6 МБ: снимок в base64 весит на треть больше самого снимка.
 AI_MAX_BYTES = 6_000_000
+
+# Остальные запросы — короткие: вход, пропуск, настройки, отметки. Мегабайт — с запасом.
+SMALL_MAX_BYTES = 1_000_000
+
+# Файлы человека едут только этими дверями: письмо своему устройству, ссылка «Дать ссылку» и
+# страница приёма. Больше, чем человек может занять на диске, не нужно ни одному из них.
+_UPLOADS = re.compile(r"^/(mbx/[^/]+|d|u/(?!open$)[^/]+)$")
+
+
+def body_limit_for(method: str, path: str) -> int:
+    """Предел тела запроса по двери (охота 27.11.2026): объявлен здесь, держит `bodylimit`."""
+    if method == "POST" and _UPLOADS.match(path):
+        return mailbox.MAX_TOTAL_BYTES
+    if path == "/ai/v1/chat/completions":
+        return AI_MAX_BYTES
+    return SMALL_MAX_BYTES
+
+
+def body_too_big(path: str) -> HTTPException:
+    # Проба отвечает голосом OpenAI — и отказ по размеру тоже: телефон читает его как отказ сервиса.
+    if path.startswith("/ai/"):
+        return HTTPException(
+            status_code=413,
+            detail={"error": {"type": "too_big", "message": t("Объект слишком большой для пробного AI-действия.")}},
+        )
+    return fail(413, "too_big", t("Запрос слишком большой."))
 
 
 class AccountSettingsRequest(BaseModel):
@@ -310,6 +337,8 @@ def create_app(
     db.init(settings.db_path)
 
     app = FastAPI(title="Point server", docs_url=None, redoc_url=None, openapi_url=None)
+    # Предел тела — по пришедшим байтам и до разбора, раньше проверки пропуска (охота 27.11.2026).
+    app.add_middleware(bodylimit_mod.BodyLimit, limit_for=body_limit_for, refusal=body_too_big)
     if knocker is None:
         # Ключа нет — Point работает без стука: просьба разбирается при открытии.
         knocker = push_mod.knocker(settings.fcm_key_path)
@@ -734,13 +763,11 @@ def create_app(
     @app.post("/ai/v1/chat/completions")
     def ai_chat(
         body: AiChatRequest,
-        request: Request,
         conn: sqlite3.Connection = Depends(conn_of),
         me: store.Caller = Depends(caller),
         d: Deps = Depends(deps),
     ):
-        if int(request.headers.get("content-length") or 0) > AI_MAX_BYTES:
-            return ai_refusal(413, "too_big", t("Объект слишком большой для пробного AI-действия."))
+        # Размер держит прослойка `bodylimit` — по пришедшим байтам, а не по заголовку.
         if not d.ai.available:
             return ai_refusal(503, "ai_off", t("Пробные AI-действия сейчас недоступны."))
         # Действие занимается до вызова сервиса, а не списывается после: иначе одновременные
