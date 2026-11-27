@@ -24,6 +24,8 @@ import os
 
 import asyncio
 import base64
+import contextlib
+import threading
 import re
 import hashlib
 import hmac
@@ -36,7 +38,11 @@ from typing import Callable, Iterator
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi import Response
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from starlette.background import BackgroundTask
+from starlette.requests import ClientDisconnect
+from starlette.formparsers import MultiPartException, MultiPartParser
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -107,12 +113,74 @@ SMALL_MAX_BYTES = 1_000_000
 # Файлы человека едут только этими дверями: письмо своему устройству, ссылка «Дать ссылку» и
 # страница приёма. Больше, чем человек может занять на диске, не нужно ни одному из них.
 _UPLOADS = re.compile(r"^/(mbx/[^/]+|d|u/(?!open$)[^/]+)$")
+_RECEIVE_PAGE = re.compile(r"^/u/(?!open$)[^/]+$")
+
+
+def _close_parser_files(parser) -> None:
+    """Временные файлы прерванного разбора — закрыть сразу, а не ждать сборки мусора."""
+    for f in list(getattr(parser, "_files_to_close_on_error", [])):
+        try:
+            f.close()
+        except Exception:
+            pass
+
+
+class _ReceiveFormParser(MultiPartParser):
+    """Разбор формы страницы приёма — с пределом на заголовки частей.
+
+    Starlette не ограничивает ни число, ни размер заголовков части: один запрос в 52 МБ из
+    миллионов крошечных заголовков занимал больше гигабайта памяти — больше, чем есть у
+    машины (проверка независимыми рецензентами 27.11.2026). Странице приёма нужны два-три
+    заголовка на часть.
+    """
+
+    MAX_HEADERS = 16
+    MAX_HEADER_BYTES = 8 * 1024
+
+    def on_part_begin(self) -> None:
+        super().on_part_begin()
+        self._headers_seen = 0
+        self._header_bytes = 0
+
+    def _grow(self, n: int) -> None:
+        self._header_bytes = getattr(self, "_header_bytes", 0) + n
+        if self._header_bytes > self.MAX_HEADER_BYTES:
+            raise MultiPartException("Part headers are too large.")
+
+    def on_header_field(self, data: bytes, start: int, end: int) -> None:
+        self._grow(end - start)
+        super().on_header_field(data, start, end)
+
+    def on_header_value(self, data: bytes, start: int, end: int) -> None:
+        self._grow(end - start)
+        super().on_header_value(data, start, end)
+
+    def on_header_end(self) -> None:
+        self._headers_seen = getattr(self, "_headers_seen", 0) + 1
+        if self._headers_seen > self.MAX_HEADERS:
+            raise MultiPartException("Too many part headers.")
+        super().on_header_end()
+
+# Обёртка формы страницы приёма — границы, заголовки частей, имя файла (в UTF-8 — до сотен
+# байт): её объявленный размер не должен отнимать у файла его 50 МБ.
+FORM_ENVELOPE_BYTES = 64 * 1024
+
+# Перед отказом тело дочитывается, только если оно не больше этого (см. `_drain`).
+DRAIN_MAX_BYTES = 2 * 1024 * 1024
+
+# Свои отправки: до трёх с устройства и до шести у человека всего — устройств у аккаунта
+# сколько угодно, и без общего потолка один аккаунт занимал бы диск без счёта.
+MAX_IN_FLIGHT_PER_PERSON = 6
 
 
 def body_limit_for(method: str, path: str) -> int:
-    """Предел тела запроса по двери (охота 27.11.2026): объявлен здесь, держит `bodylimit`."""
+    """Предел тела запроса по двери (охота 27.11.2026): объявлен здесь, держит `bodylimit`.
+
+    Двери файлов — один файл (50 МБ) и запас на обёртку формы: больше одного файла за раз сюда
+    не приходит, и сверх него сервер не читает ни байта.
+    """
     if method == "POST" and _UPLOADS.match(path):
-        return mailbox.MAX_TOTAL_BYTES
+        return mailbox.MAX_BLOB + SMALL_MAX_BYTES
     if path == "/ai/v1/chat/completions":
         return AI_MAX_BYTES
     return SMALL_MAX_BYTES
@@ -125,7 +193,14 @@ def body_too_big(path: str) -> HTTPException:
             status_code=413,
             detail={"error": {"type": "too_big", "message": t("Объект слишком большой для пробного AI-действия.")}},
         )
+    if _UPLOADS.match(path):
+        return fail(413, "too_big", t(str(mailbox.too_big())))
     return fail(413, "too_big", t("Запрос слишком большой."))
+
+
+def body_stalled(path: str) -> HTTPException:
+    """Тело замерло посреди передачи — обрываем, а не держим место и соединение без конца."""
+    return fail(408, "stalled", t("Отправка остановилась — проверьте связь и попробуйте ещё раз."))
 
 
 class AccountSettingsRequest(BaseModel):
@@ -338,7 +413,12 @@ def create_app(
 
     app = FastAPI(title="Point server", docs_url=None, redoc_url=None, openapi_url=None)
     # Предел тела — по пришедшим байтам и до разбора, раньше проверки пропуска (охота 27.11.2026).
-    app.add_middleware(bodylimit_mod.BodyLimit, limit_for=body_limit_for, refusal=body_too_big)
+    app.add_middleware(
+        bodylimit_mod.BodyLimit, limit_for=body_limit_for, refusal=body_too_big, stalled=body_stalled,
+        # Два часа на тело: 50 МБ — это 7 КБ/с, живая отправка со слабой связью успевает, а
+        # отправка по байту не держит место без конца (проверка рецензентами 27.11.2026).
+        max_seconds=7200,
+    )
     if knocker is None:
         # Ключа нет — Point работает без стука: просьба разбирается при открытии.
         knocker = push_mod.knocker(settings.fcm_key_path)
@@ -386,6 +466,12 @@ def create_app(
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException):
+        # Страница приёма без скрипта получает отказ страницей: человеку — слова, а не JSON.
+        if (request.method == "POST" and _RECEIVE_PAGE.match(request.url.path)
+                and isinstance(exc.detail, dict) and exc.status_code in (400, 408, 413)):
+            said = str(exc.detail.get("message", ""))
+            page_ = pages.too_big_page(said) if exc.status_code == 413 else pages.upload_failed_page(said)
+            return HTMLResponse(page_, status_code=exc.status_code)
         body = exc.detail if isinstance(exc.detail, dict) else {
             "error": "http_%d" % exc.status_code,
             "message": str(exc.detail),
@@ -807,7 +893,8 @@ def create_app(
             raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         # Пропуск отозван — но письма, лежащие в ящике этого устройства, остались бы на диске
         # навсегда. «Выйти» означает «меня здесь больше нет», а не «я больше не захожу».
-        mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
+        with mailbox.user_lock(me.user_id):
+            mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
         return {"revoked": device_id, "self": device_id == me.device_id}
 
     @app.put("/devices/{device_id}/push")
@@ -874,8 +961,10 @@ def create_app(
         Записи без байтов — это не удаление, а обещание удаления: файл, выложенный по ссылке,
         продолжал бы раздаваться и после того, как человек ушёл.
         """
-        store.delete_account(conn, me.user_id)
-        mailbox.forget_user(os.path.join(d.settings.root, "blobs"), me.user_id)
+        # Под замком человека: запись присланного не проскочит между удалением записи и байтов.
+        with mailbox.user_lock(me.user_id):
+            store.delete_account(conn, me.user_id)
+            mailbox.forget_user(os.path.join(d.settings.root, "blobs"), me.user_id)
         return {"deleted": True}
 
     # --- Ящики, ссылки и приём файлов под аккаунтом (#476) --------------------------------
@@ -886,6 +975,131 @@ def create_app(
 
     def _blobs_root(d: Deps) -> str:
         return os.path.join(d.settings.root, "blobs")
+
+    def _busy(e: Exception) -> HTTPException:
+        """Временный отказ — 503 с подсказкой, когда повторить, а не 507: 507 клиенты читают
+        как «слишком большой файл», и человек слышал неправду (проверка рецензентами)."""
+        return fail(503, "busy", t(str(e)), headers={"Retry-After": "30"})
+
+    # Сколько отправок идёт прямо сейчас — в памяти процесса, а не по файлам на диске. Сервер —
+    # один процесс: счёт точен, после перезапуска начинается с нуля, и убирать при старте
+    # ничего не нужно. Прежняя уборка при старте рвала отправки, которые старый процесс ещё
+    # дописывал во время выкладки (проверка рецензентами 27.11.2026).
+    uploads_lock = threading.Lock()
+    uploads_now: dict[tuple[str, str], int] = {}
+    app.state.uploads = uploads_now
+
+    @contextlib.contextmanager
+    def _one_more_upload(key: tuple[str, str], limit: int = mailbox.MAX_IN_FLIGHT):
+        with uploads_lock:
+            if uploads_now.get(key, 0) >= limit:
+                raise mailbox.Busy("Прежние отправки ещё идут — дождитесь их и попробуйте снова")
+            uploads_now[key] = uploads_now.get(key, 0) + 1
+        try:
+            yield
+        finally:
+            with uploads_lock:
+                uploads_now[key] -= 1
+                if uploads_now[key] <= 0:
+                    del uploads_now[key]
+
+    async def _drain(request: Request) -> None:
+        """Отказ до чтения тела доходит до клиента надёжнее, если тело дочитано и выброшено:
+        клиент сначала пишет всё и только потом читает ответ. Но только небольшое тело: гнать
+        50 МБ по мобильной связи ради слова «не сейчас» — дороже самого отказа."""
+        declared = bodylimit_mod.declared_length(request.headers)
+        if declared is None or declared > DRAIN_MAX_BYTES:
+            return
+        try:
+            async for _chunk in request.stream():
+                pass
+        except Exception:
+            pass
+
+    # Файл человека — на диск кусками, по мере прихода (охота 27.11.2026). Сервер — машина на
+    # 964 МБ, общая с другими службами; файл до 50 МБ раньше держался в памяти целиком.
+    async def _receive_to_disk(request: Request, d: Deps, owner: str) -> str:
+        path = mailbox.staging_path(_blobs_root(d), owner)
+        size = 0
+        try:
+            with open(path, "wb") as f:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > mailbox.MAX_BLOB:
+                        raise mailbox.too_big()
+                    f.write(chunk)
+                    # Время файла — время последнего куска: уборка не тронет живую отправку.
+                    f.flush()
+        except ClientDisconnect:
+            mailbox.discard(path)
+            raise fail(400, "gone", t("Отправка остановилась — проверьте связь и попробуйте ещё раз."))
+        except BaseException:
+            mailbox.discard(path)
+            raise
+        return path
+
+    def _spool_to_disk(src, d: Deps, owner: str) -> str:
+        """Файл из разобранной формы — в каталог приёма, кусками; предел считается по ходу."""
+        path = mailbox.staging_path(_blobs_root(d), owner)
+        size = 0
+        try:
+            with open(path, "wb") as f:
+                while True:
+                    chunk = src.read(1 << 16)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > mailbox.MAX_BLOB:
+                        raise mailbox.too_big()
+                    f.write(chunk)
+        except BaseException:
+            mailbox.discard(path)
+            raise
+        return path
+
+    def _file_response(path: str, media_type: str, headers: dict[str, str]) -> Response:
+        """Файл — с диска кусками, а не целиком в памяти (проверка рецензентами 27.11.2026).
+
+        Ссылка `/d/…` открыта без входа: прежде двадцать медленных читателей одного файла на
+        50 МБ держали в памяти гигабайт — больше, чем есть у машины. Файл открывается сразу:
+        если его уберёт подтверждение или уборка, отдача, уже начатая, доходит до конца.
+        """
+        f = open(path, "rb")
+        size = os.fstat(f.fileno()).st_size
+
+        def chunks():
+            while True:
+                block = f.read(1 << 16)
+                if not block:
+                    return
+                yield block
+
+        # Закрывает файл фоновая задача: она идёт и тогда, когда читатель оборвал связь, — иначе
+        # дескриптор висел бы до сборки мусора (проверка рецензентами).
+        return StreamingResponse(chunks(), media_type=media_type,
+                                 headers={**headers, "Content-Length": str(size)},
+                                 background=BackgroundTask(f.close))
+
+    def _commit_own(d: Deps, user_id: str, token: str, staged: str, commit, device_id: str | None = None):
+        """Запись присланного своим — под замком человека, вместе с проверкой пропуска.
+
+        «Удалить всё моё» берёт тот же замок, поэтому не проскакивает между проверкой и записью:
+        ссылка не рождается после удаления (проверка рецензентами 27.11.2026). Идёт в потоке:
+        запись в базу и на диск не держит цикл событий.
+        """
+        try:
+            with mailbox.user_lock(user_id):
+                conn = db.connect(d.settings.db_path)
+                try:
+                    if store.device_by_token(conn, token, d.now()) is None:
+                        raise fail(401, "no_pass", t("Устройство не в аккаунте. Войдите заново."))
+                    if device_id is not None and not store.device(conn, user_id, device_id):
+                        raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
+                finally:
+                    conn.close()
+                return commit()
+        finally:
+            mailbox.discard(staged)
 
     # Обещание «сутки» держится обходом, а не комментарием. Сторожа отдельным потоком не заводим —
     # тем же приёмом, что и просроченные входы: обход делает тот, кто кладёт новое. Дерево
@@ -913,9 +1127,25 @@ def create_app(
         _sweep_blobs(d)
         if not store.device(conn, me.user_id, device_id):
             raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
-        data = await request.body()
+        root = _blobs_root(d)
         try:
-            bid = mailbox.push(_blobs_root(d), me.user_id, device_id, data)
+            with _one_more_upload(("own-person", me.user_id), MAX_IN_FLIGHT_PER_PERSON), \
+                    _one_more_upload(("own", me.device_id)):
+                try:
+                    mailbox.guard_incoming(root, me.user_id, bodylimit_mod.declared_length(request.headers))
+                except mailbox.Full:
+                    await _drain(request)
+                    raise
+                staged = await _receive_to_disk(request, d, me.user_id)
+                bid = await run_in_threadpool(
+                    _commit_own, d, me.user_id, bearer(request), staged,
+                    lambda: mailbox.push_file(root, me.user_id, device_id, staged), device_id,
+                )
+        except mailbox.Busy as e:
+            await _drain(request)
+            raise _busy(e)
+        except mailbox.TooBig as e:
+            raise fail(413, "too_big", t(str(e)))
         except mailbox.Full as e:
             raise fail(507, "full", t(str(e)))
         _arrived(me.user_id, device_id).set()
@@ -946,7 +1176,7 @@ def create_app(
         arrived = _arrived(me.user_id, device_id)
         while True:
             arrived.clear()
-            got = await run_in_threadpool(mailbox.pull, root, me.user_id, device_id)
+            got = await run_in_threadpool(mailbox.pull_path, root, me.user_id, device_id)
             left = deadline - time.monotonic()
             if got or left <= 0:
                 break
@@ -956,8 +1186,12 @@ def create_app(
                 pass
         if not got:
             return Response(status_code=204)
-        bid, data = got
-        return Response(data, media_type="application/octet-stream", headers={"X-Blob-Id": bid})
+        bid, path = got
+        try:
+            return _file_response(path, "application/octet-stream", {"X-Blob-Id": bid})
+        except FileNotFoundError:
+            # Подтверждение успело раньше: письма уже нет — значит, и отдавать нечего.
+            return Response(status_code=204)
 
     @app.post("/mbx/{device_id}/ack")
     def mbx_ack(device_id: str, blob: str = "", me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
@@ -965,17 +1199,37 @@ def create_app(
         return {"acked": mailbox.ack(_blobs_root(d), me.user_id, device_id, blob)}
 
     @app.post("/d")
-    async def drop_put(request: Request, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+    async def drop_put(
+        request: Request,
+        me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
+    ):
         _sweep_blobs(d)
-        data = await request.body()
         raw = request.headers.get("X-Drop-Name", "")
         try:
             name = base64.b64decode(raw).decode("utf-8") if raw else "file"
         except Exception:
             name = "file"
+        mime = request.headers.get("X-Drop-Mime", "application/octet-stream")
+        root = _blobs_root(d)
         try:
-            did = mailbox.drop_put(_blobs_root(d), me.user_id, data, name,
-                                   request.headers.get("X-Drop-Mime", "application/octet-stream"))
+            with _one_more_upload(("own-person", me.user_id), MAX_IN_FLIGHT_PER_PERSON), \
+                    _one_more_upload(("own", me.device_id)):
+                try:
+                    mailbox.guard_incoming(root, me.user_id, bodylimit_mod.declared_length(request.headers))
+                except mailbox.Full:
+                    await _drain(request)
+                    raise
+                staged = await _receive_to_disk(request, d, me.user_id)
+                did = await run_in_threadpool(
+                    _commit_own, d, me.user_id, bearer(request), staged,
+                    lambda: mailbox.drop_put_file(root, me.user_id, staged, name, mime),
+                )
+        except mailbox.Busy as e:
+            await _drain(request)
+            raise _busy(e)
+        except mailbox.TooBig as e:
+            raise fail(413, "too_big", t(str(e)))
         except mailbox.Full as e:
             raise fail(507, "full", t(str(e)))
         return PlainTextResponse(did, headers={"X-Drop-Id": did})
@@ -991,13 +1245,18 @@ def create_app(
         # Срок человек читает остатком, а не «сутками вообще» (#1388): считает его тот же,
         # кто присланное и сотрёт.
         left = mailbox.time_left(path)
-        with open(path, "rb") as f:
-            data = f.read()
+        size = os.path.getsize(path)
+
+        # Читать глазами имеет смысл только короткий текст; остальное в память не берётся.
+        data = None
+        if size <= MAX_READABLE_TEXT:
+            with open(path, "rb") as f:
+                data = f.read()
 
         # Присланный текст читается прямо со страницы, а не скачивается файлом. Point держал
         # текст в руках и отдавал его в худшей форме: браузер сохранял вложение, и прочитать
         # присланное можно было только открыв его чем-то ещё. `?raw=1` отдаёт тот же файл.
-        if not raw and _readable_text(mime, data):
+        if not raw and data is not None and _readable_text(mime, data):
             text = data.decode("utf-8")
             here = "/d/" + drop_id + "?raw=1"
 
@@ -1019,23 +1278,33 @@ def create_app(
         base = (mime or "").split(";")[0].strip().lower()
         here = "/d/" + drop_id + "?raw=1"
         if not raw and base.startswith("image/"):
-            return HTMLResponse(pages.drop_image_page(name, here, _weight(len(data)), left))
+            return HTMLResponse(pages.drop_image_page(name, here, _weight(size), left))
         if not raw and base.startswith("audio/"):
-            return HTMLResponse(pages.drop_audio_page(name, here, mime, _weight(len(data)), left))
+            return HTMLResponse(pages.drop_audio_page(name, here, mime, _weight(size), left))
         if not raw:
             return HTMLResponse(
-                pages.drop_file_page(name, here, _kind_word(mime, name), _weight(len(data)), left)
+                pages.drop_file_page(name, here, _kind_word(mime, name), _weight(size), left)
             )
 
         quoted = urllib.parse.quote(name)
-        return Response(data, media_type=mime,
-                        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quoted})
+        try:
+            return _file_response(path, mime, {"Content-Disposition": "attachment; filename*=UTF-8''" + quoted})
+        except FileNotFoundError:
+            return HTMLResponse(pages.drop_gone_page(), status_code=404)
 
     @app.post("/u/open")
-    def inbox_open(me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+    def inbox_open(request: Request, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
         _sweep_blobs(d)
         try:
-            box = mailbox.inbox_open(_blobs_root(d), me.user_id)
+            # Под замком человека: ящик не откроется под аккаунтом, удалённым мгновение назад.
+            with mailbox.user_lock(me.user_id):
+                conn = db.connect(d.settings.db_path)
+                try:
+                    if store.device_by_token(conn, bearer(request), d.now()) is None:
+                        raise fail(401, "no_pass", t("Устройство не в аккаунте. Войдите заново."))
+                finally:
+                    conn.close()
+                box = mailbox.inbox_open(_blobs_root(d), me.user_id)
         except mailbox.Full as e:
             raise fail(507, "full", t(str(e)))
         return {"box": box, "url": d.settings.public_url.rstrip("/") + "/u/" + box}
@@ -1056,51 +1325,122 @@ def create_app(
 
     @app.post("/u/{box_id}")
     async def inbox_accept(box_id: str, request: Request, d: Deps = Depends(deps)):
-        box = mailbox.inbox_find(_blobs_root(d), box_id)
+        root = _blobs_root(d)
+        box = mailbox.inbox_find(root, box_id)
         if not box:
             return HTMLResponse(pages.link_gone_page(), status_code=404)
-        form = await request.form()
 
-        # Ссылку чаще всего дают ради куска текста — адреса, номера заказа, обрывка
-        # переписки (#883). Он приходит текстом, а не выдуманным файлом: на той стороне
-        # Point получает обычный текстовый объект.
-        item = form.get("file")
-        typed = (form.get("text") or "").strip() if isinstance(form.get("text"), str) else ""
-        if item is None and not typed:
+        # Страница шлёт только multipart: один файл или текст с именем. Другой вид тела разбор
+        # формы держал бы в памяти целиком, а поле urlencoded ещё и копировал по кусочку
+        # с квадратичной ценой (проверка рецензентами 27.11.2026).
+        if not request.headers.get("content-type", "").lower().startswith("multipart/form-data"):
             return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
-        if item is None:
-            # Контакт и место присылаются тем же полем, но своим именем и своим типом:
-            # на той стороне контакт должен стать контактом, а не «Текстом» (#916).
-            given = form.get("name")
-            given = given.strip() if isinstance(given, str) else ""
-            if "BEGIN:VCARD" in typed.upper():
-                name = given or t("Контакт") + ".vcf"
-                mime = "text/vcard; charset=utf-8"
-            else:
-                name = given or t("Текст")
-                mime = "text/plain; charset=utf-8"
-            data = typed.encode("utf-8")
-        else:
-            data = await item.read()
-            name = getattr(item, "filename", "file") or "file"
-            mime = getattr(item, "content_type", "") or "application/octet-stream"
+        _root, owner = mailbox.box_owner(box)
+        declared = bodylimit_mod.declared_length(request.headers)
         try:
-            mailbox.inbox_accept(box, data, name, mime)
-        except mailbox.Full as e:
-            return HTMLResponse(pages.too_big_page(t(str(e))), status_code=507)
+            # Чужих отправок в один ящик — не больше трёх разом: разбор формы держит их в памяти
+            # и во временных файлах, мимо всякого другого счёта. Счёт — по ящику, а не по
+            # человеку: тот, кому дали одну ссылку, не закроет человеку остальные.
+            with _one_more_upload(("receive", os.path.basename(box))):
+                try:
+                    # Объявлен размер всей формы, а с ней — обёртка: границы, заголовки частей.
+                    mailbox.guard_incoming(
+                        root, owner, None if declared is None else max(0, declared - FORM_ENVELOPE_BYTES),
+                    )
+                except mailbox.Full:
+                    await _drain(request)
+                    raise
+                parser = _ReceiveFormParser(request.headers, request.stream(), max_files=1, max_fields=4)
+                try:
+                    form = await parser.parse()
+                except StarletteHTTPException:
+                    # Отказ прослойки предела (413 размер, 408 тишина) — его отдаёт обработчик отказов.
+                    _close_parser_files(parser)
+                    raise
+                except ClientDisconnect:
+                    # Чужой закрыл вкладку посреди отправки: отвечать некому, писать в журнал нечего.
+                    _close_parser_files(parser)
+                    return Response(status_code=400)
+                except MultiPartException as e:
+                    _close_parser_files(parser)
+                    if "maximum size" in str(e):
+                        return HTMLResponse(pages.too_big_page(t("Текст слишком длинный — пришлите его файлом.")), status_code=413)
+                    return HTMLResponse(
+                        pages.upload_failed_page(t("Сервер не принял отправку. Попробуйте ещё раз.")), status_code=400,
+                    )
+                except Exception:
+                    # Битая форма от чужого (python-multipart бросает своё): страница, а не 500
+                    # с трассой в журнале; временные файлы разбора закрываются сразу.
+                    _close_parser_files(parser)
+                    return HTMLResponse(
+                        pages.upload_failed_page(t("Сервер не принял отправку. Попробуйте ещё раз.")), status_code=400,
+                    )
+
+                # Ссылку чаще всего дают ради куска текста — адреса, номера заказа, обрывка
+                # переписки (#883). Он приходит текстом, а не выдуманным файлом: на той стороне
+                # Point получает обычный текстовый объект.
+                item = form.get("file")
+                typed = (form.get("text") or "").strip() if isinstance(form.get("text"), str) else ""
+                # Форма без скрипта шлёт пустое поле файла и тогда, когда файла нет: такое поле —
+                # не файл. Прежде сохранялся пустой «file», а набранный текст терялся молча; поле
+                # «file» строкой роняло разбор в 500.
+                if not isinstance(item, StarletteUploadFile) or (not item.filename and not item.size):
+                    item = None
+                if item is None and not typed:
+                    return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
+                if item is None:
+                    # Контакт и место присылаются тем же полем, но своим именем и своим типом:
+                    # на той стороне контакт должен стать контактом, а не «Текстом» (#916).
+                    given = form.get("name")
+                    given = given.strip() if isinstance(given, str) else ""
+                    if "BEGIN:VCARD" in typed.upper():
+                        name = given or t("Контакт") + ".vcf"
+                        mime = "text/vcard; charset=utf-8"
+                    else:
+                        name = given or t("Текст")
+                        mime = "text/plain; charset=utf-8"
+                    await run_in_threadpool(mailbox.inbox_accept, box, typed.encode("utf-8"), name, mime)
+                else:
+                    name = getattr(item, "filename", "file") or "file"
+                    mime = getattr(item, "content_type", "") or "application/octet-stream"
+                    # Файл разбор формы уже держит на диске; копия идёт кусками, мимо памяти.
+                    try:
+                        staged = await run_in_threadpool(_spool_to_disk, item.file, d, owner)
+                    finally:
+                        await form.close()
+                    await run_in_threadpool(mailbox.inbox_accept_file, box, staged, name, mime)
+        except mailbox.Busy:
+            await _drain(request)
+            return HTMLResponse(
+                pages.upload_failed_page(t("Сюда сейчас отправляют много — попробуйте через минуту.")),
+                status_code=503, headers={"Retry-After": "30"},
+            )
+        except mailbox.Gone:
+            return HTMLResponse(pages.link_gone_page(), status_code=404)
+        except mailbox.TooBig as e:
+            return HTMLResponse(pages.too_big_page(t(str(e))), status_code=413)
+        except mailbox.Full:
+            # Чужой человек место владельца освободить не может — и слова у него свои.
+            return HTMLResponse(
+                pages.too_big_page(t("Сюда сейчас не помещается — скажите об этом человеку, который дал ссылку.")),
+                status_code=507,
+            )
         return HTMLResponse(pages.sent_page())
 
     @app.get("/u/{box_id}/take")
     def inbox_take(box_id: str, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
         """Забрать присланное — уже под пропуском: ящик свой."""
-        got = mailbox.inbox_take(_blobs_root(d), me.user_id, box_id)
+        got = mailbox.inbox_take_path(_blobs_root(d), me.user_id, box_id)
         if not got:
             return Response(status_code=204)
-        fid, data, name, mime = got
-        return Response(data, media_type=mime, headers={
-            "X-File-Id": fid,
-            "X-File-Name": base64.b64encode(name.encode("utf-8")).decode("ascii"),
-        })
+        fid, path, name, mime = got
+        try:
+            return _file_response(path, mime, {
+                "X-File-Id": fid,
+                "X-File-Name": base64.b64encode(name.encode("utf-8")).decode("ascii"),
+            })
+        except FileNotFoundError:
+            return Response(status_code=204)
 
     @app.post("/u/{box_id}/ack")
     def inbox_ack(box_id: str, request: Request, me: store.Caller = Depends(caller),

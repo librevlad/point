@@ -23,6 +23,11 @@ def _drop(point, name, mime, data):
     return put.headers["X-Drop-Id"]
 
 
+def _fields(values: dict) -> dict:
+    """Поля формы — multipart, как шлёт их страница приёма (FormData), а не urlencoded."""
+    return {k: (None, v) for k, v in values.items()}
+
+
 def test_снимок_виден_на_странице_а_не_качается_вслепую(point):
     """Раньше браузер молча качал файл, о котором человек ничего не знал."""
     did = _drop(point, "чек.jpg", "image/jpeg", b"\xff\xd8\xff\xe0" + b"x" * 2048)
@@ -87,7 +92,7 @@ def test_текст_можно_отправить_через_ссылку_при
     me = point.sign_in(sub="textsender")
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
 
-    sent = point.client.post("/u/" + box, data={"text": "Крещатик 22, забрать до 19:00"})
+    sent = point.client.post("/u/" + box, files=_fields({"text": "Крещатик 22, забрать до 19:00"}))
 
     assert sent.status_code == 200, sent.text
     got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
@@ -110,7 +115,7 @@ def test_пустая_отправка_говорит_про_себя_а_не_п
     me = point.sign_in(sub="emptysend")
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
 
-    sent = point.client.post("/u/" + box, data={"text": "   "})
+    sent = point.client.post("/u/" + box, files=_fields({"text": "   "}))
 
     assert sent.status_code == 400
     assert "нечего отправлять" in sent.text

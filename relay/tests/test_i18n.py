@@ -39,7 +39,7 @@ def _keys() -> set[str]:
             if name == "plural":
                 keys.update(_literal(a) for a in node.args[1:] if _literal(a))
             # Отказы ящика и входа показываются человеку через `t(str(e))`.
-            if name in ("Full", "GoogleError") and node.args:
+            if name in ("Full", "TooBig", "Busy", "GoogleError") and node.args:
                 arg = node.args[0]
                 if _literal(arg):
                     keys.add(_literal(arg))

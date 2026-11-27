@@ -19,4 +19,9 @@ ss -ltn 2>/dev/null | grep -q "127.0.0.1:8080" && exit 0
 set -a
 . ./point-server.env
 set +a
-exec ./.venv/bin/python -m uvicorn point_server.main:app --host 127.0.0.1 --port 8080 >> server.log 2>&1
+# Журнал доступа выключен: в нём оседали адреса `/d/…` и `/u/…` — а адрес и есть ключ к
+# файлу, — вместе с адресами людей (main() выключал его, а запуск шёл мимо main()).
+# Плавная остановка — не дольше 30 с: иначе одна медленная отправка держала старый процесс
+# живым рядом с новым после выкладки (проверка рецензентами 27.11.2026).
+exec ./.venv/bin/python -m uvicorn point_server.main:app --host 127.0.0.1 --port 8080 \
+    --no-access-log --timeout-graceful-shutdown 30 >> server.log 2>&1

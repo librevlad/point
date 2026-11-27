@@ -179,6 +179,27 @@ TEXTS: dict[str, tuple[str, str]] = {
         "The object is too large for a trial AI action.",
     ),
     "Запрос слишком большой.": ("Запит завеликий.", "The request is too large."),
+    "Отправка не дошла": ("Надсилання не дійшло", "The upload didn't go through"),
+    "Текст слишком длинный — пришлите его файлом.": (
+        "Текст задовгий — надішліть його файлом.",
+        "The text is too long. Send it as a file.",
+    ),
+    "Сюда сейчас отправляют много — попробуйте через минуту.": (
+        "Сюди зараз надсилають багато — спробуйте за хвилину.",
+        "Lots of uploads are coming in here right now. Try again in a minute.",
+    ),
+    "Сюда сейчас не помещается — скажите об этом человеку, который дал ссылку.": (
+        "Сюди зараз не вміщується — скажіть про це людині, яка дала посилання.",
+        "There's no room here right now. Let the person who gave you the link know.",
+    ),
+    "Отправка остановилась — проверьте связь и попробуйте ещё раз.": (
+        "Надсилання зупинилося — перевірте зв’язок і спробуйте ще раз.",
+        "The upload stopped. Check your connection and try again.",
+    ),
+    "Прежние отправки ещё идут — дождитесь их и попробуйте снова": (
+        "Попередні надсилання ще тривають — дочекайтеся їх і спробуйте знову",
+        "Earlier uploads are still in progress. Wait for them and try again",
+    ),
     "Пробные AI-действия сейчас недоступны.": (
         "Пробні AI-дії зараз недоступні.",
         "Trial AI actions are unavailable right now.",

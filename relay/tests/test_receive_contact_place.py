@@ -6,12 +6,17 @@
 """
 
 
+def _fields(values: dict) -> dict:
+    """Поля формы — multipart, как шлёт их страница приёма (FormData), а не urlencoded."""
+    return {k: (None, v) for k, v in values.items()}
+
+
 def test_контакт_приходит_контактом_а_не_текстом(point):
     me = point.sign_in(sub="vcard-in")
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
     card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Світлана\r\nTEL;TYPE=CELL:+380671234567\r\nEND:VCARD\r\n"
 
-    sent = point.client.post("/u/" + box, data={"text": card, "name": "Світлана.vcf"})
+    sent = point.client.post("/u/" + box, files=_fields({"text": card, "name": "Світлана.vcf"}))
 
     assert sent.status_code == 200, sent.text
     got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
@@ -24,7 +29,7 @@ def test_место_приходит_текстом_с_координатами(
     me = point.sign_in(sub="place-in")
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
 
-    sent = point.client.post("/u/" + box, data={"text": "50.450100, 30.523400", "name": "Место.txt"})
+    sent = point.client.post("/u/" + box, files=_fields({"text": "50.450100, 30.523400", "name": "Место.txt"}))
 
     assert sent.status_code == 200, sent.text
     got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
@@ -36,7 +41,7 @@ def test_имя_присланного_не_выдумывается(point):
     me = point.sign_in(sub="plain-in")
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
 
-    point.client.post("/u/" + box, data={"text": "просто текст"})
+    point.client.post("/u/" + box, files=_fields({"text": "просто текст"}))
 
     got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
     assert "text/plain" in got.headers["content-type"]

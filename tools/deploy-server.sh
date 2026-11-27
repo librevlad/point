@@ -51,6 +51,15 @@ else
 fi
 $CHECK && exit 0
 
+# Скрипт запуска — только с переводами строк Linux: с CRLF он не поднимет сервер после
+# остановки. На Windows рабочая копия при autocrlf может отдать CRLF (нашлось 27.11.2026
+# перед выкладкой: правка скриптом записала CRLF, и выкладка уложила бы сервер).
+# Считает `tr`, а не grep: grep из Git для Windows сам срезает CR в конце строки.
+if [ -n "$(tr -cd '\r' < "$SRC/point-server-start.sh")" ]; then
+  echo "в point-server-start.sh переводы строк Windows (CRLF) — не выкладываю: сервер не поднимется"
+  exit 1
+fi
+
 say "сборка посылки"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
