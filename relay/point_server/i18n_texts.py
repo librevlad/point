@@ -178,6 +178,7 @@ TEXTS: dict[str, tuple[str, str]] = {
         "Об’єкт завеликий для пробної AI-дії.",
         "The object is too large for a trial AI action.",
     ),
+    "Запрос слишком большой.": ("Запит завеликий.", "The request is too large."),
     "Пробные AI-действия сейчас недоступны.": (
         "Пробні AI-дії зараз недоступні.",
         "Trial AI actions are unavailable right now.",
