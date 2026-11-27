@@ -41,6 +41,7 @@ from fastapi import Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from starlette.background import BackgroundTask
 from starlette.requests import ClientDisconnect
+from starlette.formparsers import MultiPartException, MultiPartParser
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -113,9 +114,49 @@ SMALL_MAX_BYTES = 1_000_000
 _UPLOADS = re.compile(r"^/(mbx/[^/]+|d|u/(?!open$)[^/]+)$")
 _RECEIVE_PAGE = re.compile(r"^/u/(?!open$)[^/]+$")
 
+
+class _ReceiveFormParser(MultiPartParser):
+    """Разбор формы страницы приёма — с пределом на заголовки частей.
+
+    Starlette не ограничивает ни число, ни размер заголовков части: один запрос в 52 МБ из
+    миллионов крошечных заголовков занимал больше гигабайта памяти — больше, чем есть у
+    машины (проверка независимыми рецензентами 27.11.2026). Странице приёма нужны два-три
+    заголовка на часть.
+    """
+
+    MAX_HEADERS = 16
+    MAX_HEADER_BYTES = 8 * 1024
+
+    def on_part_begin(self) -> None:
+        super().on_part_begin()
+        self._headers_seen = 0
+        self._header_bytes = 0
+
+    def _grow(self, n: int) -> None:
+        self._header_bytes = getattr(self, "_header_bytes", 0) + n
+        if self._header_bytes > self.MAX_HEADER_BYTES:
+            raise MultiPartException("Part headers are too large.")
+
+    def on_header_field(self, data: bytes, start: int, end: int) -> None:
+        self._grow(end - start)
+        super().on_header_field(data, start, end)
+
+    def on_header_value(self, data: bytes, start: int, end: int) -> None:
+        self._grow(end - start)
+        super().on_header_value(data, start, end)
+
+    def on_header_end(self) -> None:
+        self._headers_seen = getattr(self, "_headers_seen", 0) + 1
+        if self._headers_seen > self.MAX_HEADERS:
+            raise MultiPartException("Too many part headers.")
+        super().on_header_end()
+
 # Обёртка формы страницы приёма — границы, заголовки частей, имя файла (в UTF-8 — до сотен
 # байт): её объявленный размер не должен отнимать у файла его 50 МБ.
 FORM_ENVELOPE_BYTES = 64 * 1024
+
+# Перед отказом тело дочитывается, только если оно не больше этого (см. `_drain`).
+DRAIN_MAX_BYTES = 2 * 1024 * 1024
 
 
 def body_limit_for(method: str, path: str) -> int:
@@ -360,6 +401,9 @@ def create_app(
     # Предел тела — по пришедшим байтам и до разбора, раньше проверки пропуска (охота 27.11.2026).
     app.add_middleware(
         bodylimit_mod.BodyLimit, limit_for=body_limit_for, refusal=body_too_big, stalled=body_stalled,
+        # Два часа на тело: 50 МБ — это 7 КБ/с, живая отправка со слабой связью успевает, а
+        # отправка по байту не держит место без конца (проверка рецензентами 27.11.2026).
+        max_seconds=7200,
     )
     if knocker is None:
         # Ключа нет — Point работает без стука: просьба разбирается при открытии.
@@ -835,7 +879,8 @@ def create_app(
             raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         # Пропуск отозван — но письма, лежащие в ящике этого устройства, остались бы на диске
         # навсегда. «Выйти» означает «меня здесь больше нет», а не «я больше не захожу».
-        mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
+        with mailbox.user_lock(me.user_id):
+            mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
         return {"revoked": device_id, "self": device_id == me.device_id}
 
     @app.put("/devices/{device_id}/push")
@@ -946,7 +991,11 @@ def create_app(
 
     async def _drain(request: Request) -> None:
         """Отказ до чтения тела доходит до клиента надёжнее, если тело дочитано и выброшено:
-        клиент сначала пишет всё и только потом читает ответ (предел тела держит `bodylimit`)."""
+        клиент сначала пишет всё и только потом читает ответ. Но только небольшое тело: гнать
+        50 МБ по мобильной связи ради слова «не сейчас» — дороже самого отказа."""
+        declared = bodylimit_mod.declared_length(request.headers)
+        if declared is None or declared > DRAIN_MAX_BYTES:
+            return
         try:
             async for _chunk in request.stream():
                 pass
@@ -1066,7 +1115,7 @@ def create_app(
             raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         root = _blobs_root(d)
         try:
-            with _one_more_upload(("own", me.user_id)):
+            with _one_more_upload(("own", me.device_id)):
                 try:
                     mailbox.guard_incoming(root, me.user_id, bodylimit_mod.declared_length(request.headers))
                 except mailbox.Full:
@@ -1149,7 +1198,7 @@ def create_app(
         mime = request.headers.get("X-Drop-Mime", "application/octet-stream")
         root = _blobs_root(d)
         try:
-            with _one_more_upload(("own", me.user_id)):
+            with _one_more_upload(("own", me.device_id)):
                 try:
                     mailbox.guard_incoming(root, me.user_id, bodylimit_mod.declared_length(request.headers))
                 except mailbox.Full:
@@ -1228,10 +1277,18 @@ def create_app(
             return HTMLResponse(pages.drop_gone_page(), status_code=404)
 
     @app.post("/u/open")
-    def inbox_open(me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+    def inbox_open(request: Request, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
         _sweep_blobs(d)
         try:
-            box = mailbox.inbox_open(_blobs_root(d), me.user_id)
+            # Под замком человека: ящик не откроется под аккаунтом, удалённым мгновение назад.
+            with mailbox.user_lock(me.user_id):
+                conn = db.connect(d.settings.db_path)
+                try:
+                    if store.device_by_token(conn, bearer(request), d.now()) is None:
+                        raise fail(401, "no_pass", t("Устройство не в аккаунте. Войдите заново."))
+                finally:
+                    conn.close()
+                box = mailbox.inbox_open(_blobs_root(d), me.user_id)
         except mailbox.Full as e:
             raise fail(507, "full", t(str(e)))
         return {"box": box, "url": d.settings.public_url.rstrip("/") + "/u/" + box}
@@ -1265,9 +1322,10 @@ def create_app(
         _root, owner = mailbox.box_owner(box)
         declared = bodylimit_mod.declared_length(request.headers)
         try:
-            # Чужих отправок в ящики одного человека — не больше трёх разом: разбор формы держит
-            # их в памяти и во временных файлах, мимо всякого другого счёта.
-            with _one_more_upload(("receive", owner)):
+            # Чужих отправок в один ящик — не больше трёх разом: разбор формы держит их в памяти
+            # и во временных файлах, мимо всякого другого счёта. Счёт — по ящику, а не по
+            # человеку: тот, кому дали одну ссылку, не закроет человеку остальные.
+            with _one_more_upload(("receive", os.path.basename(box))):
                 try:
                     # Объявлен размер всей формы, а с ней — обёртка: границы, заголовки частей.
                     mailbox.guard_incoming(
@@ -1276,13 +1334,25 @@ def create_app(
                 except mailbox.Full:
                     await _drain(request)
                     raise
-                form = await request.form(max_files=1, max_fields=4)
+                try:
+                    form = await _ReceiveFormParser(
+                        request.headers, request.stream(), max_files=1, max_fields=4,
+                    ).parse()
+                except MultiPartException:
+                    return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
+                except ClientDisconnect:
+                    # Чужой закрыл вкладку посреди отправки: отвечать некому, писать в журнал нечего.
+                    return Response(status_code=400)
 
                 # Ссылку чаще всего дают ради куска текста — адреса, номера заказа, обрывка
                 # переписки (#883). Он приходит текстом, а не выдуманным файлом: на той стороне
                 # Point получает обычный текстовый объект.
                 item = form.get("file")
                 typed = (form.get("text") or "").strip() if isinstance(form.get("text"), str) else ""
+                # Форма без скрипта шлёт и пустое поле файла рядом с текстом: тогда это текст.
+                # Прежде сохранялся пустой «file», а набранный текст терялся молча.
+                if item is not None and not getattr(item, "filename", "") and typed:
+                    item = None
                 if item is None and not typed:
                     return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
                 if item is None:
@@ -1301,7 +1371,10 @@ def create_app(
                     name = getattr(item, "filename", "file") or "file"
                     mime = getattr(item, "content_type", "") or "application/octet-stream"
                     # Файл разбор формы уже держит на диске; копия идёт кусками, мимо памяти.
-                    staged = await run_in_threadpool(_spool_to_disk, item.file, d, owner)
+                    try:
+                        staged = await run_in_threadpool(_spool_to_disk, item.file, d, owner)
+                    finally:
+                        await form.close()
                     await run_in_threadpool(mailbox.inbox_accept_file, box, staged, name, mime)
         except mailbox.Busy:
             await _drain(request)
@@ -1316,7 +1389,7 @@ def create_app(
         except mailbox.Full:
             # Чужой человек место владельца освободить не может — и слова у него свои.
             return HTMLResponse(
-                pages.too_big_page(t("Сюда больше не помещается — попросите у человека новую ссылку.")),
+                pages.too_big_page(t("Сюда сейчас не помещается — скажите об этом человеку, который дал ссылку.")),
                 status_code=507,
             )
         return HTMLResponse(pages.sent_page())

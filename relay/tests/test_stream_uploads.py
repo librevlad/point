@@ -155,11 +155,16 @@ def test_одновременных_отправок_одному_человек
         uid = store.device_by_token(conn, me["device_token"], point.clock()).user_id
     finally:
         conn.close()
-    point.client.app.state.uploads[("own", uid)] = mailbox.MAX_IN_FLIGHT
+    point.client.app.state.uploads[("own", me["device_id"])] = mailbox.MAX_IN_FLIGHT
     try:
         r = point.as_device(me["device_token"], "POST", "/d", content=b"one more", headers={"X-Drop-Mime": "text/plain"})
+        # Другое устройство того же человека этим не задерживается: зависшие отправки телефона
+        # не держат ответы компьютера.
+        pc = point.sign_in(sub="busy", kind="PC")
+        other = point.as_device(pc["device_token"], "POST", "/d", content=b"from pc", headers={"X-Drop-Mime": "text/plain"})
     finally:
-        point.client.app.state.uploads.pop(("own", uid), None)
+        point.client.app.state.uploads.pop(("own", me["device_id"]), None)
+    assert other.status_code == 200, other.text
 
     # Временный отказ — 503 с «повторите позже», а не 507: 507 клиенты читают как «слишком большой».
     assert r.status_code == 503, r.text
@@ -232,11 +237,11 @@ def test_чужого_на_странице_приёма_не_держат_от�
     finally:
         conn.close()
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
-    point.client.app.state.uploads[("own", uid)] = mailbox.MAX_IN_FLIGHT
+    point.client.app.state.uploads[("own", me["device_id"])] = mailbox.MAX_IN_FLIGHT
     try:
         sent = point.client.post("/u/" + box, files={"text": (None, "Крещатик 22")})
     finally:
-        point.client.app.state.uploads.pop(("own", uid), None)
+        point.client.app.state.uploads.pop(("own", me["device_id"]), None)
 
     assert sent.status_code == 200, sent.text
 
@@ -311,7 +316,7 @@ def test_отказ_по_размеру_на_странице_приёма_пр�
 
 
 
-def test_чужих_отправок_в_ящики_человека_не_больше_трёх_разом(point):
+def test_чужих_отправок_в_один_ящик_не_больше_трёх_разом(point):
     me = point.sign_in(sub="crowd", kind="PHONE")
     conn = db.connect(point.db_path)
     try:
@@ -319,15 +324,19 @@ def test_чужих_отправок_в_ящики_человека_не_бол�
     finally:
         conn.close()
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
-    point.client.app.state.uploads[("receive", uid)] = mailbox.MAX_IN_FLIGHT
+    point.client.app.state.uploads[("receive", box)] = mailbox.MAX_IN_FLIGHT
     try:
         sent = point.client.post("/u/" + box, files={"text": (None, "ещё одно")})
+        # Другой ящик того же человека открыт: держащий одну ссылку не закрывает остальные.
+        other_box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+        other = point.client.post("/u/" + other_box, files={"text": (None, "в другой ящик")})
     finally:
-        point.client.app.state.uploads.pop(("receive", uid), None)
+        point.client.app.state.uploads.pop(("receive", box), None)
 
     assert sent.status_code == 503
     assert sent.headers.get("Retry-After")
     assert sent.headers["content-type"].startswith("text/html")
+    assert other.status_code == 200, other.text
 
 
 def test_текст_на_странице_приёма_считается_в_место_один_раз(point, monkeypatch, tmp_path):
@@ -358,7 +367,7 @@ def test_на_странице_приёма_размер_и_место_это_р
 
     assert big.status_code == 413
     assert full.status_code == 507
-    assert "новую ссылку" in full.text or "нове посилання" in full.text or "new link" in full.text
+    assert "дал ссылку" in full.text or "дала посилання" in full.text or "gave you the link" in full.text
 
 
 def test_отдача_не_срывается_заявленной_длиной_у_get(point):
@@ -371,3 +380,33 @@ def test_отдача_не_срывается_заявленной_длиной_
 
     assert got.status_code == 200
     assert got.content == b"z" * 5000
+
+
+
+def test_миллион_заголовков_части_не_разбирается(point):
+    """Starlette не ограничивает заголовки части: один такой запрос занимал гигабайт памяти."""
+    me = point.sign_in(sub="headers", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    flood = b"".join(b"a%d: b\r\n" % i for i in range(5000))
+    body = (b"--x\r\nContent-Disposition: form-data; name=\"text\"\r\n" + flood + b"\r\nhello\r\n--x--\r\n")
+
+    r = point.client.post("/u/" + box, content=body, headers={"Content-Type": "multipart/form-data; boundary=x"})
+
+    assert r.status_code == 400
+    assert point.as_device(me["device_token"], "GET", "/u/" + box + "/take").status_code == 204
+
+
+def test_форма_без_скрипта_с_пустым_файлом_присылает_текст(point):
+    """Без скрипта браузер шлёт и пустое поле файла рядом с текстом — текст не должен теряться."""
+    me = point.sign_in(sub="nojs-text", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    sent = point.client.post("/u/" + box, files={
+        "file": ("", b"", "application/octet-stream"),
+        "text": (None, "Крещатик 22, забрать до 19:00"),
+    })
+    got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
+
+    assert sent.status_code == 200, sent.text
+    assert got.status_code == 200
+    assert got.content.decode("utf-8") == "Крещатик 22, забрать до 19:00"
