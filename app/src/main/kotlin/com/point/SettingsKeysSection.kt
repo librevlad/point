@@ -84,6 +84,8 @@ internal fun KeySection(
     onOpenUrl: (String) -> Unit,
     onBack: () -> Unit,
     onLeave: () -> Unit,
+    aiTrial: com.point.core.flow.AiTrialOffer? = null,
+    onSignIn: () -> Unit = {},
 ) {
     SectionTopBar(title = KEY_SECTION_TITLE, onBack = onBack, modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp))
 
@@ -130,6 +132,9 @@ internal fun KeySection(
             )
         }
     }
+
+    // Проба Point (#477): кто не вошёл, видит путь короче ключа — вход; кто вошёл — остаток.
+    aiTrial?.takeIf { !back }?.let { TrialRow(it, onSignIn) }
 
     TakeKey(
         // Пришли с действия — Point называет, куда идти за ключом: первый бесплатный сервис,
@@ -310,6 +315,23 @@ private fun WhoseKey(onPick: (String) -> Unit, onDismiss: () -> Unit) {
         TextButton(onClick = onDismiss, contentPadding = PaddingValues(horizontal = 4.dp)) {
             Text(WHOSE_KEY_DISMISS, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** Проба AI без своего ключа: вход ради неё или сколько её осталось. */
+@Composable
+internal fun TrialRow(offer: com.point.core.flow.AiTrialOffer, onSignIn: () -> Unit) {
+    if (offer.signedIn) {
+        Text(com.point.core.flow.aiTrialTitle(offer), style = PointText.note)
+    } else {
+        PortalRow(
+            title = com.point.core.flow.aiTrialTitle(offer),
+            subtitle = com.point.core.flow.AI_TRIAL_HOW,
+            onClick = onSignIn,
+            primary = true,
+            chevron = false,
+            subtitleMaxLines = 3,
+        )
     }
 }
 

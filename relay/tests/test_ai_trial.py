@@ -154,6 +154,17 @@ def test_без_ключей_у_сервера_пробы_нет(tmp_path, clock
         h.client.__exit__(None, None, None)
 
 
+def test_предложение_пробы_видно_без_входа(trial, tmp_path, clock):
+    """Человеку, который ещё не вошёл, Point говорит правду: есть ли проба и сколько в ней."""
+    assert trial.client.get("/ai/offer").json() == {"available": True, "trial": 3}
+
+    h = _server(tmp_path / "off", clock, None)
+    try:
+        assert h.client.get("/ai/offer").json()["available"] is False
+    finally:
+        h.client.__exit__(None, None, None)
+
+
 def test_без_пропуска_пробы_нет(trial):
     trial.sign_in(sub="sub-1", kind="PHONE")
 

@@ -95,3 +95,30 @@ class PointAiLlmClient(
         return result
     }
 }
+
+/**
+ * Что сказать о пробе на экране ключей (#477).
+ *
+ * Новичок без ключа и без входа видел только «нужен ключ» — и не знал, что вход даёт
+ * AI-действия даром. Предложение показывается, только когда сервер сам сказал, что проба есть:
+ * обещать то, чего нет, нельзя.
+ */
+data class AiTrialOffer(val signedIn: Boolean, val left: Int, val trial: Int)
+
+/** [quota] — ответ сервера вошедшему, [offer] — без входа. `null` — пробы нет или о ней не знаем. */
+fun aiTrialOfferOf(signedIn: Boolean, quota: PointAiTrial?, offer: PointAiTrial?): AiTrialOffer? =
+    if (signedIn) {
+        quota?.takeIf { it.available && it.trial > 0 }?.let { AiTrialOffer(true, it.left, it.trial) }
+    } else {
+        offer?.takeIf { it.available && it.trial > 0 }?.let { AiTrialOffer(false, it.trial, it.trial) }
+    }
+
+fun aiTrialTitle(offer: AiTrialOffer): String = when {
+    !offer.signedIn -> tr("Войти — и {0} AI-действий без ключа", offer.trial)
+    offer.left > 0 -> tr("Пробных AI-действий осталось: {0} из {1}", offer.left, offer.trial)
+    else -> tr("Пробные AI-действия кончились — дальше нужен свой ключ")
+}
+
+/** Куда уйдёт объект и как войти — одной фразой под предложением. */
+val AI_TRIAL_HOW: String
+    get() = tr("Point передаст объект через свой сервер сервису AI, который не учится на присланном. Вход — через Google.")

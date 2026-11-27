@@ -32,6 +32,9 @@ interface AccountClient {
     /** Проба AI без своего ключа (#477). `null` — спросить не вышло. */
     suspend fun aiTrial(account: PointAccount): PointAiTrial? = null
 
+    /** Есть ли проба у сервера и на сколько действий — без входа. `null` — спросить не вышло. */
+    suspend fun aiOffer(): PointAiTrial? = null
+
     /**
      * Сказать серверу, куда стучать в это устройство (#817).
      *
