@@ -43,8 +43,12 @@ android {
         versionCode = pointVersionCode
         versionName = pointVersion
 
+        // 32-битный ARM — ради штатных магнитол и недорогих планшетов (владелец 27.11.2026:
+        // «давай поставим point на магнитолу»; магнитола Subaru — RK3326, система 32-битная,
+        // и сборка только под arm64 на неё не вставала). Каждому устройству Play отдаёт
+        // библиотеки только его ABI, так что вес загрузки у остальных не растёт.
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
     }
 
