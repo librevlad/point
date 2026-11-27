@@ -717,6 +717,11 @@ def create_app(
     def ai_refusal(status: int, code: str, message: str) -> JSONResponse:
         return JSONResponse({"error": {"type": code, "message": message}}, status_code=status)
 
+    @app.get("/ai/offer")
+    def ai_offer(d: Deps = Depends(deps)):
+        """Есть ли проба и на сколько действий — без входа: по нему телефон честно зовёт войти."""
+        return {"available": d.ai.available, "trial": d.settings.ai_trial}
+
     @app.get("/ai/quota")
     def ai_quota(
         conn: sqlite3.Connection = Depends(conn_of),

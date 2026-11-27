@@ -43,6 +43,7 @@ Point не смог отправить запрос серверу — сбой 
 Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается само. Кнопка убирает это прямо сейчас — вместе со списком «Недавнего». Файл, который вы перетащили мышью, не трогается никогда.	Point не зберігає довше доби: надіслане з телефона й зроблене тут прибирається саме. Кнопка прибирає це просто зараз — разом зі списком «Нещодавнього». Файл, який ви перетягнули мишею, не чіпається ніколи.	Point keeps nothing longer than a day: what came from the phone and what was made here clears itself. The button clears it right now, along with the Recent list. A file you dragged in with the mouse is never touched.
 Point обращается к сервисам по очереди — отвечает первый доступный. Свой ключ не обязателен: он снимает общий лимит и пускает Point работать на вашей квоте.	Point звертається до сервісів по черзі — відповідає перший доступний. Свій ключ не обов’язковий: він знімає спільний ліміт і дає Point працювати на вашій квоті.	Point asks the services in turn, and the first one available answers. Your own key is optional: it lifts the shared limit and lets Point work on your quota.
 Point падал в прошлый раз	Point упав минулого разу	Point crashed last time
+Point передаст объект через свой сервер сервису AI, который не учится на присланном. Вход — через Google.	Point передасть об’єкт через свій сервер сервісу AI, який не навчається на надісланому. Вхід — через Google.	Point passes the object through its server to an AI service that does not train on what you send. Sign-in is with Google.
 Point покажет, что в нём, и подскажет, что с ним сделать	Point покаже, що в ньому, і підкаже, що з ним зробити	Point shows what's inside and suggests what to do with it
 Point расшифрует запись словами	Point розшифрує запис словами	Point transcribes the recording into words
 Point сотрёт его с устройства. {0} снова замолчит, пока не впишете новый.	Point зітре його з пристрою. {0} знову замовкне, доки не впишете новий.	Point erases it from the device. {0} goes quiet again until you enter a new one.
@@ -177,6 +178,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Войдите, чтобы подключить телефон, планшет или другой компьютер	Увійдіть, щоб під’єднати телефон, планшет або інший комп’ютер	Sign in to connect a phone, tablet or another computer
 Войти	Увійти	Sign in
 Войти через Google	Увійти через Google	Sign in with Google
+Войти — и {0} AI-действий без ключа	Увійти — і {0} AI-дій без ключа	Sign in for {0} AI actions without a key
 Восстановить	Відновити	Restore
 Вставить из буфера	Вставити з буфера	Paste from clipboard
 Вставить ключ из буфера	Вставити ключ із буфера	Paste key from clipboard
@@ -715,6 +717,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Приём не открылся	Приймання не відкрилося	Receiving didn't open
 Про такое Point спрашивает каждый раз и ответ не запоминает: ссылка на сутки — каждый раз новая ставка.	Про таке Point питає щоразу й відповіді не запам’ятовує: посилання на добу — щоразу нова ставка.	Point asks about this every time and doesn't remember the answer: a one-day link is a new decision each time.
 Пробные AI-действия кончились — {0}	Пробні AI-дії скінчилися — {0}	Your trial AI actions are used up: {0}
+Пробные AI-действия кончились — дальше нужен свой ключ	Пробні AI-дії скінчилися — далі потрібен свій ключ	Trial AI actions are used up: add your own key to go on
+Пробных AI-действий осталось: {0} из {1}	Пробних AI-дій залишилося: {0} з {1}	Trial AI actions left: {0} of {1}
 Пробую повернуть страницу — {0} из {1}	Пробую повернути сторінку — {0} з {1}	Trying to rotate the page: {0} of {1}
 Проверено {0}	Перевірено {0}	Checked {0}
 Проверил знание, но применить правки не удалось — знание оставлено как было	Перевірив знання, але застосувати правки не вдалося — знання лишилося як було	Checked what Point knows but couldn't apply the fixes. It is left as it was

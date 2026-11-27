@@ -563,6 +563,8 @@ class FlowViewModel @Inject constructor(
         }
         refreshFromPc()
         syncCircle()
+        // Вошедшему пробу освежает ответ о круге; тому, кто не вошёл, — предложение пробы.
+        if (accountFlow.current() == null) refreshAiTrial()
     }
 
     /**
@@ -1323,13 +1325,30 @@ class FlowViewModel @Inject constructor(
             accountParts.aiQuota.usable(accountFlow.current() != null)
         }
 
-    /** Сколько пробных AI-действий осталось (#477) — спрашивается, когда сервер на связи. */
+    /** Предложение пробы для того, кто ещё не вошёл: спрашивается у сервера один раз. */
+    @Volatile private var aiOffer: com.point.core.flow.PointAiTrial? = null
+
+    /**
+     * Сколько пробных AI-действий осталось (#477) — спрашивается, когда сервер на связи. Кто не
+     * вошёл, узнаёт, есть ли проба вообще: «нужен ключ» без слова о ней прятало самый короткий путь.
+     */
     private fun refreshAiTrial() {
-        val account = accountFlow.current() ?: return
+        val account = accountFlow.current()
         viewModelScope.launch(ioDispatcher) {
-            runCatching { accountParts.client.aiTrial(account) }.getOrNull()
-                ?.let(accountParts.aiQuota::remember)
+            if (account != null) {
+                runCatching { accountParts.client.aiTrial(account) }.getOrNull()
+                    ?.let(accountParts.aiQuota::remember)
+            } else if (aiOffer == null) {
+                aiOffer = runCatching { accountParts.client.aiOffer() }.getOrNull()
+            }
+            publishAiTrial()
         }
+    }
+
+    private fun publishAiTrial() {
+        val signedIn = accountFlow.current() != null
+        val offer = com.point.core.flow.aiTrialOfferOf(signedIn, accountParts.aiQuota.current(), aiOffer)
+        _ui.update { if (it.aiTrial == offer) it else it.copy(aiTrial = offer) }
     }
 
     fun onItem(item: PointObject) {
@@ -1503,6 +1522,8 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun openKeyScreen(errand: KeyErrand?) {
+        // Остаток пробы мог измениться действием — экран ключей показывает свежий.
+        publishAiTrial()
 
         _ui.update {
 
@@ -1713,6 +1734,7 @@ class FlowViewModel @Inject constructor(
                 // Тема связки — не аккаунт: убирает её свой держатель, а зовёт — этот шов.
                 pcFlow.forget()
                 _ui.update { it.copy(pcInCircle = false) }
+                refreshAiTrial()
             },
         )
     }

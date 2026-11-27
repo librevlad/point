@@ -216,6 +216,9 @@ data class FlowUiState(
 
     val aiKeySet: Boolean = false,
 
+    /** Проба AI без своего ключа (#477): что о ней сказать на экране ключей. `null` — нечего. */
+    val aiTrial: com.point.core.flow.AiTrialOffer? = null,
+
     val devicesScreen: DevicesScreenState? = null,
 
     /**

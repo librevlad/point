@@ -290,6 +290,8 @@ fun PointHost(
                 version = BuildConfig.VERSION_NAME,
                 onOpenUrl = onOpenUrl,
                 onOpenDevices = onOpenDevices,
+                aiTrial = state.aiTrial,
+                onSignIn = onSignIn,
             )
 
             busyTitle != null ->

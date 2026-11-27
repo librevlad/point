@@ -107,6 +107,10 @@ fun KeyScreen(
 
     onOpenDevices: () -> Unit = {},
 
+    /** Проба AI без своего ключа (#477) и вход ради неё. */
+    aiTrial: com.point.core.flow.AiTrialOffer? = null,
+    onSignIn: () -> Unit = {},
+
     tileAdded: Boolean = false,
     memory: com.point.core.flow.HistoryFootprint? = null,
     onForgetAll: () -> Unit = {},
@@ -170,6 +174,8 @@ fun KeyScreen(
                     onBack = { section = null },
 
                     onLeave = onCancel,
+                    aiTrial = aiTrial,
+                    onSignIn = onSignIn,
                 )
 
                 SettingsSection.PRIVACY -> PrivacySection(
