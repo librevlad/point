@@ -179,6 +179,14 @@ TEXTS: dict[str, tuple[str, str]] = {
         "The object is too large for a trial AI action.",
     ),
     "Запрос слишком большой.": ("Запит завеликий.", "The request is too large."),
+    "Отправка остановилась — проверьте связь и попробуйте ещё раз.": (
+        "Надсилання зупинилося — перевірте зв’язок і спробуйте ще раз.",
+        "The upload stopped. Check your connection and try again.",
+    ),
+    "Прежние отправки ещё идут — дождитесь их и попробуйте снова": (
+        "Попередні надсилання ще тривають — дочекайтеся їх і спробуйте знову",
+        "Earlier uploads are still in progress. Wait for them and try again",
+    ),
     "Пробные AI-действия сейчас недоступны.": (
         "Пробні AI-дії зараз недоступні.",
         "Trial AI actions are unavailable right now.",

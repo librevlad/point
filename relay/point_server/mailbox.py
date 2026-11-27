@@ -35,6 +35,14 @@ class Full(Exception):
     """Место кончилось. Текст говорит человеку, что делать, а не «quota exceeded»."""
 
 
+class Busy(Exception):
+    """Временно: прежние отправки человека ещё идут. Это не «места нет» — через минуту пройдёт."""
+
+
+class Gone(Exception):
+    """Ящика уже нет: человек удалил всё своё, пока чужая отправка ещё шла."""
+
+
 def _dir(root: str, *parts: str) -> str:
     p = os.path.join(root, *parts)
     os.makedirs(p, exist_ok=True)
@@ -58,14 +66,109 @@ def user_root(root: str, user_id: str) -> str:
 
 
 def used_bytes(root: str, user_id: str) -> int:
-    return _size(user_root(root, user_id))
+    # Только читать: каталог удалённого человека не должен рождаться заново от подсчёта места.
+    return _size(os.path.join(root, "u", user_id))
+
+
+def too_big() -> "Full":
+    return Full("Файл больше 50 МБ — столько сервер Point не берёт")
 
 
 def _guard_total(root: str, user_id: str, incoming: int) -> None:
     if incoming > MAX_BLOB:
-        raise Full("Файл больше 50 МБ — столько сервер Point не берёт")
+        raise too_big()
     if used_bytes(root, user_id) + incoming > MAX_TOTAL_BYTES:
         raise Full("На сервере кончилось место — заберите то, что уже отправлено")
+
+
+# --- приём кусками (охота 27.11.2026) ----------------------------------------------------
+# Сервер — машина на 964 МБ памяти, общая с другими службами. Файл человека (до 50 МБ)
+# раньше держался в памяти целиком, а то и в нескольких копиях. Теперь он пишется на диск по
+# мере прихода в общий каталог приёма и оттуда одним переименованием встаёт на своё место.
+#
+# Недописанное лежит вне каталога человека, но не вне его счёта: имя файла начинается с того,
+# кому он идёт, и [guard_incoming] считает его вместе с уже лежащим. Иначе параллельные или
+# замершие отправки занимали бы диск мимо всех пределов (проверка независимыми рецензентами).
+STAGING = "in"
+STAGING_TTL_SECONDS = 3600     # недописанное после срыва убирает уборка
+MAX_IN_FLIGHT = 3              # одновременных отправок на одного человека
+
+
+def _owner_tag(owner: str) -> str:
+    return "".join(c for c in owner if c.isalnum() or c in "-_")[:64] or "anon"
+
+
+def staging_path(root: str, owner: str = "") -> str:
+    return os.path.join(_dir(root, STAGING), _owner_tag(owner) + "." + uuid.uuid4().hex + ".part")
+
+
+def clear_staging(root: str) -> int:
+    """При старте: недописанное прежним процессом — сироты (процесс умер посреди приёма).
+
+    Сервер — один процесс, поэтому при его старте ни одна отправка не идёт, а сироты иначе
+    час считались бы «прежними отправками» и не пускали человека (проверка рецензентами).
+    """
+    staging = os.path.join(root, STAGING)
+    if not os.path.isdir(staging):
+        return 0
+    removed = 0
+    for name in os.listdir(staging):
+        try:
+            os.remove(os.path.join(staging, name))
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
+def _in_flight(root: str, owner: str) -> tuple[int, int]:
+    """Сколько отправок человеку идут прямо сейчас и сколько они уже весят."""
+    staging = os.path.join(root, STAGING)
+    if not os.path.isdir(staging):
+        return 0, 0
+    prefix = _owner_tag(owner) + "."
+    count = size = 0
+    for name in os.listdir(staging):
+        if name.startswith(prefix):
+            count += 1
+            try:
+                size += os.path.getsize(os.path.join(staging, name))
+            except OSError:
+                pass
+    return count, size
+
+
+def guard_incoming(root: str, owner: str, declared: int | None, *, own_upload: bool = True) -> None:
+    """Пустить ли ещё одну отправку человеку — до того, как прочитан её первый байт.
+
+    Общего на весь сервер предела здесь нет нарочно: им двое могли бы закрыть приём всем
+    остальным (проверка рецензентами). Предел — у каждого свой: место и число отправок.
+    [own_upload] — отправка самого человека; чужой файл на странице приёма его отправками не
+    задерживается.
+    """
+    if declared is not None and declared > MAX_BLOB:
+        raise too_big()
+    count, size = _in_flight(root, owner)
+    if own_upload and count >= MAX_IN_FLIGHT:
+        raise Busy("Прежние отправки ещё идут — дождитесь их и попробуйте снова")
+    if used_bytes(root, owner) + size + (declared or 0) > MAX_TOTAL_BYTES:
+        raise Full("На сервере кончилось место — заберите то, что уже отправлено")
+
+
+def stage_bytes(root: str, data: bytes, owner: str = "") -> str:
+    if len(data) > MAX_BLOB:
+        raise too_big()
+    path = staging_path(root, owner)
+    with open(path, "wb") as f:
+        f.write(data)
+    return path
+
+
+def discard(path: str) -> None:
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
 
 
 # --- почта между своими устройствами ----------------------------------------------------
@@ -77,26 +180,40 @@ def mailbox_dir(root: str, user_id: str, device_id: str) -> str:
 
 def push(root: str, user_id: str, device_id: str, data: bytes) -> str:
     """Положить письмо в ящик своего же устройства. Содержимое запечатано устройствами."""
-    _guard_total(root, user_id, len(data))
-    box = mailbox_dir(root, user_id, device_id)
-    if _size(_dir(user_root(root, user_id), "mbx")) + len(data) > MAX_MAILBOX_BYTES:
-        raise Full("Почта между вашими устройствами переполнена — заберите отправленное")
-    bid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
-    tmp = os.path.join(box, bid + ".part")
-    with open(tmp, "wb") as f:
-        f.write(data)
-    os.replace(tmp, os.path.join(box, bid + ".bin"))
-    return bid
+    return push_file(root, user_id, device_id, stage_bytes(root, data, user_id))
 
 
-def pull(root: str, user_id: str, device_id: str) -> tuple[str, bytes] | None:
-    """Забрать самое старое письмо, не удаляя: удалит `ack` — иначе потеря на разрыве связи."""
+def push_file(root: str, user_id: str, device_id: str, staged: str) -> str:
+    """То же, но письмо уже лежит на диске в [STAGING]: сюда оно приходит кусками, мимо памяти."""
+    try:
+        size = os.path.getsize(staged)
+        _guard_total(root, user_id, size)
+        box = mailbox_dir(root, user_id, device_id)
+        if _size(_dir(user_root(root, user_id), "mbx")) + size > MAX_MAILBOX_BYTES:
+            raise Full("Почта между вашими устройствами переполнена — заберите отправленное")
+        bid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
+        os.replace(staged, os.path.join(box, bid + ".bin"))
+        return bid
+    finally:
+        discard(staged)
+
+
+def pull_path(root: str, user_id: str, device_id: str) -> tuple[str, str] | None:
+    """Самое старое письмо — путём к нему: отдаётся с диска кусками, не целиком в памяти."""
     box = mailbox_dir(root, user_id, device_id)
     names = sorted(n for n in os.listdir(box) if n.endswith(".bin"))
     if not names:
         return None
-    with open(os.path.join(box, names[0]), "rb") as f:
-        return names[0][:-4], f.read()
+    return names[0][:-4], os.path.join(box, names[0])
+
+
+def pull(root: str, user_id: str, device_id: str) -> tuple[str, bytes] | None:
+    """Забрать самое старое письмо, не удаляя: удалит `ack` — иначе потеря на разрыве связи."""
+    got = pull_path(root, user_id, device_id)
+    if not got:
+        return None
+    with open(got[1], "rb") as f:
+        return got[0], f.read()
 
 
 def ack(root: str, user_id: str, device_id: str, blob_id: str) -> bool:
@@ -164,18 +281,23 @@ def drops_dir(root: str, user_id: str) -> str:
 
 
 def drop_put(root: str, user_id: str, data: bytes, name: str, mime: str) -> str:
-    _guard_total(root, user_id, len(data))
-    box_root = drops_dir(root, user_id)
-    if len(os.listdir(box_root)) >= MAX_DROPS:
-        raise Full("Больше 20 живых ссылок сразу не бывает — дождитесь, пока старые истекут")
-    did = uuid.uuid4().hex + uuid.uuid4().hex[:8]  # 160 бит: ссылку не перебрать
-    box = _dir(box_root, did)
-    write_meta(os.path.join(box, "meta"), name, mime)
-    tmp = os.path.join(box, "blob.part")
-    with open(tmp, "wb") as f:
-        f.write(data)
-    os.replace(tmp, os.path.join(box, "blob.bin"))
-    return did
+    return drop_put_file(root, user_id, stage_bytes(root, data, user_id), name, mime)
+
+
+def drop_put_file(root: str, user_id: str, staged: str, name: str, mime: str) -> str:
+    """Файл ссылки уже на диске в [STAGING]: сюда он приходит кусками, мимо памяти."""
+    try:
+        _guard_total(root, user_id, os.path.getsize(staged))
+        box_root = drops_dir(root, user_id)
+        if len(os.listdir(box_root)) >= MAX_DROPS:
+            raise Full("Больше 20 живых ссылок сразу не бывает — дождитесь, пока старые истекут")
+        did = uuid.uuid4().hex + uuid.uuid4().hex[:8]  # 160 бит: ссылку не перебрать
+        box = _dir(box_root, did)
+        write_meta(os.path.join(box, "meta"), name, mime)
+        os.replace(staged, os.path.join(box, "blob.bin"))
+        return did
+    finally:
+        discard(staged)
 
 
 def drop_find(root: str, drop_id: str) -> tuple[str, str, str] | None:
@@ -245,16 +367,36 @@ def inbox_find(root: str, box_id: str) -> str | None:
 
 
 def inbox_accept(box: str, data: bytes, name: str, mime: str) -> None:
-    if len(data) > MAX_BLOB:
-        raise Full("Файл больше 50 МБ — столько сервер Point не берёт")
-    if len([n for n in os.listdir(box) if n.endswith(".bin")]) >= MAX_INBOX_FILES:
-        raise Full("В этот ящик больше не помещается — заберите присланное")
-    fid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
-    write_meta(os.path.join(box, fid + ".meta"), name, mime)
-    tmp = os.path.join(box, fid + ".part")
-    with open(tmp, "wb") as f:
-        f.write(data)
-    os.replace(tmp, os.path.join(box, fid + ".bin"))
+    # Текст — через каталог приёма, как и файл: иначе он считался в место владельца дважды.
+    root, owner = box_owner(box)
+    inbox_accept_file(box, stage_bytes(root, data, owner), name, mime)
+
+
+def box_owner(box: str) -> tuple[str, str]:
+    """(корень, человек) ящика приёма: ящик лежит в `<корень>/u/<человек>/i/<ящик>`."""
+    user_dir = os.path.dirname(os.path.dirname(box))
+    return os.path.dirname(os.path.dirname(user_dir)), os.path.basename(user_dir)
+
+
+def inbox_accept_file(box: str, staged: str, name: str, mime: str) -> None:
+    """Присланное чужим уже на диске: страница приёма пишет его туда кусками, мимо памяти.
+
+    Присланное ложится в место владельца ящика — значит, и считается его местом. Прежде
+    страница приёма шла мимо его предела: чужие файлы занимали сотни мегабайт, и потом уже
+    собственные письма человека получали «на сервере кончилось место» (проверка рецензентами).
+    """
+    try:
+        if not os.path.isdir(box):
+            raise Gone()
+        root, owner = box_owner(box)
+        _guard_total(root, owner, os.path.getsize(staged))
+        if len([n for n in os.listdir(box) if n.endswith(".bin")]) >= MAX_INBOX_FILES:
+            raise Full("В этот ящик больше не помещается — заберите присланное")
+        fid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
+        write_meta(os.path.join(box, fid + ".meta"), name, mime)
+        os.replace(staged, os.path.join(box, fid + ".bin"))
+    finally:
+        discard(staged)
 
 
 def inbox_ack(root: str, user_id: str, box_id: str, file_id: str) -> bool:
@@ -276,8 +418,8 @@ def inbox_ack(root: str, user_id: str, box_id: str, file_id: str) -> bool:
     return removed
 
 
-def inbox_take(root: str, user_id: str, box_id: str) -> tuple[str, bytes, str, str] | None:
-    """Забрать присланное — уже под пропуском: ящик свой, значит и владелец подставляется."""
+def inbox_take_path(root: str, user_id: str, box_id: str) -> tuple[str, str, str, str] | None:
+    """Присланное — путём к файлу: отдаётся с диска кусками, не целиком в памяти."""
     safe = "".join(c for c in box_id if c.isalnum())[:80]
     box = os.path.join(inboxes_dir(root, user_id), safe)
     if not os.path.isdir(box):
@@ -287,7 +429,16 @@ def inbox_take(root: str, user_id: str, box_id: str) -> tuple[str, bytes, str, s
         return None
     fid = names[0][:-4]
     name, mime = read_meta(os.path.join(box, fid + ".meta"))
-    with open(os.path.join(box, fid + ".bin"), "rb") as f:
+    return fid, os.path.join(box, fid + ".bin"), name, mime
+
+
+def inbox_take(root: str, user_id: str, box_id: str) -> tuple[str, bytes, str, str] | None:
+    """Забрать присланное — уже под пропуском: ящик свой, значит и владелец подставляется."""
+    got = inbox_take_path(root, user_id, box_id)
+    if not got:
+        return None
+    fid, path, name, mime = got
+    with open(path, "rb") as f:
         return fid, f.read(), name, mime
 
 
@@ -322,6 +473,17 @@ def sweep(root: str, now: float | None = None) -> int:
     now = time.time() if now is None else now
     cutoff = now - TTL_SECONDS
     removed = 0
+    # Недописанное после оборванного приёма — не файл человека: ему хватит часа.
+    staging = os.path.join(root, STAGING)
+    if os.path.isdir(staging):
+        for f in os.listdir(staging):
+            p = os.path.join(staging, f)
+            try:
+                if os.path.getmtime(p) < now - STAGING_TTL_SECONDS:
+                    os.remove(p)
+                    removed += 1
+            except OSError:
+                pass
     users = os.path.join(root, "u")
     if not os.path.isdir(users):
         return 0

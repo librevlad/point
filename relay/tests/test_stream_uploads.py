@@ -1,0 +1,308 @@
+"""Файлы человека — на диск кусками, мимо памяти (охота 27.11.2026).
+
+Сервер Point — машина на 964 МБ памяти, общая с другими службами. Письмо своему устройству,
+файл ссылки и присланное на страницу приёма раньше держались в памяти целиком, до 50 МБ
+каждое, а предел двери был местом человека — 500 МБ. Владелец: «Так, лагодь» и «продолжай по тз».
+
+Обещание: файл пишется на диск по мере прихода, сверх одного файла сервер не читает, отказ не
+оставляет за собой ни байта, а что пришло — забирается байт в байт.
+"""
+from __future__ import annotations
+
+import os
+import time
+
+import pytest
+
+from point_server import app as app_mod, db, mailbox, store
+
+SMALL_BLOB = 2_000_000
+
+
+@pytest.fixture
+def small_blob(monkeypatch):
+    """Предел одного файла — 2 МБ, чтобы не гонять в тестах 50."""
+    monkeypatch.setattr(mailbox, "MAX_BLOB", SMALL_BLOB)
+    return SMALL_BLOB
+
+
+def _chunks(data: bytes, size: int = 65536):
+    for i in range(0, len(data), size):
+        yield data[i:i + size]
+
+
+def _staged(tmp_path) -> list[str]:
+    staging = tmp_path / "blobs" / mailbox.STAGING
+    return sorted(os.listdir(staging)) if staging.is_dir() else []
+
+
+def test_письмо_кусками_забирается_байт_в_байт(point, small_blob):
+    me = point.sign_in(sub="stream", kind="PHONE")
+    pc = point.sign_in(sub="stream", kind="PC")
+    letter = bytes(range(256)) * (SMALL_BLOB // 256 - 1)
+
+    put = point.as_device(me["device_token"], "POST", "/mbx/" + pc["device_id"], content=_chunks(letter))
+    got = point.as_device(pc["device_token"], "GET", "/mbx/" + pc["device_id"])
+
+    assert put.status_code == 200, put.text
+    assert got.status_code == 200
+    assert got.content == letter
+
+
+def test_файл_сверх_предела_отбивается_и_не_оставляет_следа(point, small_blob, tmp_path):
+    me = point.sign_in(sub="big", kind="PHONE")
+    pc = point.sign_in(sub="big", kind="PC")
+    big = b"z" * (SMALL_BLOB + 300_000)
+
+    letter = point.as_device(me["device_token"], "POST", "/mbx/" + pc["device_id"], content=_chunks(big))
+    drop = point.as_device(me["device_token"], "POST", "/d", content=_chunks(big))
+
+    assert letter.status_code in (413, 507), letter.text
+    assert drop.status_code in (413, 507), drop.text
+    assert "50" in letter.json()["message"], "отказ называет предел словами, а не кодом"
+    assert point.as_device(pc["device_token"], "GET", "/mbx/" + pc["device_id"]).status_code == 204
+    assert _staged(tmp_path) == [], "недописанное осталось лежать на диске"
+
+
+def test_страница_приёма_берёт_файл_больше_мегабайта_и_отбивает_лишний(point, small_blob, tmp_path):
+    me = point.sign_in(sub="inbox", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    ok = b"a" * (SMALL_BLOB - 100_000)
+    over = b"b" * (SMALL_BLOB + 100_000)
+
+    sent = point.client.post("/u/" + box, files={"file": ("снимок.bin", ok, "application/octet-stream")})
+    refused = point.client.post("/u/" + box, files={"file": ("больше.bin", over, "application/octet-stream")})
+    got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
+
+    assert sent.status_code == 200, sent.text
+    assert refused.status_code in (413, 507), refused.text
+    assert got.content == ok
+    assert _staged(tmp_path) == []
+
+
+def test_недописанное_после_обрыва_убирает_уборка(tmp_path):
+    root = str(tmp_path / "blobs")
+    orphan = mailbox.staging_path(root)
+    with open(orphan, "wb") as f:
+        f.write(b"half")
+    fresh = mailbox.staging_path(root)
+    with open(fresh, "wb") as f:
+        f.write(b"now")
+    old = time.time() - mailbox.STAGING_TTL_SECONDS - 60
+    os.utime(orphan, (old, old))
+
+    mailbox.sweep(root)
+
+    assert not os.path.exists(orphan)
+    assert os.path.exists(fresh), "уборка не должна трогать то, что пишется прямо сейчас"
+
+
+def test_предел_двери_файлов_один_файл_а_не_место_человека():
+    limit = app_mod.body_limit_for("POST", "/mbx/dev-1")
+
+    assert limit >= mailbox.MAX_BLOB, "одному файлу должно хватать"
+    assert limit < mailbox.MAX_TOTAL_BYTES, "дверь файлов не должна читать всё место человека"
+
+
+def test_страница_приёма_знает_предел_файла_и_отказ_по_размеру():
+    """Чужой человек с видео на 70 МБ слышит «файл слишком большой», а не «попробуйте ещё раз»."""
+    from point_server import upload_page
+
+    script = upload_page.UPLOAD_SCRIPT
+    assert str(mailbox.MAX_BLOB) in script, "предел файла на странице разошёлся с сервером"
+    assert "x.status===413" in script, "отказ по размеру до чтения (413) страница не узнаёт"
+
+
+def test_страница_приёма_принимает_только_multipart(point):
+    """Поле urlencoded разбор формы держал бы в памяти целиком — страница шлёт только multipart."""
+    me = point.sign_in(sub="urlenc", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    r = point.client.post("/u/" + box, data={"text": "x" * 10})
+
+    assert r.status_code == 400
+
+
+def test_долгая_отправка_после_удаления_аккаунта_не_рождает_ссылку(point, tmp_path):
+    """«Удалить всё моё» посреди отправки: ссылка не должна появиться после удаления."""
+    me = point.sign_in(sub="gone", kind="PHONE")
+    other = point.sign_in(sub="gone", kind="PC")
+
+    def body():
+        yield b"a" * 1000
+        # То же, что делает DELETE /account с другого устройства, — пока отправка ещё идёт.
+        conn = db.connect(point.db_path)
+        try:
+            who = store.device_by_token(conn, other["device_token"], point.clock())
+            store.delete_account(conn, who.user_id)
+            mailbox.forget_user(str(tmp_path / "blobs"), who.user_id)
+        finally:
+            conn.close()
+        yield b"b" * 1000
+
+    put = point.as_device(me["device_token"], "POST", "/d", content=body(), headers={"X-Drop-Mime": "text/plain"})
+
+    assert put.status_code == 401, put.text
+    assert not (tmp_path / "blobs" / "u").exists() or not any((tmp_path / "blobs" / "u").rglob("blob.bin"))
+    assert _staged(tmp_path) == []
+
+
+def test_одновременных_отправок_одному_человеку_не_больше_трёх(point, tmp_path):
+    """Недописанное лежит вне каталога человека, но не вне его счёта (проверка рецензентами)."""
+    me = point.sign_in(sub="busy", kind="PHONE")
+    who = me["device_token"]
+    conn = db.connect(point.db_path)
+    try:
+        uid = store.device_by_token(conn, who, point.clock()).user_id
+    finally:
+        conn.close()
+    root = str(tmp_path / "blobs")
+    for _ in range(mailbox.MAX_IN_FLIGHT):
+        with open(mailbox.staging_path(root, uid), "wb") as f:
+            f.write(b"in flight")
+
+    r = point.as_device(who, "POST", "/d", content=b"one more", headers={"X-Drop-Mime": "text/plain"})
+
+    # Временный отказ — 503 с «повторите позже», а не 507: 507 клиенты читают как «слишком большой».
+    assert r.status_code == 503, r.text
+    assert r.json()["error"] == "busy"
+    assert r.headers.get("Retry-After")
+
+
+def test_замершее_тело_обрывается_а_не_держит_место():
+    """Ни uvicorn, ни Caddy медленное тело не обрывают — это делает прослойка предела."""
+    import asyncio
+
+    from point_server import bodylimit
+
+    class Stalled(Exception):
+        pass
+
+    async def app(scope, receive, send):
+        while True:
+            message = await receive()
+            if not message.get("more_body"):
+                return
+
+    async def receive_then_silence():
+        if not getattr(receive_then_silence, "sent", False):
+            receive_then_silence.sent = True
+            return {"type": "http.request", "body": b"part", "more_body": True}
+        await asyncio.sleep(3600)
+
+    limited = bodylimit.BodyLimit(app, limit_for=lambda m, p: 10_000, refusal=lambda p: Exception(p),
+                                  stalled=lambda p: Stalled(p), idle_seconds=0.2)
+
+    async def go():
+        await limited({"type": "http", "method": "POST", "path": "/d", "headers": []},
+                      receive_then_silence, lambda m: None)
+
+    with pytest.raises(Stalled):
+        asyncio.run(go())
+
+
+# --- то, что нашла повторная проверка независимыми рецензентами (27.11.2026) ---------------
+
+
+def test_сироты_прежнего_процесса_убираются_при_старте(tmp_path, clock):
+    """Процесс умер посреди приёма — его недописанное не должно час держать человека."""
+    from test_ai_trial import FakeAi, _server
+
+    root = str(tmp_path / "blobs")
+    orphans = [mailbox.staging_path(root, "someone") for _ in range(mailbox.MAX_IN_FLIGHT)]
+    for path in orphans:
+        with open(path, "wb") as f:
+            f.write(b"half")
+
+    h = _server(tmp_path, clock, FakeAi())
+    try:
+        assert not any(os.path.exists(p) for p in orphans)
+    finally:
+        h.client.__exit__(None, None, None)
+
+
+def test_чужого_на_странице_приёма_не_держат_отправки_владельца(point, tmp_path):
+    me = point.sign_in(sub="owner-busy", kind="PHONE")
+    conn = db.connect(point.db_path)
+    try:
+        uid = store.device_by_token(conn, me["device_token"], point.clock()).user_id
+    finally:
+        conn.close()
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    root = str(tmp_path / "blobs")
+    for _ in range(mailbox.MAX_IN_FLIGHT):
+        with open(mailbox.staging_path(root, uid), "wb") as f:
+            f.write(b"own letter in flight")
+
+    sent = point.client.post("/u/" + box, files={"text": (None, "Крещатик 22")})
+
+    assert sent.status_code == 200, sent.text
+
+
+def test_файл_ровно_на_пределе_проходит_страницу_приёма(point, small_blob):
+    """Обёртка формы — не файл: файл ровно в 50 МБ страница пропускает, и сервер тоже."""
+    me = point.sign_in(sub="edge", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    sent = point.client.post(
+        "/u/" + box,
+        files={"file": ("видео з дуже довгою назвою українською.mp4", b"e" * SMALL_BLOB, "video/mp4")},
+    )
+
+    assert sent.status_code == 200, sent.text
+
+
+def test_удалённый_ящик_не_рождается_заново(tmp_path):
+    """«Удалить всё моё», пока чужая отправка шла: каталог человека не должен появиться снова."""
+    root = str(tmp_path / "blobs")
+    box_id = mailbox.inbox_open(root, "gone-user")
+    box = mailbox.inbox_find(root, box_id)
+    staged = mailbox.stage_bytes(root, b"late file", "gone-user")
+    mailbox.forget_user(root, "gone-user")
+
+    with pytest.raises(mailbox.Gone):
+        mailbox.inbox_accept_file(box, staged, "f.bin", "application/octet-stream")
+
+    assert not os.path.exists(os.path.join(root, "u", "gone-user"))
+    assert not os.path.exists(staged)
+
+
+def test_прослойка_без_срока_тишины_всё_равно_считает_байты():
+    import asyncio
+
+    from point_server import bodylimit
+
+    class TooBig(Exception):
+        pass
+
+    async def app(scope, receive, send):
+        while True:
+            message = await receive()
+            if not message.get("more_body"):
+                return
+
+    chunks = iter([b"a" * 600, b"b" * 600, b""])
+
+    async def receive():
+        body = next(chunks)
+        return {"type": "http.request", "body": body, "more_body": bool(body)}
+
+    limited = bodylimit.BodyLimit(app, limit_for=lambda m, p: 1000, refusal=lambda p: TooBig(p))
+
+    with pytest.raises(TooBig):
+        asyncio.run(limited({"type": "http", "method": "POST", "path": "/d", "headers": []},
+                            receive, lambda m: None))
+
+
+def test_отказ_по_размеру_на_странице_приёма_приходит_страницей(point, small_blob):
+    """Форма без скрипта показывает ответ как есть — человеку нужны слова, а не JSON."""
+    me = point.sign_in(sub="nojs", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    limit = app_mod.body_limit_for("POST", "/u/" + box)
+    body = b"--x\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.bin\"\r\n\r\n" + b"z" * (limit + 10)
+
+    r = point.client.post("/u/" + box, content=_chunks(body),
+                          headers={"Content-Type": "multipart/form-data; boundary=x"})
+
+    assert r.status_code == 413
+    assert r.headers["content-type"].startswith("text/html")
