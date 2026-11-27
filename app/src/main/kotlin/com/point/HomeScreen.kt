@@ -181,6 +181,11 @@ fun HomeScreen(
                         WHAT_POINT_IS,
                         style = com.point.core.ui.theme.PointText.subline,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+
+                        // Магнитола Subaru, 1280×720 (27.11.2026): первая строка заняла колонку до
+                        // края, и хвост «є» срезался — по умолчанию текст обрезается по своим
+                        // границам, а глиф выступает за них на пиксель-другой.
+                        overflow = TextOverflow.Visible,
                         modifier = Modifier.widthIn(max = PortalColumnWidth),
                     )
                     Spacer(Modifier.height(22.dp))
