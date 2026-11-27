@@ -148,6 +148,52 @@ TEXTS: dict[str, tuple[str, str]] = {
         "can see your circle and switch off what you don't need.",
     ),
     "Ваши настройки": ("Ваші налаштування", "Your settings"),
+    "Счёт пробных AI-действий": ("Лічильник пробних AI-дій", "Trial AI action count"),
+    "Сколько пробных AI-действий вы уже истратили — число, без содержимого запросов. "
+    "Удаление аккаунта стирает его сразу.": (
+        "Скільки пробних AI-дій ви вже витратили — число, без вмісту запитів. Видалення акаунта "
+        "стирає його одразу.",
+        "How many trial AI actions you have used: a number, without the content of the requests. "
+        "Deleting the account erases it at once.",
+    ),
+    "Пробные AI-действия": ("Пробні AI-дії", "Trial AI actions"),
+    "Groq или Cloudflare Workers AI — оба письменно обещают не учиться на присланном. Объект "
+    "идёт к ним через сервер Point только после вашего нажатия, сервер его не хранит и "
+    "считает лишь число действий.": (
+        "Groq або Cloudflare Workers AI — обидва письмово обіцяють не навчатися на надісланому. "
+        "Об’єкт іде до них через сервер Point лише після вашого натискання, сервер його не "
+        "зберігає й рахує лише кількість дій.",
+        "Groq or Cloudflare Workers AI. Both promise in writing not to train on what you send. "
+        "The object reaches them through the Point server only after your tap; the server does "
+        "not keep it and counts only the number of actions.",
+    ),
+    "Пробные AI-действия без своего ключа идут через сервер Point к сервису AI, который не "
+    "учится на присланном. Сервер передаёт объект и не хранит его.": (
+        "Пробні AI-дії без власного ключа йдуть через сервер Point до сервісу AI, який не "
+        "навчається на надісланому. Сервер передає об’єкт і не зберігає його.",
+        "Trial AI actions without your own key go through the Point server to an AI service that "
+        "does not train on what you send. The server passes the object on and does not keep it.",
+    ),
+    "Объект слишком большой для пробного AI-действия.": (
+        "Об’єкт завеликий для пробної AI-дії.",
+        "The object is too large for a trial AI action.",
+    ),
+    "Пробные AI-действия сейчас недоступны.": (
+        "Пробні AI-дії зараз недоступні.",
+        "Trial AI actions are unavailable right now.",
+    ),
+    "Пробные AI-действия кончились — задайте свой ключ.": (
+        "Пробні AI-дії скінчилися — задайте свій ключ.",
+        "Your trial AI actions are used up. Add your own key.",
+    ),
+    "Пробные AI-действия на сегодня разобраны. Попробуйте завтра.": (
+        "Пробні AI-дії на сьогодні розібрано. Спробуйте завтра.",
+        "Today's trial AI actions are all taken. Try again tomorrow.",
+    ),
+    "Сервисы AI сейчас не отвечают. Попробуйте позже.": (
+        "Сервіси AI зараз не відповідають. Спробуйте пізніше.",
+        "AI services are not responding right now. Try again later.",
+    ),
     "Ключи сервисов, которые вы добавили сами (AI, распознавание речи и текста), выбор, "
     "куда можно отправлять объекты, и звук — чтобы на каждом вашем устройстве они были "
     "те же и вводить их заново не пришлось. Сервер эти настройки читает, иначе не смог бы "

@@ -163,6 +163,17 @@ class HttpAccountClient(
         ).status == 200
     }
 
+    override suspend fun aiTrial(account: PointAccount): PointAiTrial? = io {
+        val reply = request(path = "/ai/quota", method = "GET", token = account.deviceToken)
+        if (reply.status != 200) return@io null
+        val json = parseJson(reply.body ?: "")
+        PointAiTrial(
+            available = json.bool("available") ?: false,
+            left = json.long("left")?.toInt() ?: 0,
+            trial = json.long("trial")?.toInt() ?: 0,
+        )
+    }
+
     private class Reply(val status: Int?, val body: String?)
 
     private fun refusal(reply: Reply): LoginPoll.Refused {

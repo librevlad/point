@@ -106,8 +106,12 @@ fun anyoneAllowedAt(level: PrivacyLevel): Boolean = allowedAt(level, PROMISED_SE
  * считается.
  */
 fun promiseOfService(id: String): ReaderPrivacy =
-    AI_PROVIDERS.firstOrNull { it.id == id }?.privacy
-        ?: ReaderPrivacy(where = id.ifBlank { tr("сервис") }, promise = ReaderPromise.UNKNOWN)
+    if (id == POINT_AI_SERVICE_ID) {
+        POINT_AI_PRIVACY
+    } else {
+        AI_PROVIDERS.firstOrNull { it.id == id }?.privacy
+            ?: ReaderPrivacy(where = id.ifBlank { tr("сервис") }, promise = ReaderPromise.UNKNOWN)
+    }
 
 interface CloudPrivacySettings {
     fun level(): PrivacyLevel

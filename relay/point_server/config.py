@@ -35,6 +35,15 @@ class Settings:
     # Файл ключа, которым настройки аккаунта зашифрованы на диске (`vault.py`). Пусто —
     # `settings.key` в корне службы; файла нет — сервер создаёт ключ сам.
     settings_key_path: str = ""
+    # AI без своего ключа (#477): ключи Point к сервисам, которые не учатся на присланном.
+    # Пусто — пробы нет, и это рабочее состояние: телефон её просто не предлагает.
+    ai_groq_key: str = ""
+    ai_cloudflare_key: str = ""
+    ai_cloudflare_account: str = ""
+    # Сколько пробных AI-действий у аккаунта и сколько сервер отдаёт за сутки на всех:
+    # второе — предел денег, если пробу начнут выкачивать.
+    ai_trial: int = 30
+    ai_daily_cap: int = 500
     login_ttl: int = LOGIN_TTL_SECONDS
     poll_interval: int = POLL_INTERVAL_SECONDS
     online_window: int = ONLINE_WINDOW_SECONDS
@@ -70,4 +79,9 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         login_ttl=int(env.get("POINT_LOGIN_TTL", LOGIN_TTL_SECONDS)),
         fcm_key_path=env.get("POINT_FCM_KEY", ""),
         settings_key_path=env.get("POINT_SETTINGS_KEY_FILE", ""),
+        ai_groq_key=env.get("POINT_AI_GROQ_KEY", ""),
+        ai_cloudflare_key=env.get("POINT_AI_CLOUDFLARE_KEY", ""),
+        ai_cloudflare_account=env.get("POINT_AI_CLOUDFLARE_ACCOUNT", ""),
+        ai_trial=int(env.get("POINT_AI_TRIAL", "30")),
+        ai_daily_cap=int(env.get("POINT_AI_DAILY_CAP", "500")),
     )

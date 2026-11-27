@@ -561,6 +561,7 @@ abstract class DataModule {
             http: HttpJson,
             store: ObjectStore,
             userKey: UserKeyLlmClient,
+            pointAi: com.point.core.flow.PointAiLlmClient,
             gemini: GeminiLlmClient,
             claude: ClaudeLlmClient,
             frames: com.point.core.flow.FrameForModel,
@@ -571,8 +572,30 @@ abstract class DataModule {
                 if (BuildConfig.ANTHROPIC_API_KEY.isNotBlank()) add(claude)
             }
 
-            return listOf<LlmClient>(userKey) + free + native
+            // Свой ключ — первым и мимо сервера; проба Point (#477) — сразу за ним, пока ключа нет.
+            return listOf<LlmClient>(userKey, pointAi) + free + native
         }
+
+        /** Память о пробе AI без своего ключа: одна на приложение, освежается ответом сервера. */
+        @Provides
+        @Singleton
+        fun pointAiQuota(): com.point.core.flow.PointAiQuota = com.point.core.flow.MemoryPointAiQuota()
+
+        @Provides
+        fun pointAiLlmClient(
+            account: com.point.core.flow.AccountStore,
+            http: HttpJson,
+            store: ObjectStore,
+            quota: com.point.core.flow.PointAiQuota,
+            frames: com.point.core.flow.FrameForModel,
+        ): com.point.core.flow.PointAiLlmClient = com.point.core.flow.PointAiLlmClient(
+            account = { account.current() },
+            serverUrl = serverUrl(),
+            http = http,
+            store = store,
+            quota = quota,
+            frames = frames,
+        )
 
         // Журнал обменов с моделью — только на отладочном стенде: содержимое —
         // личные данные человека (просьба владельца 2026-08-09).

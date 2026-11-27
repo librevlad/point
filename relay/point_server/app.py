@@ -43,6 +43,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import db, google as google_mod, i18n, ids, mailbox, pages, push as push_mod, store, upload_page
 from . import vault as vault_mod
+from . import ai as ai_mod
 from .i18n import t
 from .config import Settings, settings_from_env
 
@@ -65,6 +66,8 @@ class Deps:
     knocker: object = None
     # Чем настройки аккаунта зашифрованы на диске.
     vault: vault_mod.SettingsVault | None = None
+    # Кто отвечает на пробные AI-действия (#477). Без ключей — никто, и пробы нет.
+    ai: ai_mod.AiGateway | None = None
 
 
 # --- тела запросов ---------------------------------------------------------------------
@@ -85,6 +88,17 @@ class StartRequest(BaseModel):
     #: Куда возвращать, устройство НЕ говорит — адрес возврата у сервера свой (см. `APP_RETURN`),
     #: иначе ручка стала бы открытым перенаправлением на что угодно.
     handoff: bool = False
+
+
+class AiChatRequest(BaseModel):
+    """Запрос в формате OpenAI. Модель выбирает сервер: проба идёт только к тем, кто не учится."""
+
+    messages: list[dict] = Field(min_length=1, max_length=20)
+    max_tokens: int | None = None
+
+
+# Запрос пробы до ~6 МБ: снимок в base64 весит на треть больше самого снимка.
+AI_MAX_BYTES = 6_000_000
 
 
 class AccountSettingsRequest(BaseModel):
@@ -281,6 +295,7 @@ def create_app(
     google: google_mod.GoogleIdentity | None = None,
     now: Callable[[], int] | None = None,
     knocker: object | None = None,
+    ai: ai_mod.AiGateway | None = None,
 ) -> FastAPI:
     _require_form_parsing()
     settings = settings or settings_from_env()
@@ -304,6 +319,9 @@ def create_app(
         now=now or (lambda: int(time.time())),
         knocker=knocker,
         vault=vault_mod.SettingsVault(vault_mod.load_or_create_key(settings.settings_key_file)),
+        ai=ai if ai is not None else ai_mod.HttpAiGateway(ai_mod.upstreams(
+            settings.ai_groq_key, settings.ai_cloudflare_key, settings.ai_cloudflare_account,
+        )),
     )
 
     def deps(request: Request) -> Deps:
@@ -691,6 +709,46 @@ def create_app(
         if not store.put_account_settings(conn, user_id=me.user_id, data=data, at=at, now=d.now()):
             raise fail(409, "stale_settings", t("На сервере лежат более новые настройки."))
         return {"ok": True, "at": at}
+
+    # --- AI без своего ключа (#477) --------------------------------------------------
+    # Пробные действия через сервер Point. Отказы — голосом OpenAI: телефон читает их как
+    # отказ любого такого сервиса, своего клиента под эту дверь у него нет.
+
+    def ai_refusal(status: int, code: str, message: str) -> JSONResponse:
+        return JSONResponse({"error": {"type": code, "message": message}}, status_code=status)
+
+    @app.get("/ai/quota")
+    def ai_quota(
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
+    ):
+        left = max(0, d.settings.ai_trial - store.ai_used(conn, me.user_id))
+        return {"available": d.ai.available, "left": left, "trial": d.settings.ai_trial}
+
+    @app.post("/ai/v1/chat/completions")
+    def ai_chat(
+        body: AiChatRequest,
+        request: Request,
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
+    ):
+        if int(request.headers.get("content-length") or 0) > AI_MAX_BYTES:
+            return ai_refusal(413, "too_big", t("Объект слишком большой для пробного AI-действия."))
+        if not d.ai.available:
+            return ai_refusal(503, "ai_off", t("Пробные AI-действия сейчас недоступны."))
+        left = d.settings.ai_trial - store.ai_used(conn, me.user_id)
+        if left <= 0:
+            return ai_refusal(402, "trial_over", t("Пробные AI-действия кончились — задайте свой ключ."))
+        day = time.strftime("%Y-%m-%d", time.gmtime(d.now()))
+        if store.ai_day_used(conn, day) >= d.settings.ai_daily_cap:
+            return ai_refusal(429, "day_over", t("Пробные AI-действия на сегодня разобраны. Попробуйте завтра."))
+        status, payload, _ = d.ai.ask(body.messages, min(body.max_tokens or ai_mod.MAX_TOKENS, ai_mod.MAX_TOKENS))
+        if status != 200:
+            return ai_refusal(502, "ai_failed", t("Сервисы AI сейчас не отвечают. Попробуйте позже."))
+        store.ai_spend(conn, user_id=me.user_id, day=day, now=d.now())
+        return Response(payload, media_type="application/json", headers={"X-Point-Ai-Left": str(left - 1)})
 
     @app.post("/devices/{device_id}/revoke")
     def revoke(
