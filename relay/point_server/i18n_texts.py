@@ -180,6 +180,10 @@ TEXTS: dict[str, tuple[str, str]] = {
     ),
     "Запрос слишком большой.": ("Запит завеликий.", "The request is too large."),
     "Отправка не дошла": ("Надсилання не дійшло", "The upload didn't go through"),
+    "Текст слишком длинный — пришлите его файлом.": (
+        "Текст задовгий — надішліть його файлом.",
+        "The text is too long. Send it as a file.",
+    ),
     "Сюда сейчас отправляют много — попробуйте через минуту.": (
         "Сюди зараз надсилають багато — спробуйте за хвилину.",
         "Lots of uploads are coming in here right now. Try again in a minute.",

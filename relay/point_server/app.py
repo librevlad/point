@@ -42,6 +42,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from starlette.background import BackgroundTask
 from starlette.requests import ClientDisconnect
 from starlette.formparsers import MultiPartException, MultiPartParser
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -115,6 +116,15 @@ _UPLOADS = re.compile(r"^/(mbx/[^/]+|d|u/(?!open$)[^/]+)$")
 _RECEIVE_PAGE = re.compile(r"^/u/(?!open$)[^/]+$")
 
 
+def _close_parser_files(parser) -> None:
+    """Временные файлы прерванного разбора — закрыть сразу, а не ждать сборки мусора."""
+    for f in list(getattr(parser, "_files_to_close_on_error", [])):
+        try:
+            f.close()
+        except Exception:
+            pass
+
+
 class _ReceiveFormParser(MultiPartParser):
     """Разбор формы страницы приёма — с пределом на заголовки частей.
 
@@ -157,6 +167,10 @@ FORM_ENVELOPE_BYTES = 64 * 1024
 
 # Перед отказом тело дочитывается, только если оно не больше этого (см. `_drain`).
 DRAIN_MAX_BYTES = 2 * 1024 * 1024
+
+# Свои отправки: до трёх с устройства и до шести у человека всего — устройств у аккаунта
+# сколько угодно, и без общего потолка один аккаунт занимал бы диск без счёта.
+MAX_IN_FLIGHT_PER_PERSON = 6
 
 
 def body_limit_for(method: str, path: str) -> int:
@@ -976,9 +990,9 @@ def create_app(
     app.state.uploads = uploads_now
 
     @contextlib.contextmanager
-    def _one_more_upload(key: tuple[str, str]):
+    def _one_more_upload(key: tuple[str, str], limit: int = mailbox.MAX_IN_FLIGHT):
         with uploads_lock:
-            if uploads_now.get(key, 0) >= mailbox.MAX_IN_FLIGHT:
+            if uploads_now.get(key, 0) >= limit:
                 raise mailbox.Busy("Прежние отправки ещё идут — дождитесь их и попробуйте снова")
             uploads_now[key] = uploads_now.get(key, 0) + 1
         try:
@@ -1115,7 +1129,8 @@ def create_app(
             raise fail(404, "no_device", t("Такого устройства в вашем круге нет."))
         root = _blobs_root(d)
         try:
-            with _one_more_upload(("own", me.device_id)):
+            with _one_more_upload(("own-person", me.user_id), MAX_IN_FLIGHT_PER_PERSON), \
+                    _one_more_upload(("own", me.device_id)):
                 try:
                     mailbox.guard_incoming(root, me.user_id, bodylimit_mod.declared_length(request.headers))
                 except mailbox.Full:
@@ -1198,7 +1213,8 @@ def create_app(
         mime = request.headers.get("X-Drop-Mime", "application/octet-stream")
         root = _blobs_root(d)
         try:
-            with _one_more_upload(("own", me.device_id)):
+            with _one_more_upload(("own-person", me.user_id), MAX_IN_FLIGHT_PER_PERSON), \
+                    _one_more_upload(("own", me.device_id)):
                 try:
                     mailbox.guard_incoming(root, me.user_id, bodylimit_mod.declared_length(request.headers))
                 except mailbox.Full:
@@ -1334,24 +1350,41 @@ def create_app(
                 except mailbox.Full:
                     await _drain(request)
                     raise
+                parser = _ReceiveFormParser(request.headers, request.stream(), max_files=1, max_fields=4)
                 try:
-                    form = await _ReceiveFormParser(
-                        request.headers, request.stream(), max_files=1, max_fields=4,
-                    ).parse()
-                except MultiPartException:
-                    return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
+                    form = await parser.parse()
+                except StarletteHTTPException:
+                    # Отказ прослойки предела (413 размер, 408 тишина) — его отдаёт обработчик отказов.
+                    _close_parser_files(parser)
+                    raise
                 except ClientDisconnect:
                     # Чужой закрыл вкладку посреди отправки: отвечать некому, писать в журнал нечего.
+                    _close_parser_files(parser)
                     return Response(status_code=400)
+                except MultiPartException as e:
+                    _close_parser_files(parser)
+                    if "maximum size" in str(e):
+                        return HTMLResponse(pages.too_big_page(t("Текст слишком длинный — пришлите его файлом.")), status_code=413)
+                    return HTMLResponse(
+                        pages.upload_failed_page(t("Сервер не принял отправку. Попробуйте ещё раз.")), status_code=400,
+                    )
+                except Exception:
+                    # Битая форма от чужого (python-multipart бросает своё): страница, а не 500
+                    # с трассой в журнале; временные файлы разбора закрываются сразу.
+                    _close_parser_files(parser)
+                    return HTMLResponse(
+                        pages.upload_failed_page(t("Сервер не принял отправку. Попробуйте ещё раз.")), status_code=400,
+                    )
 
                 # Ссылку чаще всего дают ради куска текста — адреса, номера заказа, обрывка
                 # переписки (#883). Он приходит текстом, а не выдуманным файлом: на той стороне
                 # Point получает обычный текстовый объект.
                 item = form.get("file")
                 typed = (form.get("text") or "").strip() if isinstance(form.get("text"), str) else ""
-                # Форма без скрипта шлёт и пустое поле файла рядом с текстом: тогда это текст.
-                # Прежде сохранялся пустой «file», а набранный текст терялся молча.
-                if item is not None and not getattr(item, "filename", "") and typed:
+                # Форма без скрипта шлёт пустое поле файла и тогда, когда файла нет: такое поле —
+                # не файл. Прежде сохранялся пустой «file», а набранный текст терялся молча; поле
+                # «file» строкой роняло разбор в 500.
+                if not isinstance(item, StarletteUploadFile) or (not item.filename and not item.size):
                     item = None
                 if item is None and not typed:
                     return HTMLResponse(pages.nothing_to_send_page(), status_code=400)

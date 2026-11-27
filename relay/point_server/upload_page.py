@@ -259,6 +259,8 @@ UPLOAD_SCRIPT = r"""
   var file=i.files&&i.files[0];
   var body=(text.value||'').trim();
   if(mode==='text'&&!body){ say('Напишите текст — пока отправлять нечего',true); return; }
+  // Предел текстового поля формы — 1 МБ: длинное — файлом, а не отказом сервера после отправки.
+  if(mode==='text'&&body.length>1000000){ say('Текст слишком длинный — пришлите его файлом.',true); return; }
   if(mode==='file'&&!file){ say('Выберите файл — пока отправлять нечего',true); return; }
   // Предел одного файла (mailbox.MAX_BLOB) — до отправки: не гнать 70 МБ, чтобы услышать «нет».
   if(mode==='file'&&file.size>52428800){ say('Файл слишком большой для этого ящика.',true); return; }

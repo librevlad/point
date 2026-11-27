@@ -410,3 +410,69 @@ def test_форма_без_скрипта_с_пустым_файлом_прис�
     assert sent.status_code == 200, sent.text
     assert got.status_code == 200
     assert got.content.decode("utf-8") == "Крещатик 22, забрать до 19:00"
+
+
+def _raw_form(box, point, parts: list[bytes]):
+    body = b"".join(b"--x\r\n" + part + b"\r\n" for part in parts) + b"--x--\r\n"
+    return point.client.post("/u/" + box, content=body, headers={"Content-Type": "multipart/form-data; boundary=x"})
+
+
+def test_у_человека_всего_не_больше_шести_своих_отправок(point):
+    """Устройств у аккаунта сколько угодно: без общего потолка один аккаунт занимал бы диск без счёта."""
+    me = point.sign_in(sub="many-devices", kind="PHONE")
+    conn = db.connect(point.db_path)
+    try:
+        uid = store.device_by_token(conn, me["device_token"], point.clock()).user_id
+    finally:
+        conn.close()
+    point.client.app.state.uploads[("own-person", uid)] = app_mod.MAX_IN_FLIGHT_PER_PERSON
+    try:
+        fresh_device = point.sign_in(sub="many-devices", kind="PC")
+        r = point.as_device(fresh_device["device_token"], "POST", "/d", content=b"x", headers={"X-Drop-Mime": "text/plain"})
+    finally:
+        point.client.app.state.uploads.pop(("own-person", uid), None)
+
+    assert r.status_code == 503, r.text
+
+
+def test_битая_форма_от_чужого_страница_а_не_500(point):
+    me = point.sign_in(sub="broken-form", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    r = _raw_form(box, point, [b"Content-Disposition: form-data; name=\"text\"\r\n folded continuation\r\n\r\nhi"])
+
+    assert r.status_code == 400
+    assert r.headers["content-type"].startswith("text/html")
+
+
+def test_пустая_форма_без_скрипта_ничего_не_сохраняет(point):
+    """Браузер шлёт пустое поле файла как filename="" с пустым телом — это не файл."""
+    me = point.sign_in(sub="empty-nojs", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    r = _raw_form(box, point, [
+        b"Content-Disposition: form-data; name=\"file\"; filename=\"\"\r\nContent-Type: application/octet-stream\r\n\r\n",
+        b"Content-Disposition: form-data; name=\"text\"\r\n\r\n",
+    ])
+
+    assert r.status_code == 400
+    assert point.as_device(me["device_token"], "GET", "/u/" + box + "/take").status_code == 204
+
+
+def test_поле_file_строкой_не_роняет_сервер(point):
+    me = point.sign_in(sub="file-as-text", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    r = _raw_form(box, point, [b"Content-Disposition: form-data; name=\"file\"\r\n\r\nnot a file"])
+
+    assert r.status_code == 400
+
+
+def test_длинный_текст_слышит_про_длину_а_не_пока_нечего_отправлять(point):
+    me = point.sign_in(sub="long-text", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    r = point.client.post("/u/" + box, files={"text": (None, "а" * 700_000)})
+
+    assert r.status_code == 413
+    assert "длинный" in r.text or "задовгий" in r.text or "too long" in r.text
