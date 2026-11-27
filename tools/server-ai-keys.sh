@@ -9,6 +9,14 @@
 #   bash tools/server-ai-keys.sh     # затем bash tools/deploy-server.sh — служба перечитает окружение
 set -eu
 
+# `bash` в PowerShell — это Linux из WSL: у него свой ssh, без ключа к серверу и без его
+# отпечатка («Host key verification failed», 27.11.2026). Скрипт живёт в Git Bash.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  echo "это bash из WSL — у него нет ключа к серверу. Запустите в PowerShell так:"
+  echo '  & "C:\Program Files\Git\bin\bash.exe" tools/server-ai-keys.sh'
+  exit 2
+fi
+
 HOST="${POINT_SERVER_HOST:-user@35.185.31.106}"
 DST="${POINT_SERVER_DIR:-/home/librevlad/point-server}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
