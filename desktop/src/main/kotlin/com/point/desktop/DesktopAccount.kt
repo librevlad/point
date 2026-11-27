@@ -32,6 +32,12 @@ class DesktopAccount(
 
     /** Что приехало общего — сюда. */
     private val onSettings: (com.point.core.flow.AccountSettings) -> Unit = {},
+
+    /**
+     * Память о пробе AI без своего ключа (#477) — та же, что читает исполнитель пробы: он
+     * берётся за действие, только когда здесь сказано, что проба есть и не кончилась.
+     */
+    private val aiQuota: com.point.core.flow.PointAiQuota = com.point.core.flow.MemoryPointAiQuota(),
 ) {
 
     private val settingsSync = com.point.core.flow.AccountSettingsSync(client)
@@ -65,7 +71,39 @@ class DesktopAccount(
 
     private var job: Job? = null
 
+    private val _aiTrial = MutableStateFlow<com.point.core.flow.AiTrialOffer?>(null)
+
+    /**
+     * Что сказать о пробе на экране ключей (#477): вошедшему — сколько осталось, тому, кто не
+     * вошёл, — что вход даёт AI-действия без ключа. `null` — сервер о пробе не сказал.
+     */
+    val aiTrial: StateFlow<com.point.core.flow.AiTrialOffer?> = _aiTrial
+
+    /** Предложение пробы для того, кто не вошёл: спрашивается у сервера один раз. */
+    @Volatile private var aiOffer: com.point.core.flow.PointAiTrial? = null
+
     fun current(): PointAccount? = store.current()
+
+    /**
+     * Освежить пробу: вошедшему — остаток с сервера, тому, кто не вошёл, — есть ли проба вообще.
+     * Молча: сервер не ответил — экран ключей просто не говорит о пробе.
+     */
+    fun refreshAiTrial() {
+        val account = store.current()
+        scope.launch {
+            if (account != null) {
+                runCatching { client.aiTrial(account) }.getOrNull()?.let(aiQuota::remember)
+            } else if (aiOffer == null) {
+                aiOffer = runCatching { client.aiOffer() }.getOrNull()
+            }
+            publishAiTrial()
+        }
+    }
+
+    /** Остаток мог измениться действием — экран ключей показывает свежий, без похода на сервер. */
+    fun publishAiTrial() {
+        _aiTrial.value = com.point.core.flow.aiTrialOfferOf(store.current() != null, aiQuota.current(), aiOffer)
+    }
 
     fun peers(): List<com.point.core.flow.LinkedPc> =
         _circle.value.filterNot { it.self }.map { com.point.core.flow.LinkedPc(it.id, it.name, it.key) }
@@ -134,6 +172,8 @@ class DesktopAccount(
         // Настройки — за аккаунтом, а не за кругом (владелец 26.11.2026): сводятся сами по
         // себе, что бы сервер ни ответил о круге.
         syncSettings()
+        // Проба тоже за аккаунтом: одна на все устройства человека.
+        refreshAiTrial()
         scope.launch {
             val answer = runCatching { client.circle(account) }.getOrDefault(CircleAnswer.Unreachable)
             when (answer) {
@@ -195,5 +235,7 @@ class DesktopAccount(
         _account.value = null
         _signIn.value = null
         _error.value = why
+        // Без аккаунта остатка нет — есть предложение войти ради пробы.
+        refreshAiTrial()
     }
 }

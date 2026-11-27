@@ -134,4 +134,40 @@ class KeysOnPcTest {
 
         compose.onNodeWithText("Отвечают все 1", substring = true).assertExists()
     }
+
+    private fun trial(offer: com.point.core.flow.AiTrialOffer, onSignIn: () -> Unit = {}) {
+        compose.setContent {
+            SettingsKeys(
+                config = PcConfig(name = "ПК"),
+                onSave = { saved = it },
+                keyCheck = FakeCheck(),
+                onOpenUrl = { opened += it },
+                readClipboard = { null },
+                aiTrial = offer,
+                onSignIn = onSignIn,
+            )
+        }
+    }
+
+    /** #477: где компьютер просит ключ, он показывает и путь короче — вход ради пробы. */
+    @Test
+    fun `кто не вошёл, видит вход ради пробы, и нажатие ведёт ко входу`() {
+        var signIn = false
+        val offer = com.point.core.flow.AiTrialOffer(signedIn = false, left = 30, trial = 30)
+        trial(offer) { signIn = true }
+
+        compose.onNodeWithText(com.point.core.flow.AI_TRIAL_HOW).assertExists()
+        compose.onNodeWithText(com.point.core.flow.aiTrialTitle(offer)).performClick()
+
+        org.junit.Assert.assertTrue("нажатие на предложение не повело ко входу", signIn)
+    }
+
+    @Test
+    fun `вошедший видит остаток пробы`() {
+        val offer = com.point.core.flow.AiTrialOffer(signedIn = true, left = 7, trial = 30)
+        trial(offer)
+
+        compose.onNodeWithText(com.point.core.flow.aiTrialTitle(offer)).assertExists()
+        compose.onNodeWithText(com.point.core.flow.AI_TRIAL_HOW).assertDoesNotExist()
+    }
 }

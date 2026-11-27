@@ -99,7 +99,18 @@ internal fun SettingsPane(
                 }
             }
 
-            SettingsPage.KEYS -> SettingsKeys(config = config, onSave = onSave, onOpenUrl = onOpenUrl)
+            SettingsPage.KEYS -> {
+                val aiTrial by account.aiTrial.collectAsState()
+                // Остаток мог измениться действием — экран показывает свежий.
+                LaunchedEffect(Unit) { account.publishAiTrial() }
+                SettingsKeys(
+                    config = config,
+                    onSave = onSave,
+                    onOpenUrl = onOpenUrl,
+                    aiTrial = aiTrial,
+                    onSignIn = account::signIn,
+                )
+            }
 
             SettingsPage.PRIVACY -> SettingsPrivacy(
                 allowed = cloudAllowed,

@@ -10,6 +10,7 @@ import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.point.core.flow.usable
 import com.point.core.model.tr
 import java.awt.FileDialog
 import java.awt.Toolkit
@@ -150,12 +151,11 @@ fun main(args: Array<String>) {
     // Фон отделяется на самом компьютере (#1379): модель малая и исполняется OpenCV.
     val pcRemover = PcBackgroundRemover(excelStore)
     val pcCompositor = PcImageCompositor(excelStore)
-    val excelKeys = com.point.core.flow.AiReadiness {
-        FilePcConfig(pointDir).load().aiKeys.mine.isNotEmpty()
-    }
-    // Один клиент — вся связка ключей человека: им читают «В Excel», «Понять»,
-    // «Перевести» и «AI» (#1379: «пк должен все уметь не хуже телефона»).
-    val pcLlm = com.point.core.flow.UserKeyLlmClient(
+    // Одна связка — ключи человека, а за ними проба Point (#477): ею читают «В Excel», «Понять»,
+    // «Перевести» и «AI» (#1379: «пк должен все уметь не хуже телефона»). Порядок тот же, что
+    // на телефоне: свой ключ первым и мимо сервера, проба — пока ключа нет.
+    val aiQuota = com.point.core.flow.MemoryPointAiQuota()
+    val pcOwnKeys = com.point.core.flow.UserKeyLlmClient(
         userKeys = PcUserKeys(pointDir),
         http = com.point.core.flow.UrlConnectionHttpJson(),
         store = excelStore,
@@ -163,6 +163,23 @@ fun main(args: Array<String>) {
         privacy = PcCloudPrivacy(pointDir),
         frames = PcModelFrames,
     )
+    val pcPointAi = com.point.core.flow.PointAiLlmClient(
+        account = { accountStore.current() },
+        serverUrl = serverUrl,
+        http = com.point.core.flow.UrlConnectionHttpJson(),
+        store = excelStore,
+        quota = aiQuota,
+        frames = PcModelFrames,
+    )
+    val pcLlm = com.point.core.flow.FallbackLlmClient(
+        providers = listOf(pcOwnKeys, pcPointAi),
+        facts = PcAiFacts(),
+
+        // Спросить о сети у компьютера нечем: сорвавшийся вызов назовёт причину сам.
+        network = com.point.core.flow.NetworkAvailability { true },
+        privacy = PcCloudPrivacy(pointDir),
+    )
+    val excelKeys = com.point.core.flow.AiReadiness { pcLlm.configured }
     val pcKnowledge = com.point.core.flow.GraphKnowledge(excelStore, PcPdfTextKnowledge())
     val pcDocx = com.point.core.flow.OoxmlDocxWriter(excelStore, PcEvidenceCrops())
     val pcEyes = object : com.point.core.flow.TextRecognizer {
@@ -315,6 +332,7 @@ fun main(args: Array<String>) {
         keys = deviceKeys,
         mySettings = { FilePcConfig(pointDir).accountSettings() },
         onSettings = { merged -> runCatching { FilePcConfig(pointDir).applyAccountSettings(merged) } },
+        aiQuota = aiQuota,
     )
     linked = { account.account.value != null }
 
@@ -335,6 +353,13 @@ fun main(args: Array<String>) {
 
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         consent = FileConsent(File(pointDir, "consent")),
+
+        // Своего ключа нет, а проба доступна — вопрос о согласии называет её (#477), как на телефоне.
+        aiService = {
+            com.point.core.flow.POINT_AI_SERVICE_ID.takeIf {
+                FilePcConfig(pointDir).load().aiKeys.mine.isEmpty() && aiQuota.usable(accountStore.current() != null)
+            }
+        },
 
         // Режим спрашивается на каждом действии, как и звук: поменяли — подействовало сразу.
         privacyLevel = { FilePcConfig(pointDir).load().privacy },
@@ -474,6 +499,8 @@ fun main(args: Array<String>) {
     // Круг загружается при старте, а не после первого сбоя: пустые peers делали
     // каждое письмо «не открылось» до удачного refreshCircleNow (2026-08-09).
     account.refreshCircle()
+    // Вошедшему пробу освежает круг; тому, кто не вошёл, — предложение войти ради неё (#477).
+    if (accountStore.current() == null) account.refreshAiTrial()
 
     val relayPoller = RelayPoller(
         serverUrl = serverUrl,

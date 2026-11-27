@@ -91,6 +91,10 @@ fun SettingsKeys(
     // сайт …» на компьютере молча не делало ничего (#1487).
     onOpenUrl: (String) -> Unit,
     readClipboard: () -> String? = ::clipboardText,
+
+    /** Проба AI без своего ключа (#477): вошедшему — остаток, тому, кто не вошёл, — вход ради неё. */
+    aiTrial: com.point.core.flow.AiTrialOffer? = null,
+    onSignIn: () -> Unit = {},
 ) {
     var keys by remember { mutableStateOf(config.aiKeys) }
     var speechKey by remember { mutableStateOf(config.speech.key) }
@@ -174,6 +178,10 @@ fun SettingsKeys(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Путь короче ключа — первым (#477): новичок без ключа видел только «нужен ключ» и не
+        // знал, что вход даёт AI-действия даром.
+        aiTrial?.let { TrialLine(it, onSignIn) }
+
         // Панель состояния, а не документация (#902): наверху две мысли, подробности —
         // за «Как это работает».
         Text(com.point.core.flow.AI_CHAIN_WHAT, style = PointType.small)
@@ -298,6 +306,29 @@ fun SettingsKeys(
 
 /** «Проверить все» идёт — ни одна строка не проверяется отдельно. */
 private const val CHECK_ALL = "*"
+
+/**
+ * Проба AI на экране ключей (#477) — теми же словами, что на телефоне. Вошедшему — строка
+ * остатка; тому, кто не вошёл, — дверь входа и под ней куда уйдёт объект.
+ */
+@Composable
+private fun TrialLine(offer: com.point.core.flow.AiTrialOffer, onSignIn: () -> Unit) {
+    if (offer.signedIn) {
+        Text(com.point.core.flow.aiTrialTitle(offer), style = PointType.small)
+        return
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .glassPanel(RoundedCornerShape(14.dp))
+            .clickable(onClick = onSignIn)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(com.point.core.flow.aiTrialTitle(offer), style = PointType.body)
+        Text(com.point.core.flow.AI_TRIAL_HOW, style = PointType.small.copy(color = PointColors.muted))
+    }
+}
 
 /**
  * Ключ без приметы сервиса: спросить, а не гадать. Ключ одного сервиса, отправленный на
