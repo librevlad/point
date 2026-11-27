@@ -121,4 +121,42 @@ class PointAiTrialTest {
         assertTrue(text, text.length <= 120)
         listOf("Groq", "Cloudflare").forEach { assertFalse("назван сервис, выбранный Point: $it", text.contains(it)) }
     }
+
+    /**
+     * Охота 27.11.2026: проба брала PDF и голосовое, которые голос OpenAI не передаёт. Модель
+     * получала одну инструкцию, отвечала догадкой, а человек терял пробное действие — и до
+     * исполнителя, который PDF читает, дело не доходило. Владелец: «Так, лагодь».
+     */
+    @Test
+    fun `проба не берётся за то, чего не может передать`() {
+        val trial = client(http(200, okBody), quota(30))
+        val pdf = PointObject("pdf", "application/pdf", ScratchRef("/x.pdf"), ObjectState(ObjectKind.PDF))
+        val voice = PointObject("voice", "audio/ogg", ScratchRef("/x.ogg"), ObjectState(ObjectKind.AUDIO))
+
+        assertFalse("PDF: модель получила бы только инструкцию", trial.canHandle(pdf))
+        assertFalse("голосовое: модель получила бы только инструкцию", trial.canHandle(voice))
+        assertTrue("текст проба передаёт", trial.canHandle(textObj))
+    }
+
+    @Test
+    fun `проба не тратится впустую на PDF — цепочка отдаёт его тому, кто читает`() = runTest {
+        val trialCalls = mutableListOf<Call>()
+        val trial = client(http(200, okBody, trialCalls), quota(30))
+        val reader = object : LlmClient {
+            override val configured = true
+            override val serviceId = "reads-pdf"
+            override fun canHandle(obj: PointObject) = true
+            override suspend fun run(obj: PointObject, prompt: String) = error("ответил читающий PDF")
+        }
+        val noFacts = object : AiFacts {
+            override fun all() = emptyMap<String, AiFact>()
+            override fun remember(providerId: String, outcome: AiOutcome) = Unit
+        }
+        val chain = FallbackLlmClient(listOf(trial, reader), facts = noFacts, network = { true })
+        val pdf = PointObject("pdf", "application/pdf", ScratchRef("/x.pdf"), ObjectState(ObjectKind.PDF))
+
+        runCatching { chain.run(pdf, "изложи") }
+
+        assertTrue("PDF ушёл в пробу: ${trialCalls.map { it.url }}", trialCalls.isEmpty())
+    }
 }

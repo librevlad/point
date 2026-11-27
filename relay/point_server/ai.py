@@ -58,6 +58,16 @@ def upstreams(groq_key: str, cloudflare_key: str, cloudflare_account: str) -> li
     return out
 
 
+def answered(body: bytes) -> bool:
+    """Ответ модели голосом OpenAI: JSON с непустым `choices`."""
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return False
+    choices = data.get("choices") if isinstance(data, dict) else None
+    return isinstance(choices, list) and len(choices) > 0
+
+
 class AiGateway:
     """Шов «спросить модель»: на сервере — HTTP к сервисам, в тестах — подмена."""
 
@@ -94,7 +104,13 @@ class HttpAiGateway(AiGateway):
             })
             try:
                 with self.opener(req, timeout=TIMEOUT_SECONDS) as resp:
-                    return 200, resp.read(), up.name
+                    reply = resp.read()
+                # 2xx — ещё не ответ модели: пустое тело, страница или ошибка в обёртке 200
+                # списали бы пробу за то, что телефон не прочтёт. Такое — повод спросить
+                # следующего, как любой отказ (охота 27.11.2026, второе мнение Codex).
+                if answered(reply):
+                    return 200, reply, up.name
+                last = 502
             except urllib.error.HTTPError as e:
                 # Любой отказ — повод спросить следующего: у другого сервиса другие пределы
                 # и другая модель. Тело чужого отказа наружу не идёт: в нём может быть эхо запроса.

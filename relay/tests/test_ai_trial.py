@@ -10,7 +10,10 @@ from __future__ import annotations
 import io
 import json
 import sqlite3
+import threading
+import time
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
@@ -124,6 +127,25 @@ def test_отказ_сервиса_пробу_не_съедает(tmp_path, cloc
         h.client.__exit__(None, None, None)
 
 
+def test_сорвавшийся_вызов_возвращает_занятое_действие(tmp_path, clock):
+    """Действие занимается до вызова сервиса — значит, любой срыв обязан его вернуть."""
+
+    class Broken(FakeAi):
+        def ask(self, messages, max_tokens):
+            raise RuntimeError("сеть оборвалась посреди")
+
+    h = _server(tmp_path, clock, Broken(), ai_trial=3)
+    try:
+        phone = h.sign_in(sub="sub-1", kind="PHONE")
+
+        r = ask(h, phone["device_token"])
+
+        assert r.status_code == 502
+        assert h.as_device(phone["device_token"], "GET", "/ai/quota").json()["left"] == 3
+    finally:
+        h.client.__exit__(None, None, None)
+
+
 def test_дневной_предел_на_всех_держит_деньги(tmp_path, clock):
     h = _server(tmp_path, clock, FakeAi(), ai_trial=30, ai_daily_cap=2)
     try:
@@ -141,6 +163,76 @@ def test_дневной_предел_на_всех_держит_деньги(tmp
         assert next_day.status_code == 200
     finally:
         h.client.__exit__(None, None, None)
+
+
+class SlowAi(FakeAi):
+    """Сервис отвечает секунды, как живой: за это время успевают прийти соседние запросы."""
+
+    def ask(self, messages, max_tokens):
+        time.sleep(0.3)
+        return super().ask(messages, max_tokens)
+
+
+def _at_once(n: int, call) -> list[int]:
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        return sorted(pool.map(lambda _: call(), range(n)))
+
+
+def test_одновременные_запросы_не_проходят_мимо_конца_пробы(tmp_path, clock):
+    """Охота 27.11.2026: остаток проверялся до вызова сервиса, а списывался после, и пять
+    одновременных запросов при остатке 1 получали пять ответов. Владелец: «Так, лагодь»."""
+    slow = SlowAi()
+    h = _server(tmp_path, clock, slow, ai_trial=3, ai_daily_cap=100)
+    try:
+        phone = h.sign_in(sub="sub-1", kind="PHONE")
+        for _ in range(2):
+            assert ask(h, phone["device_token"]).status_code == 200
+
+        codes = _at_once(5, lambda: ask(h, phone["device_token"]).status_code)
+
+        assert codes == [200, 402, 402, 402, 402]
+        assert len(slow.asked) == 3, "сервис AI позван сверх пробы"
+    finally:
+        h.client.__exit__(None, None, None)
+
+
+def test_одновременные_люди_не_проходят_мимо_дневного_предела(tmp_path, clock):
+    """Дневной предел на всех держит деньги и тогда, когда люди приходят разом."""
+    slow = SlowAi()
+    h = _server(tmp_path, clock, slow, ai_trial=30, ai_daily_cap=2)
+    try:
+        tokens = iter([h.sign_in(sub=f"sub-{i}", kind="PHONE")["device_token"] for i in range(6)])
+        lock = threading.Lock()
+
+        def one():
+            with lock:
+                token = next(tokens)
+            return ask(h, token).status_code
+
+        codes = _at_once(6, one)
+
+        assert codes == [200, 200, 429, 429, 429, 429]
+        assert len(slow.asked) == 2
+    finally:
+        h.client.__exit__(None, None, None)
+
+
+def test_ответ_не_модели_пробу_не_съедает_и_ведёт_к_следующему():
+    """Пустое тело, страница или ошибка в обёртке 200 — не ответ: пробу за него не списывают."""
+    calls = []
+
+    def opener(req, timeout):
+        calls.append(req.full_url)
+        if "groq" in req.full_url:
+            return io.BytesIO(b'{"error": {"message": "overloaded"}}')
+        return io.BytesIO(b"")
+
+    gw = ai_mod.HttpAiGateway(ai_mod.upstreams("g", "c", "acct"), opener=opener)
+    status, body, who = gw.ask(ASK["messages"], 100)
+
+    assert status != 200
+    assert body == b""
+    assert len(calls) == 2
 
 
 def test_без_ключей_у_сервера_пробы_нет(tmp_path, clock):

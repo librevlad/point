@@ -318,18 +318,52 @@ def ai_day_used(conn: sqlite3.Connection, day: str) -> int:
     return row["used"] if row else 0
 
 
-def ai_spend(conn: sqlite3.Connection, *, user_id: str, day: str, now: int) -> None:
-    """Одно действие, на которое сервис ответил: за человеком и за сутками."""
-    conn.execute(
-        "INSERT INTO ai_quota (user_id, used, updated_at) VALUES (?, 1, ?)"
-        " ON CONFLICT(user_id) DO UPDATE SET used = used + 1, updated_at = excluded.updated_at",
-        (user_id, now),
-    )
-    conn.execute(
-        "INSERT INTO ai_days (day, used) VALUES (?, 1)"
-        " ON CONFLICT(day) DO UPDATE SET used = used + 1",
-        (day,),
-    )
+def ai_reserve(
+    conn: sqlite3.Connection, *, user_id: str, day: str, trial: int, daily_cap: int, now: int,
+) -> str:
+    """Занять одно пробное действие ДО вызова сервиса: "ok", "trial_over" или "day_over".
+
+    Охота 27.11.2026: остаток проверялся до вызова, а списывался после, и одновременные
+    запросы все проходили проверку — пять запросов при остатке 1 получали пять ответов, а
+    дневной предел на всех превышался на размер всплеска. Теперь проверка и списание — одна
+    транзакция с захватом записи: второй запрос ждёт первого и видит его резерв. Человек и
+    сутки пишутся вместе, поэтому срыв между двумя записями счёт больше не рассинхронизирует.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    verdict = "ok"
+    try:
+        if ai_used(conn, user_id) >= trial:
+            verdict = "trial_over"
+        elif ai_day_used(conn, day) >= daily_cap:
+            verdict = "day_over"
+        else:
+            conn.execute(
+                "INSERT INTO ai_quota (user_id, used, updated_at) VALUES (?, 1, ?)"
+                " ON CONFLICT(user_id) DO UPDATE SET used = used + 1, updated_at = excluded.updated_at",
+                (user_id, now),
+            )
+            conn.execute(
+                "INSERT INTO ai_days (day, used) VALUES (?, 1)"
+                " ON CONFLICT(day) DO UPDATE SET used = used + 1",
+                (day,),
+            )
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")
+    return verdict
+
+
+def ai_refund(conn: sqlite3.Connection, *, user_id: str, day: str) -> None:
+    """Вернуть занятое действие: сервис не ответил моделью — чужой отказ пробу не съедает."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("UPDATE ai_quota SET used = MAX(used - 1, 0) WHERE user_id = ?", (user_id,))
+        conn.execute("UPDATE ai_days SET used = MAX(used - 1, 0) WHERE day = ?", (day,))
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")
 
 
 def delete_account(conn: sqlite3.Connection, user_id: str) -> None:

@@ -743,17 +743,27 @@ def create_app(
             return ai_refusal(413, "too_big", t("Объект слишком большой для пробного AI-действия."))
         if not d.ai.available:
             return ai_refusal(503, "ai_off", t("Пробные AI-действия сейчас недоступны."))
-        left = d.settings.ai_trial - store.ai_used(conn, me.user_id)
-        if left <= 0:
-            return ai_refusal(402, "trial_over", t("Пробные AI-действия кончились — задайте свой ключ."))
+        # Действие занимается до вызова сервиса, а не списывается после: иначе одновременные
+        # запросы все проходили проверку остатка (охота 27.11.2026).
         day = time.strftime("%Y-%m-%d", time.gmtime(d.now()))
-        if store.ai_day_used(conn, day) >= d.settings.ai_daily_cap:
+        verdict = store.ai_reserve(
+            conn, user_id=me.user_id, day=day,
+            trial=d.settings.ai_trial, daily_cap=d.settings.ai_daily_cap, now=d.now(),
+        )
+        if verdict == "trial_over":
+            return ai_refusal(402, "trial_over", t("Пробные AI-действия кончились — задайте свой ключ."))
+        if verdict == "day_over":
             return ai_refusal(429, "day_over", t("Пробные AI-действия на сегодня разобраны. Попробуйте завтра."))
-        status, payload, _ = d.ai.ask(body.messages, min(body.max_tokens or ai_mod.MAX_TOKENS, ai_mod.MAX_TOKENS))
+        try:
+            status, payload, _ = d.ai.ask(body.messages, min(body.max_tokens or ai_mod.MAX_TOKENS, ai_mod.MAX_TOKENS))
+        except Exception:
+            # Занятое действие возвращается при любом срыве, не только при названном отказе.
+            status, payload = 500, b""
         if status != 200:
+            store.ai_refund(conn, user_id=me.user_id, day=day)
             return ai_refusal(502, "ai_failed", t("Сервисы AI сейчас не отвечают. Попробуйте позже."))
-        store.ai_spend(conn, user_id=me.user_id, day=day, now=d.now())
-        return Response(payload, media_type="application/json", headers={"X-Point-Ai-Left": str(left - 1)})
+        left = max(0, d.settings.ai_trial - store.ai_used(conn, me.user_id))
+        return Response(payload, media_type="application/json", headers={"X-Point-Ai-Left": str(left)})
 
     @app.post("/devices/{device_id}/revoke")
     def revoke(
