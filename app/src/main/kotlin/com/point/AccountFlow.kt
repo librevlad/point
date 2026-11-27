@@ -45,6 +45,9 @@ class AccountParts @javax.inject.Inject constructor(
 
     val pendingLogins: com.point.core.flow.PendingLoginStore,
     val deviceKeys: com.point.core.flow.DeviceKeyStore,
+
+    /** Проба AI без своего ключа (#477): принадлежит аккаунту и освежается его ответом. */
+    val aiQuota: com.point.core.flow.PointAiQuota,
 )
 
 class AccountFlow(

@@ -29,6 +29,9 @@ interface AccountClient {
     /** `false` — не сохранилось: сеть, отзыв пропуска или на сервере оказались новее. */
     suspend fun saveSettings(account: PointAccount, settings: AccountSettings): Boolean = false
 
+    /** Проба AI без своего ключа (#477). `null` — спросить не вышло. */
+    suspend fun aiTrial(account: PointAccount): PointAiTrial? = null
+
     /**
      * Сказать серверу, куда стучать в это устройство (#817).
      *

@@ -305,6 +305,33 @@ def put_account_settings(
     return True
 
 
+# --- AI без своего ключа (#477) --------------------------------------------------------
+
+
+def ai_used(conn: sqlite3.Connection, user_id: str) -> int:
+    row = conn.execute("SELECT used FROM ai_quota WHERE user_id = ?", (user_id,)).fetchone()
+    return row["used"] if row else 0
+
+
+def ai_day_used(conn: sqlite3.Connection, day: str) -> int:
+    row = conn.execute("SELECT used FROM ai_days WHERE day = ?", (day,)).fetchone()
+    return row["used"] if row else 0
+
+
+def ai_spend(conn: sqlite3.Connection, *, user_id: str, day: str, now: int) -> None:
+    """Одно действие, на которое сервис ответил: за человеком и за сутками."""
+    conn.execute(
+        "INSERT INTO ai_quota (user_id, used, updated_at) VALUES (?, 1, ?)"
+        " ON CONFLICT(user_id) DO UPDATE SET used = used + 1, updated_at = excluded.updated_at",
+        (user_id, now),
+    )
+    conn.execute(
+        "INSERT INTO ai_days (day, used) VALUES (?, 1)"
+        " ON CONFLICT(day) DO UPDATE SET used = used + 1",
+        (day,),
+    )
+
+
 def delete_account(conn: sqlite3.Connection, user_id: str) -> None:
     """«Удалить всё моё» — немедленно, не дожидаясь суток."""
     conn.execute(
@@ -314,4 +341,5 @@ def delete_account(conn: sqlite3.Connection, user_id: str) -> None:
     conn.execute("DELETE FROM devices WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM logins WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM account_settings WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM ai_quota WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM users WHERE id = ?", (user_id,))

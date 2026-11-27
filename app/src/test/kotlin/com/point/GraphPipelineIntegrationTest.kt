@@ -417,6 +417,7 @@ class GraphPipelineIntegrationTest {
             object : com.point.core.flow.DeviceKeyStore {
                 override fun keys() = TEST_KEYS
             },
+            com.point.core.flow.MemoryPointAiQuota(),
         ),
         com.point.core.flow.BrowserOpener { },
         object : SharedTexts {

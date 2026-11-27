@@ -3,6 +3,7 @@ package com.point
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.point.core.model.tr
+import com.point.core.flow.usable
 import kotlinx.coroutines.ensureActive
 import com.point.core.flow.ACTION_CEILING_MS
 import com.point.core.flow.AppLauncher
@@ -1316,7 +1317,20 @@ class FlowViewModel @Inject constructor(
         return true
     }
 
+    // Своего ключа нет, а проба Point доступна — вопрос о согласии называет её (#477).
     private fun chosenAiService(): String? = settingsFlow.chosenService()
+        ?: com.point.core.flow.POINT_AI_SERVICE_ID.takeIf {
+            accountParts.aiQuota.usable(accountFlow.current() != null)
+        }
+
+    /** Сколько пробных AI-действий осталось (#477) — спрашивается, когда сервер на связи. */
+    private fun refreshAiTrial() {
+        val account = accountFlow.current() ?: return
+        viewModelScope.launch(ioDispatcher) {
+            runCatching { accountParts.client.aiTrial(account) }.getOrNull()
+                ?.let(accountParts.aiQuota::remember)
+        }
+    }
 
     fun onItem(item: PointObject) {
         if (stack.lastOrNull()?.obj?.state?.kind != ObjectKind.COLLECTION) return
@@ -1678,7 +1692,10 @@ class FlowViewModel @Inject constructor(
                     )
                 }
             },
-            onSignedIn = { syncAccountSettings() },
+            onSignedIn = {
+                syncAccountSettings()
+                refreshAiTrial()
+            },
             onCircleLearned = { devices ->
                 // Сервер ответил — заодно свести настройки: так телефон, вошедший в аккаунт
                 // после компьютера, получает ключи при следующем же открытии Point, а не
@@ -1687,6 +1704,7 @@ class FlowViewModel @Inject constructor(
                 // обмен ждёт ответа компьютера через ящик и держал свод за собой (живая
                 // проверка 0.3.9: ключи приехали лишь при следующем ответе о круге).
                 syncAccountSettings()
+                refreshAiTrial()
                 rememberPc(devices)
             },
             onForgotten = {

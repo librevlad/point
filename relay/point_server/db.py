@@ -66,6 +66,20 @@ CREATE INDEX IF NOT EXISTS logins_by_state ON logins(state);
 -- Настройки аккаунта: ключи AI-сервисов, речи, распознавания текста, приватность, звук.
 -- Сервер их отдаёт любому устройству человека, поэтому читает; на диске они лежат
 -- зашифрованными ключом из отдельного файла (`vault.py`) и привязаны к своему человеку.
+-- AI без своего ключа (#477): сколько пробных действий истратил человек. Действие
+-- считается, только когда сервис ответил; содержимое запросов сервер не хранит.
+CREATE TABLE IF NOT EXISTS ai_quota (
+  user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  used       INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
+-- Сколько пробных действий сервер отдал за сутки на всех — предел денег.
+CREATE TABLE IF NOT EXISTS ai_days (
+  day  TEXT PRIMARY KEY,
+  used INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS account_settings (
   user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   data       TEXT NOT NULL,

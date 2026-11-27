@@ -544,6 +544,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Объект уйдёт на сервер AI-провайдера и вернётся результатом.	Об’єкт піде на сервер AI-провайдера й повернеться результатом.	The item goes to the AI provider's server and comes back as a result.
 Объект уйдёт на сервер {0} и вернётся результатом.	Об’єкт піде на сервер {0} і повернеться результатом.	The item goes to the {0} server and comes back as a result.
 Объект уйдёт на чужой сервер и вернётся результатом.	Об’єкт піде на сторонній сервер і повернеться результатом.	The item goes to another company's server and comes back as a result.
+Объект уйдёт через сервер Point к сервису AI, который не учится на присланном, и вернётся результатом.	Об’єкт піде через сервер Point до сервісу AI, який не навчається на надісланому, і повернеться результатом.	The object goes through the Point server to an AI service that does not train on what you send, and comes back as a result.
 Объект уходит только после вашего тапа, и перед отправкой Point говорит, куда именно. Здесь вы выбираете, кому его вообще можно предлагать.	Об’єкт іде лише після вашого дотику, і перед надсиланням Point каже, куди саме. Тут ви обираєте, кому його взагалі можна пропонувати.	Nothing goes out until you tap, and Point says where it goes before sending. Here you choose who it may be offered to at all.
 Объектов: {0} · {1}	Об’єктів: {0} · {1}	Items: {0} · {1}
 Обычно дело в имени модели. Откройте «Модель и адрес» и оставьте поля пустыми — имя подставится само.	Зазвичай річ у назві моделі. Відкрийте «Модель і адреса» й залиште поля порожніми — назва підставиться сама.	Usually it's the model name. Open “Model and address” and leave the fields empty; the name will fill itself in.
@@ -713,6 +714,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Пришло: 	Прийшло: 	Arrived: 
 Приём не открылся	Приймання не відкрилося	Receiving didn't open
 Про такое Point спрашивает каждый раз и ответ не запоминает: ссылка на сутки — каждый раз новая ставка.	Про таке Point питає щоразу й відповіді не запам’ятовує: посилання на добу — щоразу нова ставка.	Point asks about this every time and doesn't remember the answer: a one-day link is a new decision each time.
+Пробные AI-действия кончились — {0}	Пробні AI-дії скінчилися — {0}	Your trial AI actions are used up: {0}
 Пробую повернуть страницу — {0} из {1}	Пробую повернути сторінку — {0} з {1}	Trying to rotate the page: {0} of {1}
 Проверено {0}	Перевірено {0}	Checked {0}
 Проверил знание, но применить правки не удалось — знание оставлено как было	Перевірив знання, але застосувати правки не вдалося — знання лишилося як було	Checked what Point knows but couldn't apply the fixes. It is left as it was
