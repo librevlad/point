@@ -64,6 +64,7 @@ class CloudConsentTest {
 
     private fun state(
         consentFile: File,
+        aiService: () -> String? = { null },
 
         /** Режим спрашивается на каждом действии — как и в работе: переключили, подействовало. */
         level: () -> PrivacyLevel = { PrivacyLevel.DEFAULT },
@@ -72,6 +73,7 @@ class CloudConsentTest {
         DesktopResolver(setOf(CloudRealizer())),
         clipboard = { },
         consent = FileConsent(consentFile),
+        aiService = aiService,
         privacyLevel = level,
         background = dispatcher,
         io = dispatcher,
@@ -99,6 +101,25 @@ class CloudConsentTest {
         assertNotNull("вопрос согласия обязан появиться", ask)
         assertEquals("Отправить в облако?", ask!!.title)
         assertTrue("последствия названы словами", ask.destination.isNotBlank())
+        assertEquals("файл не должен уйти до «да»", 0, ran.get())
+    }
+
+    /**
+     * Своего ключа нет, отвечает проба Point (#477): вопрос говорит, что объект пойдёт через
+     * сервер Point к сервису, который не учится на присланном, — а не безымянное «чужой сервер».
+     */
+    @Test
+    fun `вопрос согласия называет пробу Point, когда отвечает она`() = runTest(dispatcher) {
+        val st = state(File(temp.root, "consent-trial"), aiService = { com.point.core.flow.POINT_AI_SERVICE_ID })
+
+        st.onBubble(item(), bubble())
+        advanceUntilIdle()
+
+        val expected = com.point.core.flow.cloudDestination(
+            CapabilityId("pc-understand"),
+            com.point.core.flow.POINT_AI_SERVICE_ID,
+        )
+        assertEquals(expected, st.cloudAsk.value?.destination)
         assertEquals("файл не должен уйти до «да»", 0, ran.get())
     }
 

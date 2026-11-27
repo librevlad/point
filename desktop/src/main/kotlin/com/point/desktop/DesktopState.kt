@@ -64,6 +64,12 @@ class DesktopState(
 
     internal val consent: com.point.core.flow.PrivacyConsent? = null,
 
+    /**
+     * Кто ответит на AI-действие, если это не ключ человека (#477): проба Point называется в
+     * вопросе согласия, потому что объект пойдёт через сервер Point. `null` — не она.
+     */
+    private val aiService: () -> String? = { null },
+
     /** Выбранный человеком режим отправки: спрашивается у настроек, а не помнится копией. */
     private val privacyLevel: () -> com.point.core.flow.PrivacyLevel =
         { com.point.core.flow.PrivacyLevel.DEFAULT },
@@ -1292,7 +1298,10 @@ class DesktopState(
                     _cloudAsk.value = CloudAsk(
                         item, bubble, needed,
                         title = com.point.core.flow.cloudAskTitle(needed),
-                        destination = com.point.core.flow.cloudDestination(bubble.capabilityId),
+                        destination = com.point.core.flow.cloudDestination(
+                            bubble.capabilityId,
+                            runCatching { aiService() }.getOrNull(),
+                        ),
                         confirm = com.point.core.flow.cloudAskConfirm(needed),
                     )
                     return@launch
