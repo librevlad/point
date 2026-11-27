@@ -33,7 +33,7 @@ class BodyLimit:
         refusal: Callable[[str], Exception],
         stalled: Callable[[str], Exception] | None = None,
         idle_seconds: float = 300.0,
-        max_seconds: float = 1800.0,
+        max_seconds: float | None = None,
     ) -> None:
         self.app = app
         self.limit_for = limit_for
@@ -43,7 +43,9 @@ class BodyLimit:
         self.max_seconds = max_seconds
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
+        # Тела у GET и HEAD нет: их чтение — только ожидание обрыва связи во время долгой
+        # отдачи, и отказ там сорвал бы уже начатую отдачу файла (проверка рецензентами).
+        if scope["type"] != "http" or scope.get("method") in ("GET", "HEAD"):
             await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
@@ -56,16 +58,19 @@ class BodyLimit:
 
         async def counted():
             nonlocal seen, body_done
-            if declared is not None and declared > limit:
-                raise self.refusal(path)
             if body_done:
                 return await receive()
+            if declared is not None and declared > limit:
+                raise self.refusal(path)
             if self.stalled is None:
                 message = await receive()
             else:
-                # Тишина — не дольше [idle_seconds], всё тело — не дольше [max_seconds]: иначе
-                # отправка по байту раз в минуту держала бы место и соединение сколько угодно.
-                budget = min(self.idle_seconds, self.max_seconds - (loop.time() - started))
+                # Тишина — не дольше [idle_seconds]. Общего срока на всё тело по умолчанию нет:
+                # медленная, но живая отправка со слабой мобильной связи не должна обрываться
+                # на полпути; замершие держит в узде предел отправок на человека.
+                budget = self.idle_seconds
+                if self.max_seconds is not None:
+                    budget = min(budget, self.max_seconds - (loop.time() - started))
                 if budget <= 0:
                     raise self.stalled(path)
                 try:

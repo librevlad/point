@@ -147,21 +147,19 @@ def test_долгая_отправка_после_удаления_аккаун�
     assert _staged(tmp_path) == []
 
 
-def test_одновременных_отправок_одному_человеку_не_больше_трёх(point, tmp_path):
-    """Недописанное лежит вне каталога человека, но не вне его счёта (проверка рецензентами)."""
+def test_одновременных_отправок_одному_человеку_не_больше_трёх(point):
+    """Счёт отправок — в памяти процесса: точный и чистый после перезапуска (проверка рецензентами)."""
     me = point.sign_in(sub="busy", kind="PHONE")
-    who = me["device_token"]
     conn = db.connect(point.db_path)
     try:
-        uid = store.device_by_token(conn, who, point.clock()).user_id
+        uid = store.device_by_token(conn, me["device_token"], point.clock()).user_id
     finally:
         conn.close()
-    root = str(tmp_path / "blobs")
-    for _ in range(mailbox.MAX_IN_FLIGHT):
-        with open(mailbox.staging_path(root, uid), "wb") as f:
-            f.write(b"in flight")
-
-    r = point.as_device(who, "POST", "/d", content=b"one more", headers={"X-Drop-Mime": "text/plain"})
+    point.client.app.state.uploads[("own", uid)] = mailbox.MAX_IN_FLIGHT
+    try:
+        r = point.as_device(me["device_token"], "POST", "/d", content=b"one more", headers={"X-Drop-Mime": "text/plain"})
+    finally:
+        point.client.app.state.uploads.pop(("own", uid), None)
 
     # Временный отказ — 503 с «повторите позже», а не 507: 507 клиенты читают как «слишком большой».
     assert r.status_code == 503, r.text
@@ -204,24 +202,29 @@ def test_замершее_тело_обрывается_а_не_держит_м�
 # --- то, что нашла повторная проверка независимыми рецензентами (27.11.2026) ---------------
 
 
-def test_сироты_прежнего_процесса_убираются_при_старте(tmp_path, clock):
-    """Процесс умер посреди приёма — его недописанное не должно час держать человека."""
+def test_выкладка_не_рвёт_отправки_а_сироты_никого_не_держат(tmp_path, clock):
+    """Новый процесс при старте не трогает каталог приёма: старый в это время ещё дописывает
+    отправки (выкладка: pkill, пауза, старт). А сироты умершего процесса никого не держат —
+    отправки считаются в памяти; их недописанное уберёт уборка через час."""
     from test_ai_trial import FakeAi, _server
 
     root = str(tmp_path / "blobs")
-    orphans = [mailbox.staging_path(root, "someone") for _ in range(mailbox.MAX_IN_FLIGHT)]
-    for path in orphans:
+    writing = [mailbox.staging_path(root, "someone") for _ in range(mailbox.MAX_IN_FLIGHT)]
+    for path in writing:
         with open(path, "wb") as f:
             f.write(b"half")
 
     h = _server(tmp_path, clock, FakeAi())
     try:
-        assert not any(os.path.exists(p) for p in orphans)
+        assert all(os.path.exists(p) for p in writing), "старт нового процесса стёр чужие отправки"
+        me = h.sign_in(sub="someone", kind="PHONE")
+        r = h.as_device(me["device_token"], "POST", "/d", content=b"fresh", headers={"X-Drop-Mime": "text/plain"})
+        assert r.status_code == 200, r.text
     finally:
         h.client.__exit__(None, None, None)
 
 
-def test_чужого_на_странице_приёма_не_держат_отправки_владельца(point, tmp_path):
+def test_чужого_на_странице_приёма_не_держат_отправки_владельца(point):
     me = point.sign_in(sub="owner-busy", kind="PHONE")
     conn = db.connect(point.db_path)
     try:
@@ -229,12 +232,11 @@ def test_чужого_на_странице_приёма_не_держат_от�
     finally:
         conn.close()
     box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
-    root = str(tmp_path / "blobs")
-    for _ in range(mailbox.MAX_IN_FLIGHT):
-        with open(mailbox.staging_path(root, uid), "wb") as f:
-            f.write(b"own letter in flight")
-
-    sent = point.client.post("/u/" + box, files={"text": (None, "Крещатик 22")})
+    point.client.app.state.uploads[("own", uid)] = mailbox.MAX_IN_FLIGHT
+    try:
+        sent = point.client.post("/u/" + box, files={"text": (None, "Крещатик 22")})
+    finally:
+        point.client.app.state.uploads.pop(("own", uid), None)
 
     assert sent.status_code == 200, sent.text
 
@@ -306,3 +308,66 @@ def test_отказ_по_размеру_на_странице_приёма_пр�
 
     assert r.status_code == 413
     assert r.headers["content-type"].startswith("text/html")
+
+
+
+def test_чужих_отправок_в_ящики_человека_не_больше_трёх_разом(point):
+    me = point.sign_in(sub="crowd", kind="PHONE")
+    conn = db.connect(point.db_path)
+    try:
+        uid = store.device_by_token(conn, me["device_token"], point.clock()).user_id
+    finally:
+        conn.close()
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    point.client.app.state.uploads[("receive", uid)] = mailbox.MAX_IN_FLIGHT
+    try:
+        sent = point.client.post("/u/" + box, files={"text": (None, "ещё одно")})
+    finally:
+        point.client.app.state.uploads.pop(("receive", uid), None)
+
+    assert sent.status_code == 503
+    assert sent.headers.get("Retry-After")
+    assert sent.headers["content-type"].startswith("text/html")
+
+
+def test_текст_на_странице_приёма_считается_в_место_один_раз(point, monkeypatch, tmp_path):
+    me = point.sign_in(sub="tight", kind="PHONE")
+    conn = db.connect(point.db_path)
+    try:
+        uid = store.device_by_token(conn, me["device_token"], point.clock()).user_id
+    finally:
+        conn.close()
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    text = "Крещатик 22, забрать до 19:00"
+    room = len(text.encode("utf-8")) + 10
+    monkeypatch.setattr(mailbox, "MAX_TOTAL_BYTES", mailbox.used_bytes(str(tmp_path / "blobs"), uid) + room)
+
+    sent = point.client.post("/u/" + box, files={"text": (None, text)})
+
+    assert sent.status_code == 200, sent.text
+
+
+def test_на_странице_приёма_размер_и_место_это_разные_отказы(point, small_blob, monkeypatch):
+    """413 — файл больше предела; 507 — у человека кончилось место, и чужому — его слова."""
+    me = point.sign_in(sub="two-refusals", kind="PHONE")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    big = point.client.post("/u/" + box, files={"file": ("big.bin", b"x" * (SMALL_BLOB + 1000), "application/octet-stream")})
+    monkeypatch.setattr(mailbox, "MAX_TOTAL_BYTES", 1)
+    full = point.client.post("/u/" + box, files={"text": (None, "адрес")})
+
+    assert big.status_code == 413
+    assert full.status_code == 507
+    assert "новую ссылку" in full.text or "нове посилання" in full.text or "new link" in full.text
+
+
+def test_отдача_не_срывается_заявленной_длиной_у_get(point):
+    """У GET тела нет — чужой заголовок Content-Length не должен ломать отдачу файла."""
+    me = point.sign_in(sub="get-len", kind="PHONE")
+    put = point.as_device(me["device_token"], "POST", "/d", content=b"z" * 5000, headers={"X-Drop-Mime": "application/octet-stream"})
+    drop_id = put.headers["X-Drop-Id"]
+
+    got = point.client.get("/d/" + drop_id + "?raw=1", headers={"Content-Length": str(10 ** 9)})
+
+    assert got.status_code == 200
+    assert got.content == b"z" * 5000

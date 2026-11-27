@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
 import time
 import uuid
 
@@ -33,6 +34,10 @@ TTL_SECONDS = 24 * 3600               # всё живёт сутки
 
 class Full(Exception):
     """Место кончилось. Текст говорит человеку, что делать, а не «quota exceeded»."""
+
+
+class TooBig(Full):
+    """Один файл больше предела — дело в размере, а не в месте: отказ 413, не 507."""
 
 
 class Busy(Exception):
@@ -60,6 +65,24 @@ def _size(path: str) -> int:
     return total
 
 
+_LOCKS: dict[str, threading.RLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def user_lock(user_id: str) -> threading.RLock:
+    """Замок человека: запись присланного и «Удалить всё моё» идут по очереди, не вперемешку.
+
+    Иначе удаление проскакивало между проверкой «аккаунт жив» и записью, и ссылка или ящик
+    переживали удаление (проверка независимыми рецензентами 27.11.2026). Сервер — один
+    процесс, поэтому замка в памяти достаточно.
+    """
+    with _LOCKS_GUARD:
+        lock = _LOCKS.get(user_id)
+        if lock is None:
+            lock = _LOCKS[user_id] = threading.RLock()
+        return lock
+
+
 def user_root(root: str, user_id: str) -> str:
     """Всё, что принадлежит человеку, лежит под одним каталогом — и удаляется одним движением."""
     return _dir(root, "u", user_id)
@@ -70,8 +93,8 @@ def used_bytes(root: str, user_id: str) -> int:
     return _size(os.path.join(root, "u", user_id))
 
 
-def too_big() -> "Full":
-    return Full("Файл больше 50 МБ — столько сервер Point не берёт")
+def too_big() -> "TooBig":
+    return TooBig("Файл больше 50 МБ — столько сервер Point не берёт")
 
 
 def _guard_total(root: str, user_id: str, incoming: int) -> None:
@@ -91,7 +114,7 @@ def _guard_total(root: str, user_id: str, incoming: int) -> None:
 # замершие отправки занимали бы диск мимо всех пределов (проверка независимыми рецензентами).
 STAGING = "in"
 STAGING_TTL_SECONDS = 3600     # недописанное после срыва убирает уборка
-MAX_IN_FLIGHT = 3              # одновременных отправок на одного человека
+MAX_IN_FLIGHT = 3              # одновременных отправок на одного человека (считает app)
 
 
 def _owner_tag(owner: str) -> str:
@@ -102,56 +125,16 @@ def staging_path(root: str, owner: str = "") -> str:
     return os.path.join(_dir(root, STAGING), _owner_tag(owner) + "." + uuid.uuid4().hex + ".part")
 
 
-def clear_staging(root: str) -> int:
-    """При старте: недописанное прежним процессом — сироты (процесс умер посреди приёма).
+def guard_incoming(root: str, owner: str, declared: int | None) -> None:
+    """Пустить ли отправку человеку — до того, как прочитан её первый байт: размер и место.
 
-    Сервер — один процесс, поэтому при его старте ни одна отправка не идёт, а сироты иначе
-    час считались бы «прежними отправками» и не пускали человека (проверка рецензентами).
-    """
-    staging = os.path.join(root, STAGING)
-    if not os.path.isdir(staging):
-        return 0
-    removed = 0
-    for name in os.listdir(staging):
-        try:
-            os.remove(os.path.join(staging, name))
-            removed += 1
-        except OSError:
-            pass
-    return removed
-
-
-def _in_flight(root: str, owner: str) -> tuple[int, int]:
-    """Сколько отправок человеку идут прямо сейчас и сколько они уже весят."""
-    staging = os.path.join(root, STAGING)
-    if not os.path.isdir(staging):
-        return 0, 0
-    prefix = _owner_tag(owner) + "."
-    count = size = 0
-    for name in os.listdir(staging):
-        if name.startswith(prefix):
-            count += 1
-            try:
-                size += os.path.getsize(os.path.join(staging, name))
-            except OSError:
-                pass
-    return count, size
-
-
-def guard_incoming(root: str, owner: str, declared: int | None, *, own_upload: bool = True) -> None:
-    """Пустить ли ещё одну отправку человеку — до того, как прочитан её первый байт.
-
-    Общего на весь сервер предела здесь нет нарочно: им двое могли бы закрыть приём всем
-    остальным (проверка рецензентами). Предел — у каждого свой: место и число отправок.
-    [own_upload] — отправка самого человека; чужой файл на странице приёма его отправками не
-    задерживается.
+    Сколько отправок идёт одновременно, считает приложение в памяти процесса: счёт по файлам
+    на диске путался с сиротами прежнего процесса, а уборка сирот при старте рвала отправки,
+    которые старый процесс ещё дописывал во время выкладки (проверка рецензентами).
     """
     if declared is not None and declared > MAX_BLOB:
         raise too_big()
-    count, size = _in_flight(root, owner)
-    if own_upload and count >= MAX_IN_FLIGHT:
-        raise Busy("Прежние отправки ещё идут — дождитесь их и попробуйте снова")
-    if used_bytes(root, owner) + size + (declared or 0) > MAX_TOTAL_BYTES:
+    if used_bytes(root, owner) + (declared or 0) > MAX_TOTAL_BYTES:
         raise Full("На сервере кончилось место — заберите то, что уже отправлено")
 
 
@@ -199,8 +182,14 @@ def push_file(root: str, user_id: str, device_id: str, staged: str) -> str:
 
 
 def pull_path(root: str, user_id: str, device_id: str) -> tuple[str, str] | None:
-    """Самое старое письмо — путём к нему: отдаётся с диска кусками, не целиком в памяти."""
-    box = mailbox_dir(root, user_id, device_id)
+    """Самое старое письмо — путём к нему: отдаётся с диска кусками, не целиком в памяти.
+
+    Только читает: долгое ожидание письма, закончившееся после «Удалить всё моё», не должно
+    рождать каталог удалённого человека заново.
+    """
+    box = os.path.join(root, "u", user_id, "mbx", device_id)
+    if not os.path.isdir(box):
+        return None
     names = sorted(n for n in os.listdir(box) if n.endswith(".bin"))
     if not names:
         return None
@@ -385,18 +374,24 @@ def inbox_accept_file(box: str, staged: str, name: str, mime: str) -> None:
     страница приёма шла мимо его предела: чужие файлы занимали сотни мегабайт, и потом уже
     собственные письма человека получали «на сервере кончилось место» (проверка рецензентами).
     """
+    root, owner = box_owner(box)
     try:
-        if not os.path.isdir(box):
-            raise Gone()
-        root, owner = box_owner(box)
-        _guard_total(root, owner, os.path.getsize(staged))
-        if len([n for n in os.listdir(box) if n.endswith(".bin")]) >= MAX_INBOX_FILES:
-            raise Full("В этот ящик больше не помещается — заберите присланное")
-        fid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
-        write_meta(os.path.join(box, fid + ".meta"), name, mime)
-        os.replace(staged, os.path.join(box, fid + ".bin"))
+        with user_lock(owner):
+            _accept_into(box, root, owner, staged, name, mime)
     finally:
         discard(staged)
+
+
+def _accept_into(box: str, root: str, owner: str, staged: str, name: str, mime: str) -> None:
+    """Под замком владельца: ящик ещё жив, место есть — тогда файл встаёт на место."""
+    if not os.path.isdir(box):
+        raise Gone()
+    _guard_total(root, owner, os.path.getsize(staged))
+    if len([n for n in os.listdir(box) if n.endswith(".bin")]) >= MAX_INBOX_FILES:
+        raise Full("В этот ящик больше не помещается — заберите присланное")
+    fid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
+    write_meta(os.path.join(box, fid + ".meta"), name, mime)
+    os.replace(staged, os.path.join(box, fid + ".bin"))
 
 
 def inbox_ack(root: str, user_id: str, box_id: str, file_id: str) -> bool:
@@ -421,7 +416,7 @@ def inbox_ack(root: str, user_id: str, box_id: str, file_id: str) -> bool:
 def inbox_take_path(root: str, user_id: str, box_id: str) -> tuple[str, str, str, str] | None:
     """Присланное — путём к файлу: отдаётся с диска кусками, не целиком в памяти."""
     safe = "".join(c for c in box_id if c.isalnum())[:80]
-    box = os.path.join(inboxes_dir(root, user_id), safe)
+    box = os.path.join(root, "u", user_id, "i", safe)
     if not os.path.isdir(box):
         return None
     names = sorted(n for n in os.listdir(box) if n.endswith(".bin"))
@@ -446,8 +441,9 @@ def inbox_take(root: str, user_id: str, box_id: str) -> tuple[str, bytes, str, s
 
 
 def forget_user(root: str, user_id: str) -> None:
-    """«Удалить всё моё» — немедленно, не дожидаясь суток."""
-    shutil.rmtree(user_root(root, user_id), ignore_errors=True)
+    """«Удалить всё моё» — немедленно, не дожидаясь суток; под замком, не посреди записи."""
+    with user_lock(user_id):
+        shutil.rmtree(os.path.join(root, "u", user_id), ignore_errors=True)
 
 
 def forget_device(root: str, user_id: str, device_id: str) -> None:
