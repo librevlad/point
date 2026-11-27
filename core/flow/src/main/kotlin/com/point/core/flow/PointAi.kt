@@ -61,25 +61,33 @@ class PointAiLlmClient(
     override val configured: Boolean
         get() = serverUrl.isNotBlank() && quota.usable(account() != null)
 
-    // Снимок без кадра — сожжённое пробное действие: как и у ключа человека (#1239).
-    override fun canHandle(obj: PointObject): Boolean =
-        !obj.mime.startsWith("image/") || frames !== FrameForModel.NONE
+    /**
+     * Берётся только за то, что её исполнитель может передать (#477, охота 27.11.2026).
+     *
+     * Прежде проба смотрела лишь на снимок без кадра и брала PDF и голосовое, которые голос
+     * OpenAI не передаёт: модель получала одну инструкцию «изложи этот PDF», отвечала догадкой,
+     * а человек терял пробное действие — и до Gemini, который PDF читает, дело не доходило.
+     * Решает тот же исполнитель, что и выполнит: умеет — берётся.
+     */
+    override fun canHandle(obj: PointObject): Boolean = client(pass = "").canHandle(obj)
+
+    private fun client(pass: String) = OpenAiCompatibleClient(
+        http,
+        store,
+        OpenAiProvider(
+            label = "Point",
+            baseUrl = serverUrl.trimEnd('/') + "/ai/v1",
+            apiKey = pass,
+            model = POINT_AI_MODEL,
+            vision = true,
+            id = POINT_AI_SERVICE_ID,
+        ),
+        frames,
+    )
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         val pass = account()?.deviceToken ?: error(POINT_AI_TRIAL_OVER)
-        val client = OpenAiCompatibleClient(
-            http,
-            store,
-            OpenAiProvider(
-                label = "Point",
-                baseUrl = serverUrl.trimEnd('/') + "/ai/v1",
-                apiKey = pass,
-                model = POINT_AI_MODEL,
-                vision = true,
-                id = POINT_AI_SERVICE_ID,
-            ),
-            frames,
-        )
+        val client = client(pass)
         val result = try {
             client.run(obj, prompt)
         } catch (e: AiServiceRefusal) {
