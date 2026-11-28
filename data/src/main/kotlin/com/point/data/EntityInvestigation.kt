@@ -147,9 +147,15 @@ class EntityInvestigationRealizer(
             else -> emptyList()
         }
         if (chosen.isEmpty()) return Findings()
-        val text = chosen
-            .sortedWith(compareBy({ it.box.centerY }, { it.box.left }))
-            .joinToString(" ") { it.text }
+
+        // Слова — в порядке чтения слоя, тем же правилом, что прилипание выделения (`snapSelection`).
+        // Прежде здесь была своя сортировка по сырым координатам: слова живут в кадре файла с
+        // поворотом из EXIF и бокового чтения (#1013, #1508), и без `transform` строка снимка,
+        // лежащего на боку, шла задом наперёд, а на 270° слова двух строк перемешивались. Строк
+        // она не собирала вовсе — пиксель дрожи по высоте переставлял слова одной строки
+        // («67 123 45 67» → «67 45 123 67», как в #1037). Номер и адрес под обводкой выходили
+        // чужими или выдуманными. Третьего порядка не заводим: `readingOrder` один на всех.
+        val text = layer.readingOrder(chosen).joinToString(" ") { it.text }
         if (text.isBlank()) return Findings()
 
         val at = com.point.core.flow.regionWire(

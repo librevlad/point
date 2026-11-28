@@ -8,6 +8,7 @@ import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.Focus
+import com.point.core.flow.FrameTransform
 import com.point.core.flow.META_AT_REGION
 import com.point.core.flow.META_MORE_SUFFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
@@ -129,5 +130,87 @@ class FocusedEntitiesTest {
 
         assertTrue(empty.objects.isEmpty())
         assertTrue(empty.metadata.isEmpty())
+    }
+
+    /**
+     * Визитка так, как её видит человек: имя, ниже телефон. Слова кладутся в кадр файла через
+     * [turn] — так их хранит чтение снимка, лежащего на боку (#1013, #1508).
+     */
+    private fun card(turn: FrameTransform?, phoneLine: List<Pair<String, Box>> = PHONE_LINE): AtomLayer {
+        val upright = listOf("Олег" to Box(10f, 20f, 60f, 40f), "Петренко" to Box(70f, 20f, 170f, 40f)) + phoneLine
+        return AtomLayer(
+            upright.mapIndexed { i, (text, box) -> Atom("a$i", text, turn?.toRaw(box) ?: box, confidence = 0.99f) },
+            transform = turn,
+        )
+    }
+
+    /** Что ушло на разбор сущностей — текст обведённого в том порядке, в каком его собрали. */
+    private suspend fun heardUnder(layer: AtomLayer, uprightRegion: Box): String {
+        var heard = ""
+        val listening = object : EntityExtractor {
+            override suspend fun extract(text: String): List<Entity> {
+                heard = text
+                return emptyList()
+            }
+        }
+        val atoms = File.createTempFile("atoms", ".tsv").apply {
+            writeText(AtomCodec.encode(layer))
+            deleteOnExit()
+        }
+        val obj = PointObject(
+            id = "img",
+            mime = "image/jpeg",
+            uri = ScratchRef("/tmp/img.jpg"),
+            state = ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf(META_OCR_ATOMS_REF to atoms.absolutePath),
+        )
+        // Обводка лежит в том же кадре, что и слова.
+        val region = layer.transform?.toRaw(uprightRegion) ?: uprightRegion
+        EntityInvestigationRealizer(listening)
+            .perform(obj.copy(metadata = withFocus(obj.metadata, Focus("img", region = region))), null)
+        return heard
+    }
+
+    @Test
+    fun `обведённое на снимке, лежащем на боку, читается в человеческом порядке`() = runTest {
+        val turn = FrameTransform(sample = 1, rotationDegrees = 90, uprightWidth = 400, uprightHeight = 300)
+
+        assertEquals(CARD_AS_READ, heardUnder(card(turn), Box(0f, 0f, 400f, 100f)))
+    }
+
+    @Test
+    fun `на снимке, повёрнутом на 270°, слова двух строк не перемешиваются`() = runTest {
+        val turn = FrameTransform(sample = 1, rotationDegrees = 270, uprightWidth = 400, uprightHeight = 300)
+
+        assertEquals(CARD_AS_READ, heardUnder(card(turn), Box(0f, 0f, 400f, 100f)))
+    }
+
+    /**
+     * Строка снимка никогда не ровная до пикселя. Пиксель-другой дрожи по высоте не переставляет
+     * слова строки: номер под обводкой остаётся тем, что написан, а не выдуманным (#1037).
+     */
+    @Test
+    fun `дрожь строки в пиксель-другой не переставляет цифры номера`() = runTest {
+        val shaky = listOf(
+            "+380" to Box(10f, 60f, 60f, 80f),
+            "67" to Box(70f, 61f, 95f, 81f),
+            "123" to Box(105f, 58f, 140f, 78f),
+            "45" to Box(150f, 60.5f, 175f, 80.5f),
+            "67" to Box(185f, 62f, 210f, 82f),
+        )
+
+        assertEquals(CARD_AS_READ, heardUnder(card(turn = null, phoneLine = shaky), Box(0f, 0f, 400f, 100f)))
+    }
+
+    private companion object {
+        val PHONE_LINE = listOf(
+            "+380" to Box(10f, 60f, 60f, 80f),
+            "67" to Box(70f, 60f, 95f, 80f),
+            "123" to Box(105f, 60f, 140f, 80f),
+            "45" to Box(150f, 60f, 175f, 80f),
+            "67" to Box(185f, 60f, 210f, 80f),
+        )
+
+        const val CARD_AS_READ = "Олег Петренко +380 67 123 45 67"
     }
 }

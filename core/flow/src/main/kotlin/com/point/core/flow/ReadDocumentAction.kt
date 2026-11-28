@@ -82,8 +82,12 @@ class ReadDocumentRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 reportStage(tr("Разбираю PDF на страницы"))
-                val dir = rasterizer.rasterize(input)
-                val pages = File(dir.value).walkTopDown().filter { it.isFile }.sortedBy { it.name }.toList()
+                val drawn = rasterizer.rasterize(input)
+                val pages = File(drawn.dir.value).walkTopDown().filter { it.isFile }.sortedBy { it.name }.toList()
+
+                // Счёт страниц документа — от растеризатора, а не по папке: папка знает только
+                // нарисованное, и срезанный хвост выглядел бы концом документа.
+                val total = maxOf(drawn.total, pages.size)
                 if (pages.isEmpty()) {
                     return@withContext ActionResult.Failure(
                         readerFailure(READER_NO_PAGES, ObjectKind.PDF),
@@ -111,7 +115,7 @@ class ReadDocumentRealizer(
                     }
                 }
 
-                val outcome = pagesRead(pages.size, readable, broken, brokenSaid)
+                val outcome = pagesRead(total, readable, broken, brokenSaid, drawn = pages.size)
                 val state = outcome.state
                     ?: return@withContext ActionResult.Failure(outcome.said, recoverable = true)
                 if (readable == 0) {

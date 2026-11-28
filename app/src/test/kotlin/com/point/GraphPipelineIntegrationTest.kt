@@ -355,7 +355,7 @@ class GraphPipelineIntegrationTest {
             override suspend fun launch(target: AppTarget, obj: PointObject) = Unit
         },
         object : PdfRasterizer {
-            override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+            override suspend fun rasterize(obj: PointObject) = com.point.core.flow.RasterizedPages(ScratchRef("/pages"), total = 0)
             override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
         },
         object : SensoryFeedback {

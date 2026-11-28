@@ -2,6 +2,7 @@ package com.point.desktop
 
 import com.point.core.flow.Cost
 import com.point.core.flow.PdfRasterizer
+import com.point.core.flow.RasterizedPages
 import com.point.core.flow.ReadDocumentCapability
 import com.point.core.flow.ReadDocumentRealizer
 import com.point.core.flow.Realizer
@@ -40,21 +41,26 @@ fun pcReadDocumentRealizer(readPage: suspend (File) -> String): Realizer = ReadD
 /**
  * Страницы PDF картинками — pdfbox, в временную папку. Имена с номером, чтобы порядок страниц
  * совпадал с порядком чтения; папка живёт до выхода.
+ *
+ * Компьютер рисует все страницы — среза, как у телефона, здесь нет, и счёт документа совпадает
+ * с нарисованным. Но называет его растеризатор всё равно сам: правило «сколько прочитано из
+ * скольких» общее (`pagesRead`), и оно не должно угадывать счёт по папке.
  */
 class PcPdfRasterizer(private val dpi: Float = PAGE_DPI) : PdfRasterizer {
 
-    override suspend fun rasterize(obj: PointObject): ScratchRef {
+    override suspend fun rasterize(obj: PointObject): RasterizedPages {
         val source = File(obj.uri.value).takeIf(File::isFile)
             ?: error(tr("Файла документа нет на диске"))
         val dir = Files.createTempDirectory("pages-").toFile().apply { deleteOnExit() }
-        org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
+        val total = org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
             val renderer = org.apache.pdfbox.rendering.PDFRenderer(document)
             for (index in 0 until document.numberOfPages) {
                 val page = File(dir, "page-%04d.png".format(index + 1)).apply { deleteOnExit() }
                 javax.imageio.ImageIO.write(renderer.renderImageWithDPI(index, dpi), "png", page)
             }
+            document.numberOfPages
         }
-        return ScratchRef(dir.absolutePath)
+        return RasterizedPages(ScratchRef(dir.absolutePath), total)
     }
 
     override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? {

@@ -18,12 +18,13 @@ class PagesActionTest {
     @get:Rule val tmp = TemporaryFolder()
 
     private fun rasterizerInto(dir: File) = object : PdfRasterizer {
-        override suspend fun rasterize(obj: PointObject) = ScratchRef(dir.absolutePath)
+        override suspend fun rasterize(obj: PointObject) =
+            RasterizedPages(ScratchRef(dir.absolutePath), total = dir.listFiles().orEmpty().size)
         override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
     }
 
     private fun rasterizerFailing(reason: String) = object : PdfRasterizer {
-        override suspend fun rasterize(obj: PointObject): ScratchRef = error(reason)
+        override suspend fun rasterize(obj: PointObject): RasterizedPages = error(reason)
         override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = error(reason)
     }
 
