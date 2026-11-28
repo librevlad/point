@@ -1,12 +1,14 @@
  (был 	 (був 	 (was 
- · дальше {0}-й страницы Point не читает	 · далі {0}-ї сторінки Point не читає	 · Point doesn't read past page {0}
+ · документ прочитан не целиком	 · документ прочитано не повністю	 · the document wasn't read in full
  · лист «	 · аркуш «	 · sheet “
  · не вышло	 · не вийшло	 · didn't work
  · не прочиталось страниц: {0}	 · не прочиталося сторінок: {0}	 · pages not read: {0}
  · оставлено: 	 · залишено: 	 · kept: 
  · очищено, у каждой даты своё: 	 · очищено, у кожної дати своє: 	 · cleared, each date has its own: 
  · подтверждено вами	 · підтверджено вами	 · confirmed by you
+ · прочитано страниц: {0} из {1}	 · прочитано сторінок: {0} з {1}	 · pages read: {0} of {1}
  · результат в очередь	 · результат у чергу	 · result to the queue
+ · страницы после {0}-й прочитает «Дочитать документ»	 · сторінки після {0}-ї прочитає «Дочитати документ»	 · “Finish reading the document” reads the pages after page {0}
  Живёт {0}.	 Живе {0}.	 Lives for {0}.
  Ключи общие с телефоном: вписанный здесь появится там, и наоборот.	 Ключі спільні з телефоном: вписаний тут з’явиться там, і навпаки.	 Keys are shared with the phone: one entered here appears there, and the other way round.
  МБ — сервис принимает до 1 МБ, а уменьшить этот снимок не вышло.	 МБ — сервіс приймає до 1 МБ, а зменшити цей знімок не вийшло.	 MB. The service takes up to 1 MB, and this picture couldn't be shrunk.
@@ -240,6 +242,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Документ	Документ	Document
 Документ ещё не прочитан — искать не в чем	Документ ще не прочитано — шукати нема в чому	The document hasn't been read yet, so there's nothing to search
 Доступ выключен насовсем	Доступ вимкнено назавжди	Access is turned off for good
+Дочитать документ	Дочитати документ	Finish reading the document
 Другие способы взять объект	Інші способи взяти об’єкт	Other ways to take an item
 Думаю…	Думаю…	Thinking…
 Есть QR-код	Є QR-код	Has a QR code
@@ -379,6 +382,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 На компьютере сейчас нет принтера по умолчанию	На комп’ютері зараз немає принтера за замовчуванням	The computer has no default printer right now
 На компьютере это действие для такого объекта не выполняется	На комп’ютері ця дія для такого об’єкта не виконується	The computer can't do this action for this kind of item
 На новый период	На новий період	For the next period
+На прочитанных страницах ничего не нашлось: документ прочитан не целиком	На прочитаних сторінках нічого не знайшлося: документ прочитано не повністю	Nothing found on the pages read so far: the document wasn't read in full
+На прочитанных страницах ничего не нашлось: прочитано {0} из {1}	На прочитаних сторінках нічого не знайшлося: прочитано {0} з {1}	Nothing found on the pages read so far: {0} of {1}
 На сегодня бесплатное чтение закончилось — попробуйте завтра	На сьогодні безкоштовне читання скінчилося — спробуйте завтра	Free reading is used up for today. Try tomorrow
 На снимке не нашлось текста	На знімку не знайшлося тексту	No text found in the picture
 На снимке ничего не разобрать	На знімку нічого не розібрати	Nothing can be made out in the picture

@@ -87,6 +87,10 @@ class FindRealizer : Realizer {
      *
      * Текст доехал с другого устройства не целиком — ответ говорит, докуда искали
      * ([foundInPartLabel]): по одному началу «ничего не нашлось» было бы той же ложью.
+     *
+     * Сам документ прочитан не целиком — ответ говорит о прочитанных страницах
+     * ([foundInReadPagesLabel]): «Ничего не нашлось» по скану, у которого прочитана сотня
+     * страниц из 110, — ответ о хвосте, которого никто не видел.
      */
     private fun inDocument(input: PointObject, query: String): ActionResult {
         val ref = textRefForTravel(input.metadata)
@@ -99,10 +103,13 @@ class FindRealizer : Realizer {
         val hits = findInText(text, query)
         val starts = pageStartsOf(input.metadata)
         val pages = pagesOf(hits, starts)
-        if (textCutShort(input.metadata, text.length)) {
-            return ActionResult.Done(foundInPartLabel(hits.size, pages, pageCutAt(starts, text.length)))
+        val cut = textCutShort(input.metadata, text.length)
+        val said = if (cut) {
+            foundInPartLabel(hits.size, pages, pageCutAt(starts, text.length))
+        } else {
+            foundInDocumentLabel(hits.size, pages)
         }
-        return ActionResult.Done(foundInDocumentLabel(hits.size, pages))
+        return ActionResult.Done(foundInReadPagesLabel(said, hits.size, cut, input.metadata))
     }
 
     private fun atomLayer(input: PointObject): AtomLayer? =

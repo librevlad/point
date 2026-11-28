@@ -66,13 +66,13 @@ class BrokenPdfOnPcTest {
         return temp.newFile("оборванный.pdf").apply { writeBytes(whole.copyOf(24)) }
     }
 
-    private fun window(): DesktopState = DesktopState(
+    private fun window(linked: Boolean = false): DesktopState = DesktopState(
         DesktopRegistry(desktopCapabilities()),
         object : Resolver {
             override fun realizerFor(capabilityId: CapabilityId) = error("до нажатия исполнитель не нужен")
         },
         clipboard = { },
-        linked = { false },
+        linked = { linked },
     )
 
     @Test
@@ -113,6 +113,33 @@ class BrokenPdfOnPcTest {
             "оставшаяся дверь молчит о причине до нажатия: ${doors.filter { it.unusableReason != sharedWords }.map { it.title }}",
             doors.all { it.unusableReason == sharedWords },
         )
+    }
+
+    /**
+     * Дверь чтения, которую компьютер у обломка спрятал, не возвращается телефонной (#994,
+     * #1101): иначе «Извлечь текст · на телефоне» встало бы на место спрятанного своего и повезло
+     * бы обломок на телефон — отказывать там. Своими компьютер считает и двери, которые прячет
+     * сам, а не только показанные.
+     */
+    @Test
+    fun `обломку PDF и с телефоном рядом не предлагается телефонная дверь чтения`() {
+        val st = window(linked = true)
+        st.setPhoneCaps(
+            com.point.core.flow.advertisedActions(
+                com.point.core.flow.capabilities.sharedCapabilities() + com.point.core.flow.ReadDocumentCapability(),
+            ),
+            persist = false,
+        )
+        val item = Inbox(temp.newFolder("inbox")).addFile(notAPdf().absolutePath)
+        st.onReceived(item)
+
+        val hiddenHere = desktopCapabilities()
+            .filter { Intent.UNDERSTAND in it.intents(item.obj.state) }
+            .map { it.id.value }
+            .toSet()
+        val phoneReading = st.actionsFor(item).mapNotNull { it.remote }.filter { it.id in hiddenHere }
+
+        assertTrue("обломку предложили прочитать себя на телефоне: ${phoneReading.map { it.label }}", phoneReading.isEmpty())
     }
 
     @Test

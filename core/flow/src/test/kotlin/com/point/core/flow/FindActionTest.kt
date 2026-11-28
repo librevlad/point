@@ -211,7 +211,7 @@ class FindActionTest {
      * Каждая страница — ровно 3 000 знаков, поэтому 34-я начинается со знака 99 066, а 35-я —
      * уже за пределом дороги.
      */
-    private fun contractFromAnotherDevice(words: Map<Int, String>): PointObject {
+    private fun contractFromAnotherDevice(words: Map<Int, String>, coverage: String? = null): PointObject {
         val read = StringBuilder()
         val starts = mutableListOf<PageStart>()
         (1..60).forEach { page ->
@@ -219,7 +219,11 @@ class FindActionTest {
             starts += PageStart(page, read.length)
             read.append(("Сторінка $page. ${words[page].orEmpty()} " + "умови договору ".repeat(200)).take(3_000))
         }
-        val there = mapOf(META_OCR_TEXT_REF to "/там/прочитане.txt", META_OCR_TEXT_PAGES to pageStartsWire(starts))
+        val there = mapOfNotNull(
+            META_OCR_TEXT_REF to "/там/прочитане.txt",
+            META_OCR_TEXT_PAGES to pageStartsWire(starts),
+            coverage?.let { META_OCR_TEXT_COVERAGE to it },
+        )
         val packed = knowledgePackedForTravel(there, read.toString().take(READ_TEXT_TRAVEL_READ))
         val kept = File.createTempFile("arrived", ".txt").apply {
             deleteOnExit()
@@ -271,6 +275,61 @@ class FindActionTest {
             .message
 
         assertNotEquals("про страницу 2, которой в тексте нет, сказано «ничего не нашлось»", foundOnPageLabel(0), said)
+    }
+
+    /**
+     * Прочтение, легшее до того, как счёт страниц стал знанием (карточка «Не отвечать «Ничего не
+     * нашлось» по скану, прочитанному не целиком»): сколько страниц прочитано, оно не знает, но
+     * вопрос чтения у него «исследовано недостаточно» — и голое «ничего» было бы той же ложью.
+     */
+    private fun readPartlyBeforeCoverage(text: String, pages: String): PointObject = readScan(text, pages).let {
+        it.copy(
+            metadata = it.metadata +
+                (investigationKey(KnownCapabilities.IMAGE_TEXT) to InvestigationState.INSUFFICIENTLY_INVESTIGATED.wire),
+        )
+    }
+
+    @Test
+    fun `недочитанный скан без счёта страниц — ненайденное оговорено, а не «ничего не нашлось»`() = runTest {
+        val said = (FindRealizer().perform(readPartlyBeforeCoverage("Одержувач Іванов", "1:0"), "Петров") as ActionResult.Done)
+            .message
+
+        assertNotEquals("про недочитанный документ сказано голое «ничего не нашлось»", foundOnPageLabel(0), said)
+        assertTrue("ответ не говорит, что прочитан не весь документ: $said", "прочитан" in said)
+    }
+
+    @Test
+    fun `недочитанный скан без счёта страниц — найденное названо, но не как все места документа`() = runTest {
+        val said = (FindRealizer().perform(readPartlyBeforeCoverage("Одержувач Іванов", "1:0"), "Іванов") as ActionResult.Done)
+            .message
+
+        assertTrue("найденное потеряло страницу: $said", said.startsWith(foundInDocumentLabel(1, listOf(1))))
+        assertNotEquals("одно место в прочитанной части названо как все места документа", foundInDocumentLabel(1, listOf(1)), said)
+    }
+
+    /**
+     * Обе оговорки вместе: текст доехал сюда обрезком, а сам документ там прочитан не целиком.
+     * Ответ говорит и докуда доехало, и сколько прочитано, — одно не отменяет другое.
+     */
+    @Test
+    fun `обрезок недочитанного документа — ответ называет и обрыв, и счёт прочитанного`() = runTest {
+        val contract = contractFromAnotherDevice(mapOf(45 to "Іванов"), coverage = "1-60/70")
+
+        val said = (FindRealizer().perform(contract, "Іванов") as ActionResult.Done).message
+
+        assertTrue("обрыв дороги потерян: $said", said.startsWith(foundInPartLabel(0, emptyList(), cutPage = 34)))
+        assertTrue("счёт прочитанного потерян: $said", "60" in said && "70" in said)
+    }
+
+    /** Документ прочитан целиком — ответ прежний, без оговорок. */
+    @Test
+    fun `прочитанный целиком скан отвечает без оговорок`() = runTest {
+        val whole = readScan("Одержувач Іванов", "1:0").let {
+            it.copy(metadata = it.metadata + (META_OCR_TEXT_COVERAGE to "1/1"))
+        }
+
+        assertEquals(foundOnPageLabel(0), (FindRealizer().perform(whole, "Петров") as ActionResult.Done).message)
+        assertEquals(foundInDocumentLabel(1, listOf(1)), (FindRealizer().perform(whole, "Іванов") as ActionResult.Done).message)
     }
 
     /** Экран телефона ищет подсветкой ровно там, где исполнитель искал бы по слою слов. */
