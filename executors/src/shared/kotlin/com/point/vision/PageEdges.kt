@@ -3,8 +3,11 @@ package com.point.vision
 import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.MatOfFloat
+import org.opencv.core.MatOfInt
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
+import org.opencv.core.Rect
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import kotlin.math.sqrt
@@ -91,6 +94,78 @@ internal object PageEdges {
     }
 
     /**
+     * Не рамка ли это, напечатанная на листе (#1044, кадр 04 корпуса): за каждым видимым краем
+     * четырёхугольника — та же бумага, что у края изнутри.
+     *
+     * Лист, заполнивший кадр, края на снимке не имеет, и самым крупным четырёхугольником
+     * становится рамка таблицы на нём. Текста она не режет, а всё, что за ней, — терялось.
+     * У настоящего края по ту сторону стол, обложка, тень — хотя бы с одной стороны листа.
+     * Края на кромке снимка не в счёт: что за ними, не видно.
+     */
+    fun paperBeyondEverySide(gray: Mat, corners: Array<Point>, scratch: MutableList<Mat>): Boolean {
+        val (tl, tr, br, bl) = corners
+        val pageW = maxOf(PageVision.distance(tl, tr), PageVision.distance(bl, br))
+        val pageH = maxOf(PageVision.distance(tl, bl), PageVision.distance(tr, br))
+        if (pageW < 1.0 || pageH < 1.0) return false
+        val s = WORK_SIDE / maxOf(pageW, pageH)
+        val w = pageW * s
+        val h = pageH * s
+        val m = MARGIN * maxOf(w, h)
+
+        val src = MatOfPoint2f(tl, tr, br, bl).also { scratch += it }
+        val dst = MatOfPoint2f(Point(m, m), Point(m + w, m), Point(m + w, m + h), Point(m, m + h)).also { scratch += it }
+        val transform = Imgproc.getPerspectiveTransform(src, dst).also { scratch += it }
+        val canvas = Mat().also { scratch += it }
+        Imgproc.warpPerspective(gray, canvas, transform, Size(w + 2 * m, h + 2 * m), Imgproc.INTER_LINEAR, Core.BORDER_CONSTANT)
+        val seen = Mat().also { scratch += it }
+        Imgproc.warpPerspective(
+            Mat.ones(gray.size(), CvType.CV_8U).also { scratch += it }, seen, transform, canvas.size(),
+            Imgproc.INTER_NEAREST, Core.BORDER_CONSTANT,
+        )
+
+        val g = (GAP * maxOf(w, h)).toInt()
+        val st = (STRIP * maxOf(w, h)).toInt()
+        val x0 = m.toInt()
+        val y0 = m.toInt()
+        val x1 = (m + w).toInt()
+        val y1 = (m + h).toInt()
+        // Изнутри полоса у самого края, снаружи — сразу за ним: у рамки на листе обе — бумага.
+        val sides = listOf(
+            Pair(Rect(x0 + g, y0, st, y1 - y0), Rect(x0 - g - st, y0, st, y1 - y0)),
+            Pair(Rect(x1 - g - st, y0, st, y1 - y0), Rect(x1 + g, y0, st, y1 - y0)),
+            Pair(Rect(x0, y0 + g, x1 - x0, st), Rect(x0, y0 - g - st, x1 - x0, st)),
+            Pair(Rect(x0, y1 - g - st, x1 - x0, st), Rect(x0, y1 + g, x1 - x0, st)),
+        )
+        var visible = 0
+        for ((inner, outer) in sides) {
+            val outSeen = seen.submat(outer)
+            if (Core.countNonZero(outSeen) < MIN_SEEN * outer.area()) continue
+            visible++
+            val paper = median(canvas.submat(inner), null)
+            val beyond = median(canvas.submat(outer), outSeen)
+            if (Math.abs(paper - beyond) > SAME_PAPER_LEVELS) return false
+        }
+        return visible > 0
+    }
+
+    private fun median(m: Mat, mask: Mat?): Double {
+        val hist = Mat()
+        try {
+            Imgproc.calcHist(listOf(m), MatOfInt(0), mask ?: Mat(), hist, MatOfInt(256), MatOfFloat(0f, 256f))
+            val total = Core.sumElems(hist).`val`[0]
+            if (total <= 0.0) return 0.0
+            var seen = 0.0
+            for (i in 0 until 256) {
+                seen += hist.get(i, 0)[0]
+                if (seen >= total / 2) return i.toDouble()
+            }
+            return 255.0
+        } finally {
+            hist.release()
+        }
+    }
+
+    /**
      * Край режет текст, если за ним те же строки напротив строк — или просто не меньше
      * чернил, чем у края изнутри (кадры 18 и 21 корпуса: отрезанная шапка и начала строк
      * дерева лежат не строка в строку, но гуще, чем внутри). У настоящего края изнутри
@@ -148,4 +223,7 @@ internal object PageEdges {
     private const val MIN_TEXT_DENSITY = 0.03
     private const val TEXT_GOES_ON = 0.8
     private const val MIN_SEEN = 0.3
+
+    /** Насколько (уровней яркости из 255) бумага по обе стороны рамки может разниться. */
+    private const val SAME_PAPER_LEVELS = 12.0
 }

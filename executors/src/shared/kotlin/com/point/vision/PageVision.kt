@@ -37,9 +37,16 @@ object PageVision {
      *
      * Ненайденная страница исходным кадром не подменяется: снаружи это было бы неотличимо от
      * успеха. Кадр целиком — отдельная дорога ([processAsIs]), и результат её помечается.
+     *
+     * Геометрия та же, что у «Скана» ([straightened]): прежде страница PDF выпрямлялась только
+     * по углам, без расправления изгиба, и изогнутая таблица в PDF оставалась кривой, хотя
+     * «Скан» того же снимка выходил ровным (DOC-1, сверка 28.11.2026).
      */
-    fun process(rgba: Mat, scratch: MutableList<Mat>): Mat? =
-        detectDocument(rgba, scratch)?.let { binarise(upright(it, scratch), scratch) }
+    fun process(rgba: Mat, scratch: MutableList<Mat>, readTurns: Int? = null): Mat? =
+        straight(rgba, scratch)?.let { page ->
+            val turns = readTurns ?: PageOrientation.quarterTurns(page.mat, scratch)
+            binarise(PageOrientation.turned(page.mat, turns, scratch), scratch)
+        }
 
     /** Кадр целиком, сведённый к чёрно-белому (#1333): страницы не нашли, но работа не пропадает. */
     fun processAsIs(rgba: Mat, scratch: MutableList<Mat>): Mat = binarise(rgba, scratch)
@@ -48,15 +55,18 @@ object PageVision {
      * Выпрямленная и подготовленная страница и её четыре угла — или `null`, страницы не нашлось
      * (#1332, #1333).
      *
-     * Кривую страницу Point расправляет по линиям разлиновки, а не по четырём углам
-     * ([dewarpByTps]), и обратного хода у неё нет — тогда углов нет: `null` честнее
-     * четырёхугольника, которого не было.
+     * Сначала лист отделяется от стола по краям, потом изогнутый расправляется по линиям
+     * разлиновки ([dewarpByTps]). Прежде линии шли первыми и кадр не обрезали вовсе: страница
+     * выходила вместе с обложкой книжки и полосой стола (кадры 19 и 23 корпуса, #1044).
+     *
+     * У расправленной по линиям страницы обратного хода нет — тогда углов нет: `null` честнее
+     * четырёхугольника, которого не было. Ровный лист по линиям не трогается, и углы остаются.
      */
     suspend fun straightened(rgba: Mat, scratch: MutableList<Mat>, readTurns: Int? = null): Page? {
-        var corners: Array<Point>? = null
         reportStage(tr("Ищу страницу на снимке"))
-        val straight = dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch) { corners = it }
-            ?: return null
+        val page = straight(rgba, scratch) ?: return null
+        val straight = page.mat
+        val corners = page.corners
 
         // Лист ставится так, чтобы его можно было читать, и углы поворачиваются вместе с ним:
         // по ним прочитанное возвращается на снимок человека (#1332).
@@ -89,22 +99,29 @@ object PageVision {
     /** Выпрямленная страница и её углы на развёрнутом кадре; `null` — углов нет. */
     class Page(val mat: Mat, val quad: PageQuad?)
 
+    /** Лист, выпрямленный так, как лежал на кадре, и его углы; `null` — углов нет. */
+    private class Straight(val mat: Mat, val corners: Array<Point>?)
+
+    /**
+     * Общая геометрия «Скана» и скана в PDF: лист отделяется от стола по краям, изогнутый
+     * расправляется по линиям; не нашёлся лист — кадр расправляется по линиям целиком, если
+     * они есть. `null` — ни листа, ни линий.
+     */
+    private fun straight(rgba: Mat, scratch: MutableList<Mat>): Straight? {
+        val found = pageCorners(rgba, scratch)
+        if (found != null) {
+            val flat = warp(rgba, found, scratch)
+            return dewarpByTps(flat, scratch, minBend = BENT_FRAC)?.let { Straight(it, null) } ?: Straight(flat, found)
+        }
+        return dewarpByTps(rgba, scratch)?.let { Straight(it, null) }
+    }
+
     /** Общий хвост цветных путей: выбелить бумагу и увеличить мелкое (#1333). */
     private suspend fun prepared(straight: Mat, scratch: MutableList<Mat>): Mat {
         reportStage(tr("Выбеливаю бумагу"))
         val finished = whitenFinish(straight, scratch)
         return upscale(finished, scratch)
     }
-
-    /**
-     * Страница, повёрнутая так, чтобы строки шли слева направо сверху вниз (#1044).
-     *
-     * Только найденный лист: кадр целиком остаётся, как человек его снял. На нём кроме
-     * страницы стол, рамка монитора, изгиб — и по строкам целого кадра монитор ложился на
-     * бок, а мятая накладная вверх ногами (кадры 07 и 18 корпуса).
-     */
-    private fun upright(mat: Mat, scratch: MutableList<Mat>): Mat =
-        PageOrientation.turned(mat, PageOrientation.quarterTurns(mat, scratch), scratch)
 
     /**
      * Углы листа после поворота копии на [turns] четвертей по часовой: верхним левым
@@ -136,11 +153,11 @@ object PageVision {
         return up
     }
 
-    private fun detectDocument(
-        rgba: Mat,
-        scratch: MutableList<Mat>,
-        onPage: (Array<Point>) -> Unit = {},
-    ): Mat? {
+    /**
+     * Четыре угла листа на кадре (верх-лево, верх-право, низ-право, низ-лево) — или `null`,
+     * листа не нашлось.
+     */
+    private fun pageCorners(rgba: Mat, scratch: MutableList<Mat>): Array<Point>? {
         val longSide = maxOf(rgba.rows(), rgba.cols()).toDouble()
         val downscale = if (longSide > DETECT_MAX_PX) DETECT_MAX_PX / longSide else 1.0
         val small = Mat().also { scratch += it }
@@ -169,39 +186,57 @@ object PageVision {
 
         // Углы, режущие текст, страницей не считаются (#1044): копия без концов строк вышла
         // бы ровной и молча неполной.
-        val whole: (Array<Point>) -> Boolean = { !PageEdges.cutsText(gray, it, scratch) }
-        var corners = quadFromMask(otsu, frameArea, scratch, whole)
+        // Рамка, напечатанная на листе, — не край листа: за ней та же бумага (кадр 04).
+        val frame = Size(small.cols().toDouble(), small.rows().toDouble())
+        val whole: (Array<Point>) -> Boolean = {
+            PageQuads.plausible(it, frame) &&
+                !PageEdges.cutsText(gray, it, scratch) &&
+                !PageEdges.paperBeyondEverySide(gray, it, scratch)
+        }
+
+        // Светлый стол того же тона, что бумага, сливается с листом в одно пятно (кадр 19:
+        // светлое дерево над страницей) — сначала ищется лист без светлого чужого цвета с края.
+        var corners = PaperColor.withoutForeignEdges(otsu, small, scratch)
+            ?.let { quadFromMask(it, frame, scratch, whole) }
+            ?: quadFromMask(otsu, frame, scratch, whole)
 
         if (corners == null) {
             val median = medianBrightness(blurred)
             val edges = Mat().also { scratch += it }
             Imgproc.Canny(blurred, edges, 0.66 * median, 1.33 * median)
             Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
-            corners = quadFromMask(edges, frameArea, scratch, whole)
+            corners = quadFromMask(edges, frame, scratch, whole, paperSpot = false)
         }
         // Свой ход листа не нашёл — второе слово за обученной моделью углов (#1044). Она
         // смотрит на тот же уменьшенный кадр и проверяется так же.
         val found = corners ?: LearnedCorners.find(small, scratch)?.let(::orderCorners)?.takeIf(whole) ?: return null
-        val page = found.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray()
-        onPage(page)
-        return warp(rgba, page, scratch)
+        return found.map { Point(it.x / downscale, it.y / downscale) }.toTypedArray()
     }
 
     private fun quadFromMask(
         mask: Mat,
-        frameArea: Double,
+        frame: Size,
         scratch: MutableList<Mat>,
         accept: (Array<Point>) -> Boolean,
+        paperSpot: Boolean = true,
     ): Array<Point>? {
         val contours = ArrayList<MatOfPoint>()
         Imgproc.findContours(
             mask, contours, Mat().also { scratch += it },
             Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE,
         )
+        // У пятна бумаги несколько догадок об углах, от плотной к охватывающей: отвергнутая
+        // плотная — ещё не повод бросать пятно (кадр 18: четыре точки срезали угол листа с
+        // текстом, а охватывающий четырёхугольник лист берёт целиком). Контур краёв — не
+        // бумага, а что угодно (циферблат счётчика на кадре 15): охватывать его нечего, и у
+        // него одна догадка, как прежде.
         return contours
             .sortedByDescending { Imgproc.contourArea(it) }
             .take(6)
-            .firstNotNullOfOrNull { contour -> pageQuad(contour, frameArea)?.let(::orderCorners)?.takeIf(accept) }
+            .firstNotNullOfOrNull { contour ->
+                val quads = pageQuads(contour, frame, enclose = paperSpot)
+                (if (paperSpot) quads else quads.take(1)).map(::orderCorners).firstOrNull(accept)
+            }
     }
 
     private fun medianBrightness(gray: Mat): Double {
@@ -220,22 +255,33 @@ object PageVision {
         return 128.0
     }
 
-    private fun pageQuad(contour: MatOfPoint, frameArea: Double): Array<Point>? {
+    /**
+     * Догадки об углах листа по одному пятну — от плотной к охватывающей: четыре точки самого
+     * контура, четыре точки его выпуклой оболочки, наименьший охватывающий оболочку
+     * четырёхугольник ([PageQuads.enclosing]) и повёрнутый прямоугольник.
+     *
+     * Охватывающий четырёхугольник — для листа, чей угол срезан краем кадра или загнут: там
+     * у пятна пять-шесть вершин, и четыре точки контура отрезали угол вместе с текстом.
+     */
+    private fun pageQuads(contour: MatOfPoint, frame: Size, enclose: Boolean): List<Array<Point>> {
         val area = Imgproc.contourArea(contour)
-        if (area < MIN_PAGE_FRACTION * frameArea || area > MAX_PAGE_FRACTION * frameArea) return null
+        val frameArea = frame.width * frame.height
+        if (area < MIN_PAGE_FRACTION * frameArea || area > MAX_PAGE_FRACTION * frameArea) return emptyList()
 
-        val c2f = MatOfPoint2f(*contour.toArray())
+        val points = contour.toArray()
+        val quads = ArrayList<Array<Point>>(4)
+        val c2f = MatOfPoint2f(*points)
         try {
-
-            fourCorners(c2f)?.let { return it }
+            fourCorners(c2f)?.let { quads += it }
 
             val hullIdx = MatOfInt()
             Imgproc.convexHull(contour, hullIdx)
-            val hullPts = hullIdx.toArray().map { contour.toArray()[it] }.toTypedArray()
+            val hullPts = hullIdx.toArray().map { points[it] }.toTypedArray()
             hullIdx.release()
             val hull2f = MatOfPoint2f(*hullPts)
             try {
-                fourCorners(hull2f)?.let { return it }
+                fourCorners(hull2f)?.let { quads += it }
+                if (enclose) PageQuads.enclosing(hull2f, frame)?.let { quads += it }
             } finally {
                 hull2f.release()
             }
@@ -243,10 +289,11 @@ object PageVision {
             val box = Imgproc.minAreaRect(c2f)
             val pts = arrayOfNulls<Point>(4)
             box.points(pts)
-            return pts.filterNotNull().toTypedArray().takeIf { it.size == 4 }
+            pts.filterNotNull().toTypedArray().takeIf { it.size == 4 }?.let { quads += it }
         } finally {
             c2f.release()
         }
+        return quads
     }
 
     private fun fourCorners(c2f: MatOfPoint2f): Array<Point>? {
@@ -353,7 +400,11 @@ object PageVision {
         return r.across[lo] + t * (r.across[hi] - r.across[lo])
     }
 
-    private fun dewarpByTps(rgba: Mat, scratch: MutableList<Mat>): Mat? {
+    /**
+     * Страница, расправленная по линиям разлиновки, — или `null`: линий мало, или они изогнуты
+     * меньше, чем на [minBend] страницы (ровному листу расправлять нечего, а углы у него есть).
+     */
+    private fun dewarpByTps(rgba: Mat, scratch: MutableList<Mat>, minBend: Double = 0.0): Mat? {
         val longSide = maxOf(rgba.rows(), rgba.cols()).toDouble()
         val s = if (longSide > RULE_DETECT_PX) RULE_DETECT_PX / longSide else 1.0
         val small = Mat().also { scratch += it }
@@ -403,6 +454,7 @@ object PageVision {
         val mapYs = Mat(hd, wd, CvType.CV_32F).also { scratch += it }
         val rowX = FloatArray(wd)
         val rowY = FloatArray(wd)
+        var bend = 0.0
         for (id in 0 until hd) {
             val sy = id.toDouble() * (h - 1) / (hd - 1)
             val outside = when {
@@ -415,12 +467,14 @@ object PageVision {
                 val sx = jd.toDouble() * (w - 1) / (wd - 1)
                 val dx = (fx.eval(sx / d, sy / d) * d - sx).coerceIn(-maxDx, maxDx) * wgt
                 val dy = (fy.eval(sx / d, sy / d) * d - sy).coerceIn(-maxDy, maxDy) * wgt
+                bend = maxOf(bend, Math.abs(dx) / w, Math.abs(dy) / h)
                 rowX[jd] = (sx + dx).coerceIn(0.0, xMax).toFloat()
                 rowY[jd] = (sy + dy).coerceIn(0.0, yMaxPx).toFloat()
             }
             mapXs.put(id, 0, rowX)
             mapYs.put(id, 0, rowY)
         }
+        if (bend < minBend) return null
         val mapX = Mat().also { scratch += it }
         val mapY = Mat().also { scratch += it }
         Imgproc.resize(mapXs, mapX, Size(rgba.cols().toDouble(), rgba.rows().toDouble()))
@@ -639,6 +693,16 @@ object PageVision {
 
     /** Доля различимых чернил, с которой светлое пятно — уже не блик, а страница с текстом. */
     private const val GLARE_MAX_INK = 0.01
+
+    /**
+     * С какого изгиба линий найденный по углам лист ещё расправляется по ним — доля стороны
+     * страницы. Меньше — лист ровный, и выпрямление по углам уже всё сделало.
+     *
+     * На корпусе изогнутые таблицы после выпрямления по углам гнутся на 0,7% стороны (кадры 19
+     * и 23: около 19 точек на странице в 2600) — это глазом видно, и чтение без расправления
+     * теряло ячейки. Ровный лист по линиям даёт десятые доли процента.
+     */
+    private const val BENT_FRAC = 0.004
 
     private const val MIN_PAGE_FRACTION = 0.12
 
