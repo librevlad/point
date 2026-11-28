@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.ALL_PAGES
 import com.point.core.flow.Cost
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.RasterizedPages
@@ -9,6 +10,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
 import com.point.core.flow.TextRecognizer
+import com.point.core.flow.pagesToDraw
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import com.point.core.model.tr
@@ -42,25 +44,36 @@ fun pcReadDocumentRealizer(readPage: suspend (File) -> String): Realizer = ReadD
  * Страницы PDF картинками — pdfbox, в временную папку. Имена с номером, чтобы порядок страниц
  * совпадал с порядком чтения; папка живёт до выхода.
  *
- * Компьютер рисует все страницы — среза, как у телефона, здесь нет, и счёт документа совпадает
- * с нарисованным. Но называет его растеризатор всё равно сам: правило «сколько прочитано из
- * скольких» общее (`pagesRead`), и оно не должно угадывать счёт по папке.
+ * Компьютер рисует все просимые страницы — среза, как у телефона, здесь нет. Но счёт документа
+ * называет растеризатор всё равно сам: правило «сколько прочитано из скольких» общее
+ * (`pagesRead`), и оно не должно угадывать счёт по папке.
+ *
+ * Продолжение чтения просит только непрочитанные страницы (карточка «Не отвечать «Ничего не
+ * нашлось» по скану, прочитанному не целиком»): страницы, на которых сервис отказал, читаются
+ * заново, а прочитанные не рисуются и не уходят в сервис второй раз.
  */
 class PcPdfRasterizer(private val dpi: Float = PAGE_DPI) : PdfRasterizer {
 
-    override suspend fun rasterize(obj: PointObject): RasterizedPages {
+    override suspend fun rasterize(obj: PointObject): RasterizedPages = rasterize(obj, ALL_PAGES)
+
+    override suspend fun rasterize(obj: PointObject, pages: IntRange): RasterizedPages {
         val source = File(obj.uri.value).takeIf(File::isFile)
             ?: error(tr("Файла документа нет на диске"))
         val dir = Files.createTempDirectory("pages-").toFile().apply { deleteOnExit() }
+        var first = 1
         val total = org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
             val renderer = org.apache.pdfbox.rendering.PDFRenderer(document)
-            for (index in 0 until document.numberOfPages) {
-                val page = File(dir, "page-%04d.png".format(index + 1)).apply { deleteOnExit() }
-                javax.imageio.ImageIO.write(renderer.renderImageWithDPI(index, dpi), "png", page)
+            val drawn = pagesToDraw(pages, document.numberOfPages)
+            first = drawn.first
+            for (number in drawn) {
+
+                // Имя — настоящий номер страницы в документе, а не номер в этом заходе.
+                val page = File(dir, "page-%04d.png".format(number)).apply { deleteOnExit() }
+                javax.imageio.ImageIO.write(renderer.renderImageWithDPI(number - 1, dpi), "png", page)
             }
             document.numberOfPages
         }
-        return RasterizedPages(ScratchRef(dir.absolutePath), total)
+        return RasterizedPages(ScratchRef(dir.absolutePath), total, first)
     }
 
     override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? {

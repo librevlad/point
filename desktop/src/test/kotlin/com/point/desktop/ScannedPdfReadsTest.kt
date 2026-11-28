@@ -81,6 +81,19 @@ class ScannedPdfReadsTest {
         assertEquals(3, File(drawn.dir.value).listFiles().orEmpty().size)
     }
 
+    /**
+     * Продолжение чтения рисует только просимые страницы и называет их настоящими номерами
+     * (карточка «Не отвечать «Ничего не нашлось» по скану, прочитанному не целиком»): страница,
+     * на которой сервис отказал, уходит в сервис одна, а не вместе со всем документом.
+     */
+    @Test fun `компьютер рисует просимые страницы под их номерами в документе`() = runBlocking {
+        val drawn = PcPdfRasterizer(dpi = 10f).rasterize(scannedPdf(pages = 5), 3..4)
+
+        assertEquals("счёт документа подменён счётом нарисованного", 5, drawn.total)
+        assertEquals(3, drawn.first)
+        assertEquals(listOf("page-0003.png", "page-0004.png"), File(drawn.dir.value).listFiles().orEmpty().map { it.name }.sorted())
+    }
+
     @Test fun `прочитана часть страниц — вопрос не закрыт находкой целиком`() = runBlocking {
         var page = 0
         val realizer = pcReadDocumentRealizer(readPage = {

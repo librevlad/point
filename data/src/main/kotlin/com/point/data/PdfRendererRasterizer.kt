@@ -5,11 +5,13 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import com.point.core.flow.ALL_PAGES
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.READER_NO_PAGES
 import com.point.core.flow.READER_NOT_DECODED
 import com.point.core.flow.RasterizedPages
+import com.point.core.flow.pagesToDraw
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +24,9 @@ class PdfRendererRasterizer @Inject constructor(
     private val store: ObjectStore,
 ) : PdfRasterizer {
 
-    override suspend fun rasterize(obj: PointObject): RasterizedPages = withContext(Dispatchers.IO) {
+    override suspend fun rasterize(obj: PointObject): RasterizedPages = rasterize(obj, ALL_PAGES)
+
+    override suspend fun rasterize(obj: PointObject, pages: IntRange): RasterizedPages = withContext(Dispatchers.IO) {
         val src = File(obj.uri.value)
 
         ParcelFileDescriptor.open(src, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
@@ -35,23 +39,28 @@ class PdfRendererRasterizer @Inject constructor(
                 if (renderer.pageCount == 0) error(READER_NO_PAGES)
                 val dir = File(store.newScratchFile("pages").value).apply { mkdirs() }
 
-                // Рисуются первые MAX_PAGES — это бережёт память и время телефона. Но срез не
-                // молчит: настоящий счёт страниц уходит дальше вместе с папкой, и чтение говорит
-                // человеку «100 из 150», а не «100 из 100» — непрочитанный хвост не выдаётся за
-                // конец документа (см. PdfRasterizer.rasterize).
-                val pages = minOf(renderer.pageCount, MAX_PAGES)
-                if (renderer.pageCount > MAX_PAGES) {
-                    Log.w(TAG, "PDF has ${renderer.pageCount} pages; rasterising the first $MAX_PAGES")
+                // За заход рисуется не больше MAX_PAGES — это бережёт память и время телефона.
+                // Но срез не молчит: настоящий счёт страниц уходит дальше вместе с папкой, и
+                // чтение говорит человеку «100 из 150», а не «100 из 100» — непрочитанный хвост
+                // не выдаётся за конец документа (см. PdfRasterizer.rasterize). И срез больше не
+                // навсегда: заход начинается с той страницы, которую просят, и следующее чтение
+                // рисует хвост (карточка «Не отвечать «Ничего не нашлось» по скану, прочитанному
+                // не целиком»).
+                val drawn = pagesToDraw(pages, renderer.pageCount, MAX_PAGES)
+                if (drawn.last < minOf(pages.last, renderer.pageCount)) {
+                    Log.w(TAG, "PDF has ${renderer.pageCount} pages; rasterising pages ${drawn.first}-${drawn.last}")
                 }
-                for (i in 0 until pages) {
-                    val page = renderer.openPage(i)
+                for (number in drawn) {
+                    val page = renderer.openPage(number - 1)
                     try {
                         val w = (page.width * SCALE).coerceIn(1, MAX_DIM)
                         val h = (page.height * SCALE).coerceIn(1, MAX_DIM)
                         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                         bmp.eraseColor(Color.WHITE)
                         page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        File(dir, "page-%03d.jpg".format(i + 1)).outputStream().use { out ->
+
+                        // Имя — настоящий номер страницы в документе, а не номер в этом заходе.
+                        File(dir, "page-%03d.jpg".format(number)).outputStream().use { out ->
                             bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
                         }
                         bmp.recycle()
@@ -59,7 +68,7 @@ class PdfRendererRasterizer @Inject constructor(
                         page.close()
                     }
                 }
-                RasterizedPages(ScratchRef(dir.absolutePath), total = renderer.pageCount)
+                RasterizedPages(ScratchRef(dir.absolutePath), total = renderer.pageCount, first = drawn.first)
             } finally {
                 renderer.close()
             }

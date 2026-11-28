@@ -235,6 +235,19 @@ interface PdfRasterizer {
      */
     suspend fun rasterize(obj: PointObject): RasterizedPages
 
+    /**
+     * Страницы [pages] документа — номера по документу, с единицы (карточка «Не отвечать «Ничего
+     * не нашлось» по скану, прочитанному не целиком»).
+     *
+     * Нужно чтению, которое продолжает прежнее: телефон рисовал только первые сто страниц, и
+     * хвост длинного скана не читался никогда — каждое новое чтение начиналось бы с первой
+     * страницы и в ту же сотню упиралось. Растеризатор вправе нарисовать меньше просимого
+     * (телефон — не больше ста за раз) и вправе больше: читатель берёт из нарисованного только
+     * то, что ещё не прочитано. Поэтому по умолчанию рисуется весь документ — растеризатору,
+     * который не умеет рисовать часть, честнее нарисовать лишнее, чем выдать начало за просимое.
+     */
+    suspend fun rasterize(obj: PointObject, pages: IntRange): RasterizedPages = rasterize(obj)
+
     suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef?
 }
 
@@ -243,8 +256,11 @@ interface PdfRasterizer {
  *
  * @param dir папка с картинками страниц; имена по номеру, чтобы порядок файлов был порядком чтения
  * @param total сколько страниц в самом документе — не сколько нарисовано в [dir]
+ * @param first номер по документу первой нарисованной страницы; остальные идут в [dir] подряд за
+ * ней. Нарисованное не обязано начинаться с первой страницы документа: продолжение чтения рисует
+ * со 101-й, и считать её первой значило бы положить её текст под чужим номером.
  */
-data class RasterizedPages(val dir: ScratchRef, val total: Int)
+data class RasterizedPages(val dir: ScratchRef, val total: Int, val first: Int = 1)
 
 interface OfficeTextExtractor {
     suspend fun extractText(obj: PointObject): String

@@ -88,3 +88,21 @@ private fun brokenNote(broken: Int, brokenSaid: String?): String =
  * платить за него человек не должен.
  */
 val NO_TEXT_IN_DOCUMENT: String get() = tr("В документе не нашлось текста")
+
+/** Все страницы документа — просьба к растеризатору без предела. */
+val ALL_PAGES: IntRange = 1..Int.MAX_VALUE
+
+/**
+ * Какие страницы рисовать за один заход: просимые [wanted] в пределах документа на [pageCount]
+ * страниц — и не больше [atMost] подряд, считая с первой просимой.
+ *
+ * Одно правило на телефон и компьютер: телефон бережёт память и время и рисует за заход не
+ * больше сотни, компьютер — сколько попросили. Заход начинается с первой непросмотренной
+ * страницы, а не с первой страницы документа: иначе длинный скан читался бы с начала каждый раз
+ * и до хвоста не доходил никогда.
+ */
+fun pagesToDraw(wanted: IntRange, pageCount: Int, atMost: Int = Int.MAX_VALUE): IntRange {
+    val from = maxOf(1, wanted.first)
+    val last = minOf(wanted.last.toLong(), pageCount.toLong(), from.toLong() + atMost - 1).toInt()
+    return from..last
+}
