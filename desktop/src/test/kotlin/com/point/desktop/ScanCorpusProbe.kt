@@ -21,6 +21,7 @@ import java.io.File
  *       ./gradlew :desktop:test --tests com.point.desktop.ScanCorpusProbe
  *
  * `POINT_SCAN_FRAMES` — номера кадров через запятую, если нужны не все.
+ * `POINT_SCAN_MAX_PX` — длинная сторона кадра; телефон 12 Мп снимок уменьшает до 2000, компьютер до 2600.
  */
 class ScanCorpusProbe {
 
@@ -37,7 +38,7 @@ class ScanCorpusProbe {
             .filter { only == null || it.nameWithoutExtension in only }
             .sortedBy { it.name }
         for (file in frames) {
-            val picture = uprightPicture(file) ?: continue
+            val picture = (System.getenv("POINT_SCAN_MAX_PX")?.toIntOrNull()?.let { uprightPicture(file, it) } ?: uprightPicture(file)) ?: continue
             val started = System.nanoTime()
             var path = "кадр целиком"
             var corners = ""
