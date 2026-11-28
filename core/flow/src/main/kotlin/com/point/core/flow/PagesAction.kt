@@ -32,7 +32,7 @@ class PagesRealizer(
         withContext(Dispatchers.IO) {
             runCatching {
                 reportStage(tr("Разбираю PDF на страницы"))
-                val dir = rasterizer.rasterize(input)
+                val dir = rasterizer.rasterize(input).dir
                 val count = File(dir.value).walkTopDown().count { it.isFile }
                 if (count == 0) {
                     ActionResult.Failure(NOT_SPLIT, recoverable = true)

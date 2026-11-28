@@ -69,6 +69,18 @@ class ScannedPdfReadsTest {
         )
     }
 
+    /**
+     * Компьютер рисует документ целиком, и счёт страниц называет сам растеризатор: общее
+     * правило «прочитано столько-то из скольких» не угадывает его по папке, где лежит только
+     * нарисованное (у телефона это первые сто страниц).
+     */
+    @Test fun `компьютер рисует все страницы документа и называет их счёт`() = runBlocking {
+        val drawn = PcPdfRasterizer(dpi = 10f).rasterize(scannedPdf(pages = 3))
+
+        assertEquals(3, drawn.total)
+        assertEquals(3, File(drawn.dir.value).listFiles().orEmpty().size)
+    }
+
     @Test fun `прочитана часть страниц — вопрос не закрыт находкой целиком`() = runBlocking {
         var page = 0
         val realizer = pcReadDocumentRealizer(readPage = {

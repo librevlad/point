@@ -223,10 +223,28 @@ interface ImageCompositor {
 
 interface PdfRasterizer {
 
-    suspend fun rasterize(obj: PointObject): ScratchRef
+    /**
+     * Страницы документа картинками — и сколько страниц в нём на самом деле.
+     *
+     * Растеризатор вправе нарисовать не все страницы: телефон бережёт память и время и рисует
+     * первые сто. Но сколько их в документе, обязан сказать он же — больше этого никто не знает.
+     * Пока ответом была одна папка, срезанный хвост был неотличим от конца документа: скан на
+     * 150 страниц читался как «Прочитано страниц: 100 из 100», вопрос чтения закрывался «найдено»,
+     * а текст пятидесяти страниц пропадал молча. Тот же класс, что #1255: непрочитанное выдано
+     * за прочитанное.
+     */
+    suspend fun rasterize(obj: PointObject): RasterizedPages
 
     suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef?
 }
+
+/**
+ * Нарисованные страницы и счёт страниц документа.
+ *
+ * @param dir папка с картинками страниц; имена по номеру, чтобы порядок файлов был порядком чтения
+ * @param total сколько страниц в самом документе — не сколько нарисовано в [dir]
+ */
+data class RasterizedPages(val dir: ScratchRef, val total: Int)
 
 interface OfficeTextExtractor {
     suspend fun extractText(obj: PointObject): String
