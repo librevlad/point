@@ -50,11 +50,28 @@ class FallbackRealizer(
     private fun onlyNotFound(findings: Findings?): Boolean {
         val told = findings ?: return false
         if (told.features.isNotEmpty() || told.objects.isNotEmpty() || told.relations.isNotEmpty()) return false
-        return told.metadata.isNotEmpty() &&
-            told.metadata.all { (key, value) -> isStateKey(key) && value == InvestigationState.NOT_FOUND.wire }
+        return told.metadata.keys.any(::isStateKey) &&
+            told.metadata.all { (key, value) ->
+                (isStateKey(key) && value == InvestigationState.NOT_FOUND.wire) || key in HOW_IT_WAS_LOOKED
+            }
     }
 
     companion object {
+
+        /**
+         * Пометки о том, как смотрели, а не о том, что увидели: с ними «не нашлось» остаётся
+         * одним только «не нашлось».
+         *
+         * Чтение документа кладёт рядом со своим ответом счёт просмотренных страниц
+         * ([META_OCR_TEXT_COVERAGE], карточка «Не отвечать «Ничего не нашлось» по скану,
+         * прочитанному не целиком»). Это знание о проходе этого читателя — какие страницы он
+         * довёл до ответа, — а не о содержимом: следующий читает те же страницы заново и
+         * приносит свой счёт, который встаёт на место прежнего ([REFRESHABLE_KNOWLEDGE]). Без
+         * этой оговорки рукописный скан, на котором движок телефона не увидел текста, больше не
+         * уходил к зрячему читателю компьютера: «не нашлось» со счётом очередь принимала за
+         * находку и закрывала вопрос ответом того, кто видит хуже всех (#1054).
+         */
+        private val HOW_IT_WAS_LOOKED = setOf(META_OCR_TEXT_COVERAGE)
 
         val NOBODY_TO_DO_IT: String get() = tr("Это действие сейчас выполнить нечем — вернитесь к объекту и выберите другое")
     }

@@ -340,6 +340,24 @@ class PartlyReadScanTest {
         assertTrue(realizer.perform(read, null) is ActionResult.Failure)
     }
 
+    /**
+     * «Не нашлось» со счётом страниц — всё ещё одно «не нашлось» (#1054): рукописный скан, на
+     * котором движок телефона текста не увидел, уходит к следующему читателю очереди, а не
+     * закрывает вопрос ответом того, кто видит хуже всех. Счёт — о том, как смотрел слабый
+     * читатель, а не о содержимом документа.
+     */
+    @Test fun `скан, на котором слабый читатель не увидел текста, достаётся следующему`() = runTest {
+        val weak = ReadDocumentRealizer(Document(total = 3), Reader { "" }, keeper)
+        val sighted = Reader { page -> "рукопис сторінки $page" }
+        val strong = ReadDocumentRealizer(Document(total = 3), sighted, keeper)
+
+        val read = scan.learned(FallbackRealizer(ReadDocumentCapability.ID, listOf(weak, strong)).perform(scan, null))
+
+        assertEquals("зрячий читатель за слабым не пробовал", listOf(1, 2, 3), sighted.read)
+        assertEquals(InvestigationState.FOUND, stateOf(read))
+        assertEquals(foundInDocumentLabel(1, listOf(2)), read.find("сторінки 2"))
+    }
+
     @Test fun `заход рисует непрочитанное в пределах документа и не больше предела`() {
         assertEquals((1..100).toList(), pagesToDraw(emptySet(), pageCount = 110, atMost = 100))
         assertEquals((101..110).toList(), pagesToDraw((1..100).toSet(), pageCount = 110, atMost = 100))
