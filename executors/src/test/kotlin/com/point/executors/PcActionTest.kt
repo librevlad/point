@@ -96,6 +96,32 @@ class PcActionTest {
         assertEquals("+3806", transport.sentMeta!!["entity.phone"])
     }
 
+    /**
+     * Длинный прочитанный текст едет на компьютер началом — и назван обрезком (#1014): без
+     * пометки компьютер принимал начало за весь текст документа и на слово со страницы 45
+     * отвечал «ничего не нашлось». Читатель в дорогу обязан брать знак сверх предела: по
+     * прочитанному ровно до предела обрыва не видно.
+     */
+    @Test
+    fun `длинный прочитанный текст едет на компьютер началом и назван обрезком`() = runTest {
+        val read = java.io.File.createTempFile("read", ".txt").apply {
+            deleteOnExit()
+            writeText("умови договору ".repeat(10_000))
+        }
+        val transport = FakeTransport()
+
+        PcRealizer(FakeLinks(linked), transport, FileBackedStore)
+            .perform(obj(mapOf(com.point.core.flow.META_OCR_TEXT_REF to read.absolutePath)), null)
+
+        val sent = transport.sentMeta!!
+        assertEquals(com.point.core.flow.READ_TEXT_TRAVEL_LIMIT, sent[com.point.core.flow.META_READ_TEXT]?.length)
+        assertEquals(
+            "обрезок уехал на компьютер без пометки — там его примут за весь документ",
+            com.point.core.flow.READ_TEXT_TRAVEL_LIMIT.toString(),
+            sent[com.point.core.flow.META_OCR_TEXT_CUT],
+        )
+    }
+
     @Test
     fun `отправленное называет место — окно Point и папку Point`() = runTest {
 

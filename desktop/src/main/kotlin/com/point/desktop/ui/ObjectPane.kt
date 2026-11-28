@@ -51,6 +51,10 @@ internal fun ObjectPane(
 ) {
     val journal by state.journal.collectAsState()
     val working by state.working.collectAsState()
+
+    // Вопрос действия — только у того объекта, чьё действие спросило (#1014).
+    val pendingAsk by state.inputAsk.collectAsState()
+    val ask = pendingAsk?.takeIf { it.item.obj.id == item.obj.id }
     val now = rememberNow()
     val zone = remember { ZoneId.systemDefault() }
     val entry = journal.firstOrNull { it.path == item.obj.uri.value }
@@ -122,8 +126,9 @@ internal fun ObjectPane(
                     entry?.let { History(it, verdict.headline, now, zone) }
                     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         Column(if (hasContent) Modifier.width(ACTIONS_WIDTH) else Modifier.widthIn(max = 560.dp)) {
-                            ActionSections(state, item, values, actions, sharedReason, atTop = true)
-                            ActionSections(state, item, rest, actions, sharedReason, atTop = values.isEmpty())
+                            ask?.let { AskPanel(it, state::answerInput, state::dismissInput) }
+                            ActionSections(state, item, values, actions, sharedReason, atTop = ask == null)
+                            ActionSections(state, item, rest, actions, sharedReason, atTop = values.isEmpty() && ask == null)
                         }
                         if (hasContent) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -139,14 +144,15 @@ internal fun ObjectPane(
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     ObjectHead(item, verdict, entry, now, zone, picture, ring = 64.dp)
                     Column {
-                        ActionSections(state, item, values, actions, sharedReason, atTop = true)
+                        ask?.let { AskPanel(it, state::answerInput, state::dismissInput) }
+                        ActionSections(state, item, values, actions, sharedReason, atTop = ask == null)
                         if (hasContent) {
                             Column(
-                                Modifier.padding(top = if (values.isEmpty()) 0.dp else 14.dp),
+                                Modifier.padding(top = if (values.isEmpty() && ask == null) 0.dp else 14.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) { content() }
                         }
-                        ActionSections(state, item, rest, actions, sharedReason, atTop = values.isEmpty() && !hasContent)
+                        ActionSections(state, item, rest, actions, sharedReason, atTop = values.isEmpty() && !hasContent && ask == null)
                     }
                     entry?.let { History(it, verdict.headline, now, zone) }
                 }

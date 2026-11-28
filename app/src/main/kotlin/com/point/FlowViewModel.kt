@@ -849,7 +849,11 @@ class FlowViewModel @Inject constructor(
             requireCloudConsent(about = aboutOf(bubble.title, top)) { openChat(top) }
             return
         }
-        if (bubble.capabilityId == FindCapability.ID) {
+        // Подсветка на странице — только там, где есть слой слов (#1014). Прочитанный скан слоя
+        // не имеет, у него текст: поиск идёт обычным путём действия — исполнитель спрашивает
+        // «что найти», ответ человека запускает его же, и найденное называется словами со
+        // страницами. Прежде тап на таком документе отказывал «страница не прочитана».
+        if (bubble.capabilityId == FindCapability.ID && com.point.core.flow.findShowsOnPage(top)) {
 
             openFind()
             return
@@ -2250,7 +2254,9 @@ class FlowViewModel @Inject constructor(
                     uri = com.point.core.model.ScratchRef(ref),
                     state = com.point.core.model.ObjectState(ObjectKind.TEXT),
                 ),
-                limit = com.point.core.flow.READ_TEXT_TRAVEL_LIMIT,
+
+                // Знак сверх предела — по нему видно, что едет обрезок (#1014).
+                limit = com.point.core.flow.READ_TEXT_TRAVEL_READ,
             )
         }.getOrNull()
         return com.point.core.flow.knowledgePackedForTravel(knowledge, text)

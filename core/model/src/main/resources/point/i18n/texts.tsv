@@ -76,6 +76,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 {0} Ключ сохранён.	{0} Ключ збережено.	{0} Key saved.
 {0} МБ	{0} МБ	{0} MB
 {0} дн. назад	{0} дн. тому	{0} days ago
+{0} и {1}	{0} і {1}	{0} and {1}
+{0} и ещё {1}	{0} і ще {1}	{0} and {1} more
 {0} с телефона{1} не принят — отправьте его с телефона ещё раз	{0} з телефона{1} не прийнято — надішліть його з телефона ще раз	{0} from the phone{1} wasn't taken. Send it from the phone again
 {0} сек	{0} с	{0} sec
 {0} — Point работает на своих	{0} — Point працює на своїх	{0}. Point runs on its own
@@ -86,6 +88,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 {0} — ждёт телефона: выполнится, когда вы его откроете	{0} — чекає на телефон: виконається, коли ви його відкриєте	{0}: waiting for the phone, runs when you open it
 {0} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект	{0} — чекає на телефон: відкрийте на телефоні головний екран Point і заберіть об’єкт	{0}: waiting for the phone. Open Point's home screen on the phone and pick up the item
 {0} — откройте «{1}» на домашнем экране	{0} — відкрийте «{1}» на домашньому екрані	{0}: open “{1}” on the home screen
+{0}. Сюда доехало только начало текста	{0}. Сюди доїхав лише початок тексту	{0}. Only the start of the text reached this device
+{0}. Текст сюда доехал только до страницы {1}	{0}. Текст сюди доїхав лише до сторінки {1}	{0}. The text reached this device only up to page {1}
 {0}: {1} — {2} в настройках	{0}: {1} — {2} у налаштуваннях	{0}: {1}. {2} in settings
 {0}: {1} — попробуйте завтра	{0}: {1} — спробуйте завтра	{0}: {1}. Try tomorrow
 {0}: ключ не задан	{0}: ключ не задано	{0}: no key set
@@ -150,6 +154,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 В коллекции нет изображений для PDF	У наборі немає зображень для PDF	The set has no pictures for a PDF
 В наборе нет картинок — добавьте снимки, и PDF соберётся	У наборі немає картинок — додайте знімки, і PDF збереться	The set has no pictures. Add photos and the PDF will come together
 В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста	У наборі немає сторінок для таблиці — ні знімка, ні PDF, ні тексту	The set has no pages for a table: no picture, PDF or text
+В начале документа ничего не нашлось: дальше текст сюда не доехал	На початку документа нічого не знайшлося: далі текст сюди не доїхав	Nothing found at the start of the document: the rest of the text didn't reach this device
 В области ничего не нашлось	В області нічого не знайшлося	Nothing was found in the area
 В объекте нет ссылки, которую можно открыть	В об’єкті немає посилання, яке можна відкрити	The item has no link to open
 В проверенной части ошибок не нашлось ({0}) — текст оставлен как был	У перевіреній частині помилок не знайшлося ({0}) — текст лишився як був	No mistakes in the checked part ({0}). The text is left as it was
@@ -229,9 +234,11 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Действие не выполнилось — попробуйте ещё раз	Дія не виконалася — спробуйте ще раз	The action didn't run. Try again
 До сервера Point не дозвониться	До сервера Point не додзвонитися	Can't reach the Point server
 До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз.	До сервера Point не додзвонитися. Перевірте інтернет і спробуйте ще раз.	Can't reach the Point server. Check your internet and try again.
+До страницы {0} ничего не нашлось: дальше текст сюда не доехал	До сторінки {0} нічого не знайшлося: далі текст сюди не доїхав	Nothing found up to page {0}: the rest of the text didn't reach this device
 Добавить	Додати	Add
 Добавить в контакты	Додати в контакти	Add to contacts
 Документ	Документ	Document
+Документ ещё не прочитан — искать не в чем	Документ ще не прочитано — шукати нема в чому	The document hasn't been read yet, so there's nothing to search
 Доступ выключен насовсем	Доступ вимкнено назавжди	Access is turned off for good
 Другие способы взять объект	Інші способи взяти об’єкт	Other ways to take an item
 Думаю…	Думаю…	Thinking…
@@ -416,6 +423,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Настройки	Налаштування	Settings
 Настройки не открылись — включите доступ вручную: Приложения → Point → Разрешения	Налаштування не відкрилися — увімкніть доступ вручну: Застосунки → Point → Дозволи	Settings didn't open. Turn on access yourself: Apps → Point → Permissions
 Нашлось {0} {1}	Знайшлося {0} {1}	Found {0} {1}
+Нашлось {0} {1} — на страницах {2}	Знайшлося {0} {1} — на сторінках {2}	Found {0} {1} on pages {2}
+Нашлось {0} {1} — на странице {2}	Знайшлося {0} {1} — на сторінці {2}	Found {0} {1} on page {2}
 Нашёл	Знайшов	Found
 Нашёл · {0}	Знайшов · {0}	Found · {0}
 Нашёл адрес	Знайшов адресу	Found an address
@@ -738,6 +747,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Просьба подождёт здесь и выполнится, когда вы откроете Point на телефоне и заберёте объект. Пока этого не случилось, здесь ничего не изменится.	Прохання почекає тут і виконається, коли ви відкриєте Point на телефоні й заберете об’єкт. Поки цього не сталося, тут нічого не зміниться.	The request will wait here and run when you open Point on the phone and pick up the item. Until then nothing changes here.
 Просьбы компьютера	Прохання комп’ютера	Computer requests
 Прочитал снимок	Прочитав знімок	Read the picture
+Прочитанный текст документа не открылся — искать не в чем	Прочитаний текст документа не відкрився — шукати нема в чому	The document's read text didn't open, so there's nothing to search
 Прочитано начало — {0} из {1} символов. Нажмите «Понять» ещё раз — прочитаю дальше.	Прочитано початок — {0} з {1} символів. Натисніть «Зрозуміти» ще раз — прочитаю далі.	Read the beginning: {0} of {1} characters. Press “Understand” again to read on.
 Прочитано сильнее — текст объекта обновлён	Прочитано ретельніше — текст об’єкта оновлено	Read more thoroughly. The item's text is updated
 Прочитано страниц: {0} из {1} — текст у документа	Прочитано сторінок: {0} з {1} — текст у документа	Pages read: {0} of {1}. The text is with the document
@@ -1336,7 +1346,6 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 прочтения спорят: 	прочитання розходяться: 	readings disagree: 
 пусто	порожньо	empty
 работает на ключе Point	працює на ключі Point	runs on Point's key
-разложите на страницы	розкладіть на сторінки	split it into pages
 раскрыть ›	розгорнути ›	expand ›
 расшифровать	розшифрувати	transcribe
 расшифровку умеют Groq и OpenAI, но не OpenRouter	розшифровувати вміють Groq і OpenAI, але не OpenRouter	Groq and OpenAI can transcribe, OpenRouter can't
@@ -1358,6 +1367,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 слова записи · запись уйдёт в сервис	слова запису · запис піде в сервіс	words of the recording · the recording goes to a service
 смотрели — не нашлось	дивилися — не знайшлося	looked, nothing found
 сначала извлеките текст	спершу витягніть текст	extract the text first
+сначала прочитайте документ	спершу прочитайте документ	read the document first
 сначала распознайте текст	спершу розпізнайте текст	recognise the text first
 снимок	знімок	picture
 спорную ячейку	спірну клітинку	disputed cell

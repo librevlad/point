@@ -85,6 +85,35 @@ class ReadDocumentActionTest {
         assertTrue("страницы потеряны: $text", text.contains("первая") && text.contains("вторая"))
     }
 
+    /**
+     * Где начинается каждая страница — знание того же прочтения (#1014): без него «Найти в
+     * документе» говорило «нашлось три места», но не «где». Пустая страница номеров не сдвигает:
+     * третья страница остаётся третьей, хотя прочитанных перед ней одна.
+     */
+    @Test fun `границы прочитанных страниц ложатся рядом с текстом, а сам текст не меняется`() = runTest {
+        val done = read(3, { "первая" }, { "" }, { "третья" }) as ActionResult.Done
+
+        val found = done.findings!!
+        val text = File(found.metadata.getValue(META_OCR_TEXT_REF)).readText()
+        assertEquals(
+            "склейка страниц, которую читают другие, осталась прежней",
+            listOf("первая", "третья").joinToString("\n\n"),
+            text,
+        )
+        assertEquals(
+            "граница указывает туда, где в тексте начинается своя страница",
+            listOf(PageStart(1, 0), PageStart(3, text.indexOf("третья"))),
+            pageStartsOf(found.metadata),
+        )
+    }
+
+    /** Сорвавшаяся страница тоже просто пропущена: номер следующей — её настоящий номер. */
+    @Test fun `сорвавшаяся страница не сдвигает номера следующих`() = runTest {
+        val done = read(3, { "первая" }, { error("engine init failed") }, { "третья" }) as ActionResult.Done
+
+        assertEquals(listOf(1, 3), pageStartsOf(done.findings!!.metadata).map { it.page })
+    }
+
     /** Страницы прочитаны, текста нет — это ответ на вопрос, а не сбой операции. */
     @Test fun `страницы пусты — это ответ «текста нет», а не сбой чтения`() = runTest {
         val result = read(2, { "" }, { "" })

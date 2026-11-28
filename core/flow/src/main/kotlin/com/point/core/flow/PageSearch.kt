@@ -84,4 +84,4 @@ private const val SEARCH_NOISE = "-–—«»„“”\"'‘’⚠"
 fun foundOnPageLabel(matches: Int): String =
     if (matches == 0) tr("Ничего не нашлось") else tr("Нашлось {0} {1}", matches, placesWord(matches))
 
-private fun placesWord(n: Int): String = trPlural(n, "место", "места", "мест")
+internal fun placesWord(n: Int): String = trPlural(n, "место", "места", "мест")

@@ -15,7 +15,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -33,6 +33,13 @@ import androidx.compose.ui.platform.LocalWindowInfo
  * вернувшийся в поле настроек, обнаруживал, что курсор из поля выдернули и буквы идут мимо.
  * Поэтому фокус просится только тогда, когда его внутри окна не держит никто — ни сам
  * корень, ни поле ввода.
+ *
+ * Первой клавишу слышит поле, в котором человек печатает, а корень — то, что поле не взяло
+ * (находка ревью #1014). Корень слушал её до поля (`onPreviewKeyEvent`), и Ctrl+V — «взять
+ * буфер новым объектом» — съедался раньше, чем поле успевало вставить: в вопрос «Что найти
+ * в документе?» скопированное слово не вставлялось, а Point вместо этого заводил из буфера
+ * новый объект. Поле само забирает только свои клавиши — вставку, выделение, стрелки; Esc и
+ * остальные клавиши окна оно не трогает, и они доходят до корня, как прежде.
  */
 @Composable
 fun Modifier.windowKeys(onKey: (KeyEvent) -> Boolean): Modifier {
@@ -65,5 +72,5 @@ fun Modifier.windowKeys(onKey: (KeyEvent) -> Boolean): Modifier {
                 if (!held) root.requestFocus()
             }
         }
-        .onPreviewKeyEvent(onKey)
+        .onKeyEvent(onKey)
 }

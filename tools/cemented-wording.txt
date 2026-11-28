@@ -116,7 +116,7 @@
 4 core/flow/src/test/kotlin/com/point/core/flow/ExcelLayoutTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
-6 core/flow/src/test/kotlin/com/point/core/flow/FindActionTest.kt
+5 core/flow/src/test/kotlin/com/point/core/flow/FindActionTest.kt
 3 core/flow/src/test/kotlin/com/point/core/flow/FixErrorsRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/HumanSendNameTest.kt
 1 executors/src/test/kotlin/com/point/executors/LongWorkSaysWhatItDoesTest.kt

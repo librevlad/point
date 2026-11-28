@@ -18,11 +18,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SkikoComposeUiTest
@@ -33,6 +36,7 @@ import com.point.core.flow.AccountClient
 import com.point.core.flow.AccountStore
 import com.point.core.flow.BrowserOpener
 import com.point.core.flow.CircleAnswer
+import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.DeviceKeyPair
 import com.point.core.flow.DeviceKeyStore
 import com.point.core.flow.DeviceKind
@@ -62,21 +66,34 @@ fun compactScene(
     account: DesktopAccount = signedInAccount(),
     width: Int = COMPACT_WIDTH,
     height: Int = COMPACT_HEIGHT,
+
+    /**
+     * Буфер, из которого вставляют поля окна; `null` — системный. Тест, где человек вставляет
+     * Ctrl+V, даёт свой: системный буфер принадлежит человеку за этим компьютером.
+     */
+    clipboard: ClipboardManager? = null,
+
+    /** Окно взяло буфер новым объектом (Ctrl+V мимо поля ввода). */
+    onClipboardTaken: (ClipboardPayload) -> Unit = {},
 ): ImageComposeScene = ImageComposeScene(
     width = width,
     height = height,
     density = Density(1f),
 ) {
-    PointDesktopTheme {
-        PointWindow(
-            state = state,
-            config = PcConfig(name = "Компьютер"),
-            account = account,
-            openObject = MutableStateFlow(null),
-            onObjectOpened = {},
-            onHide = onHide,
-        )
+    val window = @Composable {
+        PointDesktopTheme {
+            PointWindow(
+                state = state,
+                config = PcConfig(name = "Компьютер"),
+                account = account,
+                openObject = MutableStateFlow(null),
+                onObjectOpened = {},
+                onHide = onHide,
+                onClipboardTaken = onClipboardTaken,
+            )
+        }
     }
+    if (clipboard == null) window() else CompositionLocalProvider(LocalClipboardManager provides clipboard) { window() }
 }
 
 /**

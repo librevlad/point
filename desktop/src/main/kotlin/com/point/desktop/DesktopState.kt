@@ -648,9 +648,16 @@ class DesktopState(
         item: InboxItem,
         stationTitle: String? = null,
         quiet: Boolean = false,
+
+        /** Ответ человека на вопрос этого же действия ([answerInput]) — или `null` при первом заходе. */
+        amendment: String? = null,
     ): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
         val step = if (stationTitle != null) title else tr("{0} · с телефона", title)
+
+        // Новое действие, нажатое рукой, отменяет вопрос прежнего: ответ на него запустил бы
+        // работу, о которой человек уже не думает.
+        if (stationTitle != null && !quiet) _inputAsk.value = null
 
         // Одна воронка на все входы (#1269): режим проверяется здесь, а не только на пути
         // клика по экрану. Просьба телефона была единственным входом мимо него — человек
@@ -700,7 +707,7 @@ class DesktopState(
                     // Кто добыл знание, знает только этот шов (#1273): исследование видит свой
                     // вопрос, а не того, кем он решён в этот раз. Тот же шов, что у телефона в
                     // `DefaultEnrichment`.
-                    realizer.perform(item.obj, null).knownBy(item.obj, realizer.meta.actor)
+                    realizer.perform(item.obj, amendment).knownBy(item.obj, realizer.meta.actor)
                 }
             }.getOrElse { e ->
 
@@ -755,6 +762,14 @@ class DesktopState(
             result is ActionResult.Done -> result.message
             result is ActionResult.Success -> result.result.metadata["name"] ?: tr("Готово")
             else -> _message.value
+        }
+
+        // Действие, нажатое здесь рукой, спросило человека (ADR-0001 §18, #1014). Прежде вопрос
+        // пропадал молча: «Найти в документе» на компьютере не могло спросить, что искать, и
+        // нажатие не делало ничего. Просьба телефона сюда не попадает — спрашивать её надо там,
+        // где человек, а не на экране компьютера.
+        if (result is ActionResult.NeedsInput && stationTitle != null && !quiet) {
+            _inputAsk.value = InputAsk(item, id, title, result.prompt, result.suggestions)
         }
 
         // Автоматический шаг в «ПУТЬ» не пишется (решение владельца 23.08.2026): журнал —
@@ -1358,6 +1373,43 @@ class DesktopState(
             runCatching { consent?.allow(ask.scope) }
             perform(ask.bubble.capabilityId.value, ask.item, ask.bubble.title)
         }
+    }
+
+    /**
+     * Вопрос, на котором остановилось действие, нажатое на этом компьютере (ADR-0001 §18, #1014).
+     *
+     * Общий для всех действий, а не поиска: спрашивают и «Найти в документе», и «AI», и
+     * «Исправить значение». Ожидание — не исход и не знание: оно живёт здесь, пока человек не
+     * ответит ([answerInput]) или не передумает ([dismissInput]). [title] — каким действием
+     * задан вопрос, [actionId] — его же и запускает ответ.
+     */
+    data class InputAsk(
+        val item: InboxItem,
+        val actionId: String,
+        val title: String,
+        val prompt: String,
+        val suggestions: List<String> = emptyList(),
+    )
+
+    private val _inputAsk = MutableStateFlow<InputAsk?>(null)
+    val inputAsk: StateFlow<InputAsk?> = _inputAsk.asStateFlow()
+
+    /**
+     * Ответ человека запускает то же действие ещё раз — с ответом (ADR-0001 §18), тем же путём,
+     * каким оно было нажато, и над объектом, каким он стал к этой минуте: пока человек думал,
+     * к объекту могло прийти знание. Пустой ответ ничего не запускает — вопрос остаётся.
+     */
+    fun answerInput(text: String) {
+        val ask = _inputAsk.value ?: return
+        if (text.isBlank()) return
+        _inputAsk.value = null
+        val current = _items.value.firstOrNull { it.obj.id == ask.item.obj.id } ?: ask.item
+        scope.launch(io) { perform(ask.actionId, current, ask.title, amendment = text) }
+    }
+
+    /** Человек передумал отвечать: вопрос уходит, действие остаётся доступным, как было. */
+    fun dismissInput() {
+        _inputAsk.value = null
     }
 
     fun declineCloud() {
