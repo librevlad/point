@@ -127,4 +127,50 @@ class PartsBecomeASetTest {
         val set = st.items.value.single { it.obj.state.kind == ObjectKind.COLLECTION }
         assertEquals(1, collectionChildren(set.obj).size)
     }
+
+    /**
+     * Набор, в который легли страницы, — объект, с которым дальше работают, а не витрина
+     * (#1407). Первый шаг с ним — «На телефон», и уехать должны страницы: прежде в очередь
+     * вставал файл-манифест со списком путей этого компьютера, а окно отвечало «Ждёт
+     * телефона». «Открыть» набору не предлагается — как и на телефоне: одного файла у набора
+     * нет, и Windows отвечала «Открыть нечем».
+     */
+    @Test
+    fun `«На телефон» у лёгших страниц отправляет сами страницы по порядку, «Открыть» набору не предлагается`() {
+        val inbox = Inbox(temp.newFolder("inbox-send"))
+        val outbox = Outbox(temp.newFolder("outbox"))
+        val st = DesktopState(
+            DesktopRegistry(setOf(PagesCapability(), PcToPhoneCapability(), PcOpenCapability())),
+            DesktopResolver(
+                setOf(
+                    PagesRealizer(PcPdfRasterizer(dpi = 18f)),
+                    PcToPhoneRealizer(outbox),
+                    PcOpenRealizer({ error("набору нечего открывать одним файлом") }, { }),
+                ),
+            ),
+            clipboard = { },
+            reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
+            landResult = inbox::land,
+        )
+        val document = inbox.addFile(pdfOfPages(3).absolutePath)
+        st.onReceived(document)
+        st.pressAndWait(document, PagesCapability.ID)
+        val set = st.items.value.single { it.obj.state.kind == ObjectKind.COLLECTION }
+
+        val doors = st.bubblesFor(set).map { it.capabilityId.value }
+        assertTrue("набору предложили «Открыть» одним файлом", "pc-open" !in doors)
+        st.pressAndWait(set, CapabilityId(PC_TO_PHONE))
+
+        val sent = outbox.entries().single()
+        assertEquals("телефону уехал не архив страниц", "application/zip", sent.meta["mime"])
+        val pages = collectionChildren(set.obj).map(::File)
+        val shipped = java.util.zip.ZipFile(outbox.file(sent.id)!!).use { zip ->
+            zip.entries().toList().map { it.name to zip.getInputStream(it).readBytes() }
+        }
+        assertEquals("порядок страниц потерялся в дороге", pages.map { it.name }, shipped.map { it.first })
+        assertTrue(
+            "вместо страниц уехало что-то другое",
+            shipped.map { it.second }.zip(pages.map(File::readBytes)).all { (got, page) -> got.contentEquals(page) },
+        )
+    }
 }

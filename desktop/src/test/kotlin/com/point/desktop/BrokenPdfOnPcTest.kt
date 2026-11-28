@@ -160,4 +160,115 @@ class BrokenPdfOnPcTest {
         assertFalse("документ под паролем назван обломком", item.obj.state.has(Feature.UNUSABLE))
         assertNull(item.obj.metadata[META_UNUSABLE_REASON])
     }
+
+    /**
+     * Файл, который сейчас не читается, — не обломок (Конституция §13). Заперт другой программой,
+     * лежит в OneDrive без сети, нет прав — pdfbox отвечает тем же `IOException`, что и на
+     * обломок, а метку «повреждён» в сеансе снять нечем: человек терял двери чтения у целого
+     * документа и получал отказ «С этим файлом нечего делать» на каждой двери наружу.
+     */
+    @Test
+    fun `PDF, который сейчас не читается, повреждённым не объявляется`() {
+        val healthy = realPdf()
+
+        val item = whileUnreadable(healthy) { Inbox(temp.newFolder("inbox")).addFile(healthy.absolutePath) }
+
+        assertEquals(ObjectKind.PDF, item.obj.state.kind)
+        assertFalse("файл, который просто не прочитался, назван обломком", item.obj.state.has(Feature.UNUSABLE))
+        assertNull(item.obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    /** Чтение, сорвавшееся посреди разбора (отвалилась сетевая папка), — тоже про попытку. */
+    @Test
+    fun `чтение, сорвавшееся посреди разбора, приговором файлу не становится`() {
+        val healthy = realPdf()
+        val dropsMidway = PdfBoxText { file ->
+            BreaksAfter(org.apache.pdfbox.io.RandomAccessBufferedFileInputStream(file), healthy.length() + 64)
+        }
+
+        assertNull("сорвавшееся чтение записано поломкой файла", dropsMidway.trouble(healthy))
+        assertNull("целый документ назван обломком", PdfBoxText().trouble(healthy))
+        assertEquals("обломок перестал узнаваться", READER_NOT_DECODED, PdfBoxText().trouble(notAPdf()))
+    }
+
+    /**
+     * Защита сертификатом и защита, которой pdfbox не знает, — тот же целый документ, что и под
+     * паролем: pdfbox называет их голым `IOException`, но поломкой они не становятся. Телефон
+     * такой документ тоже не зовёт повреждённым — его ридер отвечает отказом доступа.
+     */
+    @Test
+    fun `PDF под защитой сертификатом не объявляется повреждённым`() {
+        val item = Inbox(temp.newFolder("inbox")).addFile(protectedBy("Adobe.PubSec", "под-сертификатом").absolutePath)
+
+        assertFalse("документ под сертификатом назван обломком", item.obj.state.has(Feature.UNUSABLE))
+        assertNull(item.obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    @Test
+    fun `PDF под незнакомой защитой не объявляется повреждённым`() {
+        val item = Inbox(temp.newFolder("inbox")).addFile(protectedBy("NoSuchDRM", "под-чужой-защитой").absolutePath)
+
+        assertFalse("документ под чужой защитой назван обломком", item.obj.state.has(Feature.UNUSABLE))
+        assertNull(item.obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    /** Целый документ, объявивший защиту [filter]: ключ `/Encrypt` в трейлере, тело нетронуто. */
+    private fun protectedBy(filter: String, name: String): File {
+        val plain = realPdf("$name-открытый.pdf").readBytes().toString(Charsets.ISO_8859_1)
+        val trailer = plain.lastIndexOf("trailer")
+        val opens = plain.indexOf("<<", trailer)
+        check(trailer >= 0 && opens > trailer) { "у документа не нашёлся трейлер" }
+
+        // Трейлер стоит после таблицы ссылок: вставка в него не сдвигает ни одного адреса.
+        val sealed = plain.substring(0, opens + 2) +
+            "\n/Encrypt << /Filter /$filter /SubFilter /adbe.pkcs7.s4 /V 4 /R 4 /Length 128 >>" +
+            plain.substring(opens + 2)
+        return temp.newFile("$name.pdf").apply { writeBytes(sealed.toByteArray(Charsets.ISO_8859_1)) }
+    }
+
+    /**
+     * Пока идёт [body], файл не читается: на Windows его запирает замок, на остальных — снятое
+     * право чтения. Система, которая не умеет ни того, ни другого, проверку пропускает.
+     */
+    private fun <T> whileUnreadable(file: File, body: () -> T): T {
+        if (file.setReadable(false) && !readable(file)) {
+            try {
+                return body()
+            } finally {
+                file.setReadable(true)
+            }
+        }
+        java.nio.channels.FileChannel.open(
+            file.toPath(),
+            java.nio.file.StandardOpenOption.READ,
+            java.nio.file.StandardOpenOption.WRITE,
+        ).use { channel ->
+            channel.lock().use {
+                org.junit.Assume.assumeFalse("эта система не запирает файл от чтения", readable(file))
+                return body()
+            }
+        }
+    }
+
+    private fun readable(file: File) = runCatching { file.inputStream().use { it.read() } }.isSuccess
+
+    /** Источник байтов, который отдаёт [left] байт и обрывается, как отвалившаяся сетевая папка. */
+    private class BreaksAfter(
+        private val inner: org.apache.pdfbox.io.RandomAccessRead,
+        private var left: Long,
+    ) : org.apache.pdfbox.io.RandomAccessRead by inner {
+
+        private fun took(count: Int): Int {
+            if (count > 0) {
+                left -= count
+                if (left < 0) throw java.io.IOException("The specified network name is no longer available")
+            }
+            return count
+        }
+
+        override fun read(): Int = inner.read().also { if (it >= 0) took(1) }
+        override fun read(b: ByteArray): Int = took(inner.read(b))
+        override fun read(b: ByteArray, offset: Int, length: Int): Int = took(inner.read(b, offset, length))
+        override fun readFully(length: Int): ByteArray = inner.readFully(length).also { took(it.size) }
+    }
 }

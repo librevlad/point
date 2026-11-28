@@ -39,7 +39,12 @@ class PcOpenCapability : Capability {
     override val icon = "open"
     override val meta = CapabilityMeta(priority = 10)
     override fun label(state: ObjectState) = tr("Открыть")
-    override fun accepts(state: ObjectState) = true
+
+    // Набор одним файлом не открывается — как и на телефоне, где «Открыть» набору не
+    // предлагается. Его файл — манифест путей (#1099): Windows отвечала «Открыть нечем», а
+    // телефону, позвавшему «Открыть на компьютере», уезжал путь папки вместо частей. Части
+    // набора открываются каждая своей строкой в его списке.
+    override fun accepts(state: ObjectState) = state.kind != ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state
 }
 

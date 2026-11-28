@@ -1,6 +1,6 @@
 pc-open-link=Открыть в браузере на компьютере	URL				5
 speak=Озвучить	TEXT				8
-pc-open=Открыть на компьютере					10
+pc-open=Открыть на компьютере	IMAGE,TEXT,PDF,ZIP,OFFICE,URL,AUDIO,UNKNOWN				10
 transcribe=Расшифровать	AUDIO				10
 email=Написать письмо				HAS_EMAIL	13
 map=Открыть на карте				HAS_ADDRESS	15

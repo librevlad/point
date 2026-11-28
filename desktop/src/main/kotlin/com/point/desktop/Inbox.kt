@@ -233,3 +233,16 @@ fun collectionChildren(obj: com.point.core.model.PointObject): List<String> =
     else runCatching {
         File(obj.uri.value).readLines().map(String::trim).filter { it.isNotBlank() }
     }.getOrDefault(emptyList())
+
+/**
+ * Части набора, которые лежат на диске, — в порядке набора (#1207): известные порядку — как
+ * он велит, остальные — по имени. Один порядок на всех, кто берёт части набора файлами:
+ * «Объединить в PDF», «Сканировать в PDF» и архив «На телефон».
+ */
+fun collectionFiles(
+    obj: com.point.core.model.PointObject,
+    children: (com.point.core.model.PointObject) -> List<String> = ::collectionChildren,
+): List<File> = com.point.core.flow.inCollectionOrder(
+    children(obj).map(::File).filter(File::isFile),
+    com.point.core.flow.collectionOrder(obj.metadata),
+) { it.name }

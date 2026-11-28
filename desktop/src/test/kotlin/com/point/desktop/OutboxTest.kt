@@ -124,6 +124,35 @@ class OutboxTest {
         )
     }
 
+    /**
+     * Набор, лёгший на компьютере объектом, — манифест путей (#1099), и в очередь вставал сам
+     * манифест: телефон получал вместо страниц список путей этого компьютера. Едут части —
+     * тем же архивом, что набор-папка; тёзки из разных папок не затирают друг друга.
+     */
+    @Test
+    fun `набор-манифест едет архивом своих частей, а не списком путей`() {
+        val box = outbox()
+        val first = File(tmp.root, "почта").apply { mkdirs() }.let { File(it, "скан.jpg").apply { writeText("первый") } }
+        val second = File(tmp.root, "загрузки").apply { mkdirs() }.let { File(it, "скан.jpg").apply { writeText("второй") } }
+        val manifest = File(tmp.root, "Набор.list").apply {
+            writeText(listOf(first.absolutePath, second.absolutePath).joinToString(System.lineSeparator()))
+        }
+        val set = PointObject(
+            "set", COLLECTION_MIME, ScratchRef(manifest.absolutePath), ObjectState(ObjectKind.COLLECTION),
+            metadata = mapOf("name" to "Набор · 2", "collection.size" to "2"),
+        )
+
+        val id = box.add(set)
+
+        val entry = box.entries().single()
+        assertEquals("набор не назван архивом", setArchiveName("Набор · 2"), entry.meta["name"])
+        assertEquals("application/zip", entry.meta["mime"])
+        val partsIn = java.util.zip.ZipFile(box.file(id)!!).use { zip ->
+            zip.entries().toList().map { zip.getInputStream(it).readBytes().toString(Charsets.UTF_8) }
+        }
+        assertEquals("тёзка затёр соседа или вместо частей уехал манифест", listOf("первый", "второй").sorted(), partsIn.sorted())
+    }
+
     /** Пустой набор не притворяется вещью: отказ, и в очереди не остаётся пустышки (#1414). */
     @Test
     fun `пустой набор не встаёт в очередь и не оставляет пустышки`() {
