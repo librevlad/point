@@ -92,6 +92,12 @@ class ReadDocumentRealizer(
                 }
 
                 val read = StringBuilder()
+
+                // Где в склеенном тексте начинается каждая прочитанная страница (#1014): без
+                // этого «Найти в документе» знало, сколько мест нашлось, но не на каких
+                // страницах. Номер — по документу, поэтому пустая или сорвавшаяся страница
+                // просто пропущена, а не сдвигает номера следующих.
+                val starts = mutableListOf<PageStart>()
                 var readable = 0
                 var broken = 0
                 var brokenSaid: String? = null
@@ -107,6 +113,7 @@ class ReadDocumentRealizer(
                     if (text != null && !noTextAnswer(text)) {
                         readable++
                         if (read.isNotEmpty()) read.append("\n\n")
+                        starts += PageStart(page = index + 1, offset = read.length)
                         read.append(text.trim())
                     }
                 }
@@ -129,6 +136,7 @@ class ReadDocumentRealizer(
                         features = setOf(Feature.HAS_TEXT),
                         metadata = mapOf(
                             META_OCR_TEXT_REF to ref,
+                            META_OCR_TEXT_PAGES to pageStartsWire(starts),
                             investigationKey(KnownCapabilities.IMAGE_TEXT) to state.wire,
                         ),
                     ),
