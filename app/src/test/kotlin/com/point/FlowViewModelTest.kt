@@ -6145,6 +6145,96 @@ class FlowViewModelTest {
         assertEquals("Страница ещё не прочитана — искать не в чем", vm.ui.value.message)
         assertEquals(com.point.core.ui.Outcome.FAILED, vm.ui.value.messageOutcome)
     }
+
+    /**
+     * Прочитанный скан ищется на телефоне (#1014, решение владельца 19.08.2026): «Прочитать
+     * документ» положил текст на сам PDF, и тап по «Найти в документе» спрашивает запрос, а
+     * ответ человека запускает поиск по тексту — со страницами. Прежде тот же тап уходил в
+     * подсветку на снимке и отказывал «страница не прочитана»: слоя слов у PDF нет.
+     */
+    @Test fun `в прочитанном скане тап по поиску спрашивает запрос и находит по тексту`() = runTest(dispatcher) {
+        val read = java.io.File.createTempFile("read", ".txt").apply {
+            deleteOnExit()
+            writeText("Договір поставки\n\nОдержувач Іванов")
+        }
+        store.kind = ObjectKind.PDF
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                setOf(Feature.IS_IMAGE_PDF, Feature.HAS_TEXT),
+                mapOf(
+                    com.point.core.flow.META_OCR_TEXT_REF to read.absolutePath,
+                    com.point.core.flow.META_OCR_TEXT_PAGES to "1:0,2:18",
+                ),
+                emptyList(),
+            ),
+        )
+        resolver.realizer = com.point.core.flow.FindRealizer()
+        val vm = vm(
+            caps = mapOf(com.point.core.flow.FindCapability.ID to setOf(Intent.UNDERSTAND)),
+
+            // Предпросмотр здесь не проверяется: сорвавшаяся попытка не объявляет документ
+            // негодным, а пустой ответ подменного отрисовщика объявил бы.
+            pdf = object : com.point.core.flow.PdfRasterizer {
+                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
+                    throw java.io.IOException("No space left on device")
+            },
+        ).apply { actionCeilingMs = null }
+        vm.onShared("uri", "application/pdf"); advanceUntilIdle()
+
+        // Настоящий исполнитель работает на настоящем Dispatchers.IO: ждём его исхода, чередуя
+        // планировщик теста и реальное время, — как в `GraphPipelineIntegrationTest`.
+        fun settle(until: () -> Boolean) {
+            repeat(200) {
+                advanceUntilIdle()
+                if (until()) return
+                Thread.sleep(10)
+            }
+            advanceUntilIdle()
+        }
+
+        vm.onBubble(bubble(id = "find", title = "Найти в документе"))
+        settle { vm.ui.value.inputPrompt != null }
+
+        assertNull("у скана нет слоя слов — подсветке на снимке показывать нечего", vm.ui.value.find)
+        assertNotNull("запрос не спрошен — человеку нечем искать", vm.ui.value.inputPrompt)
+
+        val heard = com.point.core.flow.foundInDocumentLabel(1, listOf(2))
+        vm.submitAmendment("іванов")
+        settle { vm.ui.value.message == heard }
+
+        assertNull(vm.ui.value.inputPrompt)
+        assertEquals("найденное названо со страницей, где оно стоит", heard, vm.ui.value.message)
+    }
+
+    /** У страницы со слоем слов поиск по-прежнему открывается подсветкой, мимо исполнителя. */
+    @Test fun `у страницы со слоем слов тап по поиску открывает подсветку на снимке`() = runTest(dispatcher) {
+        val atoms = java.io.File.createTempFile("atoms", ".tsv").apply {
+            deleteOnExit()
+            writeText(
+                com.point.core.flow.AtomCodec.encode(
+                    com.point.core.flow.AtomLayer(
+                        listOf(com.point.core.flow.Atom("a1", "Іванов", com.point.core.flow.Box(10f, 10f, 80f, 30f))),
+                    ),
+                ),
+            )
+        }
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                setOf(Feature.HAS_WORD_LAYER),
+                mapOf(com.point.core.flow.META_OCR_ATOMS_REF to atoms.absolutePath),
+                emptyList(),
+            ),
+        )
+        val vm = vm(caps = mapOf(com.point.core.flow.FindCapability.ID to setOf(Intent.UNDERSTAND)))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "find", title = "Найти в документе")); advanceUntilIdle()
+
+        assertTrue("поиск ушёл исполнителю, а не на снимок", resolver.performed.isEmpty())
+        assertNull(vm.ui.value.inputPrompt)
+        assertNotNull("подсветка не попросила снимок страницы", noFrames.askedPath)
+    }
 }
 
 private class FakeStore : ObjectStore {
