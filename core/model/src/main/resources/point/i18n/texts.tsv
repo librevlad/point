@@ -75,6 +75,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 {0} Ключ сохранён.	{0} Ключ збережено.	{0} Key saved.
 {0} МБ	{0} МБ	{0} MB
 {0} дн. назад	{0} дн. тому	{0} days ago
+{0} и {1}	{0} і {1}	{0} and {1}
+{0} и ещё {1}	{0} і ще {1}	{0} and {1} more
 {0} с телефона{1} не принят — отправьте его с телефона ещё раз	{0} з телефона{1} не прийнято — надішліть його з телефона ще раз	{0} from the phone{1} wasn't taken. Send it from the phone again
 {0} сек	{0} с	{0} sec
 {0} — Point работает на своих	{0} — Point працює на своїх	{0}. Point runs on its own
@@ -231,6 +233,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Добавить	Додати	Add
 Добавить в контакты	Додати в контакти	Add to contacts
 Документ	Документ	Document
+Документ ещё не прочитан — искать не в чем	Документ ще не прочитано — шукати нема в чому	The document hasn't been read yet, so there's nothing to search
 Доступ выключен насовсем	Доступ вимкнено назавжди	Access is turned off for good
 Другие способы взять объект	Інші способи взяти об’єкт	Other ways to take an item
 Думаю…	Думаю…	Thinking…
@@ -415,6 +418,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Настройки	Налаштування	Settings
 Настройки не открылись — включите доступ вручную: Приложения → Point → Разрешения	Налаштування не відкрилися — увімкніть доступ вручну: Застосунки → Point → Дозволи	Settings didn't open. Turn on access yourself: Apps → Point → Permissions
 Нашлось {0} {1}	Знайшлося {0} {1}	Found {0} {1}
+Нашлось {0} {1} — на страницах {2}	Знайшлося {0} {1} — на сторінках {2}	Found {0} {1} on pages {2}
+Нашлось {0} {1} — на странице {2}	Знайшлося {0} {1} — на сторінці {2}	Found {0} {1} on page {2}
 Нашёл	Знайшов	Found
 Нашёл · {0}	Знайшов · {0}	Found · {0}
 Нашёл адрес	Знайшов адресу	Found an address
@@ -737,6 +742,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Просьба подождёт здесь и выполнится, когда вы откроете Point на телефоне и заберёте объект. Пока этого не случилось, здесь ничего не изменится.	Прохання почекає тут і виконається, коли ви відкриєте Point на телефоні й заберете об’єкт. Поки цього не сталося, тут нічого не зміниться.	The request will wait here and run when you open Point on the phone and pick up the item. Until then nothing changes here.
 Просьбы компьютера	Прохання комп’ютера	Computer requests
 Прочитал снимок	Прочитав знімок	Read the picture
+Прочитанный текст документа не открылся — искать не в чем	Прочитаний текст документа не відкрився — шукати нема в чому	The document's read text didn't open, so there's nothing to search
 Прочитано начало — {0} из {1} символов. Нажмите «Понять» ещё раз — прочитаю дальше.	Прочитано початок — {0} з {1} символів. Натисніть «Зрозуміти» ще раз — прочитаю далі.	Read the beginning: {0} of {1} characters. Press “Understand” again to read on.
 Прочитано сильнее — текст объекта обновлён	Прочитано ретельніше — текст об’єкта оновлено	Read more thoroughly. The item's text is updated
 Прочитано страниц: {0} из {1} — текст у документа	Прочитано сторінок: {0} з {1} — текст у документа	Pages read: {0} of {1}. The text is with the document
@@ -1334,7 +1340,6 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 прочтения спорят: 	прочитання розходяться: 	readings disagree: 
 пусто	порожньо	empty
 работает на ключе Point	працює на ключі Point	runs on Point's key
-разложите на страницы	розкладіть на сторінки	split it into pages
 раскрыть ›	розгорнути ›	expand ›
 расшифровать	розшифрувати	transcribe
 расшифровку умеют Groq и OpenAI, но не OpenRouter	розшифровувати вміють Groq і OpenAI, але не OpenRouter	Groq and OpenAI can transcribe, OpenRouter can't
@@ -1356,6 +1361,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 слова записи · запись уйдёт в сервис	слова запису · запис піде в сервіс	words of the recording · the recording goes to a service
 смотрели — не нашлось	дивилися — не знайшлося	looked, nothing found
 сначала извлеките текст	спершу витягніть текст	extract the text first
+сначала прочитайте документ	спершу прочитайте документ	read the document first
 сначала распознайте текст	спершу розпізнайте текст	recognise the text first
 снимок	знімок	picture
 спорную ячейку	спірну клітинку	disputed cell
