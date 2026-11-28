@@ -203,7 +203,7 @@ object PageVision {
             PageQuads.plausible(it, frame) &&
                 PageQuads.area(it) <= MAX_PAGE_FRACTION * frameArea &&
                 !PageEdges.cutsText(gray, it, scratch) &&
-                PageEdges.edgesOf(gray, small, it, scratch) == PageEdges.Edges.SHEET
+                PageEdges.beyondOf(gray, small, it, scratch) == PageEdges.Beyond.CLEAR
         }
 
         // Светлый стол того же тона, что бумага, сливается с листом в одно пятно (кадр 19:

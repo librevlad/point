@@ -261,17 +261,108 @@ class WholeSheetTest {
         }
     }
 
+    /** Счёт во весь кадр: шапка, таблица в рамке (с закрашенной строкой заголовка), подпись. */
+    private fun invoice(degrees: Double, shadedHeader: Boolean): BufferedImage = canvas(1200, 1600) {
+        color = Color(240, 240, 236)
+        fillRect(0, 0, 1200, 1600)
+        rotate(Math.toRadians(degrees), 600.0, 800.0)
+        color = Color(30, 30, 30)
+        font = Font(Font.SANS_SERIF, Font.BOLD, 30)
+        drawString("СЧЁТ № 4521 от 18.07.2026", 300, 170)
+        font = Font(Font.SANS_SERIF, Font.PLAIN, 22)
+        drawString("Поставщик: ООО Ромашка, ИНН 7701234567", 160, 230)
+        if (shadedHeader) {
+            color = Color(205, 205, 200)
+            fillRect(150, 300, 900, 60)
+        }
+        color = Color.BLACK
+        stroke = java.awt.BasicStroke(3f)
+        drawRect(150, 300, 900, 900)
+        for (i in 1 until 15) drawLine(150, 300 + i * 60, 1050, 300 + i * 60)
+        drawLine(600, 300, 600, 1200)
+        font = Font(Font.SANS_SERIF, Font.PLAIN, 22)
+        for (i in 1 until 15) drawString("Позиция $i · 2 шт · 145,00", 170, 340 + i * 60)
+        drawString("Подпись получателя ________  Иванов И. И.", 160, 1320)
+        drawString("Подпись поставщика ________  Петров П. П.", 160, 1380)
+    }
+
+    @Test
+    fun `рамка таблицы с закрашенной шапкой и снятая с рук — не край листа`() {
+        // Проверка 28.11.2026, второй круг: закрашенная шапка таблицы читалась «другой бумагой»
+        // за краем, а у снятого с рук листа модель углов обводила блок таблицы — и шапка счёта
+        // с подписями терялись.
+        for ((degrees, shaded) in listOf(0.0 to true, 1.5 to false, 3.0 to true)) {
+            val quad = page(invoice(degrees, shaded))?.quad ?: continue
+            assertTrue("потеряна шапка счёта (поворот $degrees°, шапка закрашена: $shaded)", quad.holds(600.0, 170.0))
+            assertTrue("потеряны подписи (поворот $degrees°, шапка закрашена: $shaded)", quad.holds(600.0, 1360.0))
+        }
+    }
+
+    @Test
+    fun `грамота в печатной рамке на светлом столе находится`() {
+        // Проверка 28.11.2026, второй круг: лист с рамкой, напечатанной у края, на столе того же
+        // тона — края листа не видно, и рамка — единственный ответ. За ней пустые поля, текста
+        // она не отрезает, и прежде (до ветки) такой лист находился по рамке.
+        val shot = canvas(1200, 1600) {
+            color = Color(230, 230, 228)
+            fillRect(0, 0, 1200, 1600)
+            color = Color(242, 242, 240)
+            fillPolygon(Polygon(intArrayOf(150, 1060, 1100, 110), intArrayOf(140, 110, 1470, 1500), 4))
+            color = Color(20, 20, 20)
+            stroke = java.awt.BasicStroke(6f)
+            drawPolygon(Polygon(intArrayOf(210, 1000, 1035, 172), intArrayOf(200, 174, 1408, 1436), 4))
+            font = Font(Font.SERIF, Font.BOLD, 48)
+            drawString("ГРАМОТА", 470, 420)
+            font = Font(Font.SERIF, Font.PLAIN, 26)
+            var y = 560
+            while (y < 1200) {
+                drawString("награждается за добросовестный труд", 300, y)
+                y += 60
+            }
+        }
+
+        val quad = page(shot)?.quad
+
+        assertNotNull("лист в рамке на светлом столе не найден — уйдёт кадром целиком", quad)
+        assertTrue("потерялся текст грамоты", quad!!.holds(600.0, 800.0))
+    }
+
+    @Test
+    fun `белый лист на белом столе, снятый близко, не отвергается из-за кромки снимка`() {
+        // Проверка 28.11.2026, второй круг: чёрное за кромкой снимка читалось сплошной чертой
+        // вдоль края, и лист на столе того же тона с узкими полями выходил «рамкой».
+        val shot = canvas(1200, 1600) {
+            color = Color(231, 231, 228)
+            fillRect(0, 0, 1200, 1600)
+            color = Color(242, 242, 240)
+            fillRect(45, 50, 1110, 1500)
+            color = Color(30, 30, 30)
+            font = Font(Font.SANS_SERIF, Font.PLAIN, 24)
+            var y = 160
+            while (y < 1480) {
+                drawString(text, 110, y)
+                y += 40
+            }
+        }
+
+        val quad = page(shot)?.quad ?: return // своим ходом и моделью такой лист может не найтись вовсе
+
+        assertTrue("потерян лист", quad.holds(600.0, 800.0))
+        assertFalse("в страницу вошёл стол", quad.holds(10.0, 10.0))
+    }
+
     @Test
     fun `разлинованный кадр без листа уходит в PDF кадром целиком, а не страницей`() {
         // Проверка 28.11.2026: скан в PDF стал звать общую геометрию «Скана», и кадр, у
         // которого листа нет, а линии есть, уходил в PDF найденной страницей без пометки.
+        // Сетка во весь кадр, до самой кромки: краёв листа на снимке нет нигде.
         val grid = canvas(1200, 1400) {
             color = Color(240, 240, 236)
             fillRect(0, 0, 1200, 1400)
             color = Color(30, 30, 30)
             stroke = java.awt.BasicStroke(3f)
-            for (i in 0..10) drawLine(0, 60 + i * 125, 1200, 60 + i * 125)
-            for (i in 0..7) drawLine(40 + i * 160, 0, 40 + i * 160, 1400)
+            for (i in 0..10) drawLine(0, 3 + i * 139, 1200, 3 + i * 139)
+            for (i in 0..7) drawLine(3 + i * 170, 0, 3 + i * 170, 1400)
         }
 
         val made = onFrame(grid) { rgba, scratch -> PageVision.process(rgba, scratch) != null }
