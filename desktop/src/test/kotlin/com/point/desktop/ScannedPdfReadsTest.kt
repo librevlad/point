@@ -1,7 +1,9 @@
 package com.point.desktop
 
+import com.point.core.flow.GraphState
 import com.point.core.flow.InvestigationState
 import com.point.core.flow.KnownCapabilities
+import com.point.core.flow.META_OCR_TEXT_COVERAGE
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.investigationStateOf
 import com.point.core.model.ActionResult
@@ -94,18 +96,25 @@ class ScannedPdfReadsTest {
         assertEquals(listOf("page-0003.png", "page-0004.png"), File(drawn.dir.value).listFiles().orEmpty().map { it.name }.sorted())
     }
 
-    @Test fun `прочитана часть страниц — вопрос не закрыт находкой целиком`() = runBlocking {
+    /**
+     * Чистый лист прочитан: текста на нём нет — это ответ, а не непрочитанная страница (карточка
+     * «Не отвечать «Ничего не нашлось» по скану, прочитанному не целиком»). Прежде здесь стояло
+     * обратное — «часть страниц прочитана, вопрос не закрыт», — и скан с чистой страницей
+     * навсегда оставался «прочитанным не целиком», неотличимо от недочитанного.
+     */
+    @Test fun `чистая страница прочитана — документ прочитан целиком`() = runBlocking {
         var page = 0
         val realizer = pcReadDocumentRealizer(readPage = {
             page++
             if (page == 1) "только первая" else ""
         })
 
-        val found = (realizer.perform(scannedPdf(pages = 2), null) as ActionResult.Done).findings!!
+        val done = realizer.perform(scannedPdf(pages = 2), null) as ActionResult.Done
 
+        assertTrue("чистая страница посчитана непрочитанной: ${done.message}", "2 из 2" in done.message)
         assertEquals(
-            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
-            investigationStateOf(found.metadata, KnownCapabilities.IMAGE_TEXT),
+            InvestigationState.FOUND,
+            investigationStateOf(done.findings!!.metadata, KnownCapabilities.IMAGE_TEXT),
         )
     }
 
@@ -182,9 +191,11 @@ class ScannedPdfReadsTest {
         )
     }
 
-    @Test fun `пометка сервиса «текста нет» на странице — страница не прочитана, отписка в текст не идёт`() = runBlocking {
+    @Test fun `пометка сервиса «текста нет» на странице — страница пустая, отписка в текст не идёт`() = runBlocking {
         // Тот же сервис, что у снимка, на пустой странице отвечает не пустотой, а пометкой
-        // (#1054): без сторожа она уходила в текст документа и шла в счёт прочитанных.
+        // (#1054): без сторожа она уходила в текст документа и шла в счёт страниц с текстом.
+        // Сервис посмотрел страницу и текста не увидел — она просмотрена, как чистый лист
+        // (карточка «Не отвечать «Ничего не нашлось» по скану, прочитанному не целиком»).
         var page = 0
         val realizer = pcReadDocumentRealizer(readPage = {
             page++
@@ -196,7 +207,7 @@ class ScannedPdfReadsTest {
         val text = File(found.metadata.getValue(META_OCR_TEXT_REF)).readText()
         assertTrue("отписка ушла в текст документа", "No text detected" !in text)
         assertEquals(
-            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            InvestigationState.FOUND,
             investigationStateOf(found.metadata, KnownCapabilities.IMAGE_TEXT),
         )
     }
@@ -235,6 +246,27 @@ class ScannedPdfReadsTest {
         assertTrue(cap.accepts(ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF))))
         assertTrue(!cap.accepts(ObjectState(ObjectKind.PDF)))
         assertTrue(!cap.accepts(ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF, Feature.HAS_TEXT))))
+    }
+
+    /**
+     * Прочитанный не целиком скан дверь чтения не теряет (карточка «Не отвечать «Ничего не
+     * нашлось» по скану, прочитанному не целиком»): текст у него уже есть, но счёт страниц
+     * говорит, что прочитаны не все.
+     */
+    @Test fun `у недочитанного скана дверь чтения остаётся, у дочитанного — нет`() {
+        val cap = pcReadDocument()
+        val read = PointObject(
+            "pdf",
+            "application/pdf",
+            ScratchRef("/skan.pdf"),
+            ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF, Feature.HAS_TEXT)),
+        )
+
+        assertTrue(
+            "после отказа сервиса на половине страниц дочитать нечем",
+            cap.accepts(GraphState(read.copy(metadata = mapOf(META_OCR_TEXT_COVERAGE to "1-50/100")))),
+        )
+        assertTrue(!cap.accepts(GraphState(read.copy(metadata = mapOf(META_OCR_TEXT_COVERAGE to "1-100/100")))))
     }
 
     private var server: HttpServer? = null

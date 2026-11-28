@@ -163,7 +163,9 @@ class ReadDocumentActionTest {
      * Скан на 150 страниц: телефон рисует первые сто. Прежде человек читал «Прочитано
      * страниц: 100 из 100», вопрос чтения закрывался «найдено», а текст пятидесяти страниц
      * пропадал молча. Теперь назван настоящий счёт и место, где чтение остановилось, а вопрос
-     * остаётся «исследовано недостаточно».
+     * остаётся «исследовано недостаточно». И названо, чем продолжить: хвост читает следующий
+     * заход той же двери (карточка «Не отвечать «Ничего не нашлось» по скану, прочитанному не
+     * целиком»), а не «Point дальше не читает».
      */
     @Test fun `длинный скан — сказано, сколько прочитано из скольких, и вопрос чтения не закрыт`() = runTest {
         val done = ReadDocumentRealizer(rasterizer(pages = 100, total = 150), reads({ "строка" }), keeper)
@@ -171,7 +173,11 @@ class ReadDocumentActionTest {
 
         assertTrue("счёт документа потерян: ${done.message}", "100 из 150" in done.message)
         assertTrue("срез выдан за конец документа: ${done.message}", "100 из 100" !in done.message)
-        assertTrue("не сказано, где чтение остановилось: ${done.message}", "дальше 100-й страницы" in done.message)
+        assertTrue("не сказано, где чтение остановилось: ${done.message}", "100-й" in done.message)
+        assertTrue(
+            "не сказано, чем дочитать хвост: ${done.message}",
+            ReadDocumentCapability().label(GraphState(document.copy(metadata = done.findings!!.metadata))) in done.message,
+        )
         assertEquals(
             InvestigationState.INSUFFICIENTLY_INVESTIGATED,
             investigationStateOf(done.findings!!.metadata, KnownCapabilities.IMAGE_TEXT),
