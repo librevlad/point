@@ -257,6 +257,57 @@ class PartlyReadScanTest {
         assertEquals(foundInDocumentLabel(1, listOf(cutAt + 5)), whole.find("Сторінка ${cutAt + 5}."))
     }
 
+    /** Читатель телефона: о срыве он не бросает, а говорит слоем — пустым и с пометкой `incomplete`. */
+    private class LayerReader(private val say: (Int) -> AtomLayer) : AtomRecognizer {
+        val read = mutableListOf<Int>()
+
+        override suspend fun read(obj: PointObject): AtomLayer {
+            val page = Regex("""page-(\d+)""").find(File(obj.uri.value).name)!!.groupValues[1].toInt()
+            read += page
+            return say(page)
+        }
+    }
+
+    /**
+     * Не завёлся движок, кончилась память, вышло время — страница не просмотрена, и чистым листом
+     * она не считается («пусто и оборвано» — не «текста нет», ADR-0001 §9). Иначе скан выходил
+     * «3 из 3» и «найдено», дверь «Дочитать» закрывалась, а слово со страницы, до которой движок
+     * не дошёл, искалось в ответ «Ничего не нашлось».
+     */
+    @Test fun `страница, до которой движок телефона не дошёл, не считается чистым листом`() = runTest {
+        var outOfMemory = true
+        val texts = mapOf(1 to "перша сторінка", 2 to "друга сторінка", 3 to "третя сторінка")
+        val reader = LayerReader { page ->
+            if (page == 2 && outOfMemory) {
+                AtomLayer(emptyList(), incomplete = "error: OutOfMemoryError")
+            } else {
+                AtomLayer(emptyList(), readerText = texts.getValue(page))
+            }
+        }
+        val realizer = ReadDocumentRealizer(Document(total = 3), reader, keeper)
+
+        val done = realizer.perform(scan, null) as ActionResult.Done
+        val read = scan.learned(done)
+
+        assertFalse("сорвавшаяся страница посчитана прочитанной: ${done.message}", "3 из 3" in done.message)
+        assertEquals(InvestigationState.INSUFFICIENTLY_INVESTIGATED, stateOf(read))
+        assertEquals("сорвавшаяся страница посчитана прочитанной", setOf(1, 3), pageCoverageOf(read.metadata)!!.pages)
+        assertTrue("после срыва движка дочитать нечем", door.accepts(GraphState(read)))
+        assertNotEquals(
+            "по слову со страницы, до которой движок не дошёл, сказано «ничего не нашлось»",
+            foundOnPageLabel(0),
+            read.find("друга"),
+        )
+
+        outOfMemory = false
+        reader.read.clear()
+        val whole = read.learned(realizer.perform(read, null))
+
+        assertEquals("дочитывание перечитало прочитанное", listOf(2), reader.read)
+        assertEquals(InvestigationState.FOUND, stateOf(whole))
+        assertEquals(foundInDocumentLabel(1, listOf(2)), whole.find("друга"))
+    }
+
     /**
      * Страница, на которой читатель срывается каждый раз, не держит на себе дочитывание: сотня
      * телефона — сотня непрочитанных страниц, а не сотня подряд от сорванной. Прежде скан на 250

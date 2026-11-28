@@ -154,7 +154,7 @@ class ReadDocumentRealizer(
                     // говорил «из 100», хотя страниц в документе 110.
                     reportStage(tr("Читаю страницу {0} из {1}", number, total))
                     val text = runCatching {
-                        recognizer.recognize(input.copy(mime = "image/png", uri = ScratchRef(page.absolutePath)))
+                        pageText(input.copy(mime = "image/png", uri = ScratchRef(page.absolutePath)))
                     }.getOrElse { trouble ->
                         broken++
                         brokenSaid = brokenSaid ?: (ownWordsOf(trouble) ?: readerFailure(trouble.message, ObjectKind.PDF))
@@ -203,6 +203,31 @@ class ReadDocumentRealizer(
                 ActionResult.Failure(ownWordsOf(it) ?: readerFailure(it.message, ObjectKind.PDF), recoverable = true)
             }
         }
+
+    /**
+     * Текст страницы — или срыв, если читатель до страницы не дошёл.
+     *
+     * Читатель телефона о срыве не бросает, а говорит слоем: не завёлся движок, кончилась
+     * память, вышло время — и слой приходит пустым с пометкой `incomplete`. Через голый
+     * `recognize` такой слой доезжал пустой строкой, неотличимой от чистого листа, и с тех пор,
+     * как пустая страница считается просмотренной, страница, до которой движок не дошёл, молча
+     * ложилась в счёт прочитанных: «3 из 3», «найдено», дверь «Дочитать» закрыта, а поиск по
+     * слову с неё отвечал «Ничего не нашлось» — тот самый ложный ответ, ради которого счёт и
+     * заведён. «Пусто и оборвано» — не «текста нет», а «не смогли посмотреть» (ADR-0001 §9) —
+     * то же правило, что у чтения снимка (`OcrInvestigation`).
+     *
+     * Слова — про этот заход, а не про файл человека: страницу нарисовали мы сами, и «не
+     * разобралась» у её картинки — не приговор документу, который только что открылся (#1258).
+     */
+    private suspend fun pageText(page: PointObject): String {
+        val layered = recognizer as? AtomRecognizer ?: return recognizer.recognize(page)
+        val layer = layered.read(page)
+        val trouble = layer.incomplete
+        if (trouble != null && layer.atoms.isEmpty() && layer.text.isBlank()) {
+            ownWords(readerFailure(trouble, ObjectKind.PDF).takeUnless { readerFailureIsFatal(trouble) } ?: READ_NOT_NOW)
+        }
+        return layer.text
+    }
 
     /**
      * Текст документа из текстов страниц — в порядке страниц, а не заходов: дочитанная вторая
