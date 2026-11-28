@@ -352,6 +352,10 @@ fun main(args: Array<String>) {
         linked = { linked() },
 
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
+
+        // Результат действия — файл или набор частей («Страницы», «Слайды»): оба становятся
+        // объектом ленты (#1407), набор — тем же манифестом, что и пачка брошенных файлов.
+        landResult = inbox::land,
         consent = FileConsent(File(pointDir, "consent")),
 
         // Своего ключа нет, а проба доступна — вопрос о согласии называет её (#477), как на телефоне.

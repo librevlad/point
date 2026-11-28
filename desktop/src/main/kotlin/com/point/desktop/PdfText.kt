@@ -1,5 +1,7 @@
 package com.point.desktop
 
+import com.point.core.flow.READER_NOT_DECODED
+import com.point.core.flow.readerFailureIsFatal
 import java.io.File
 
 /**
@@ -12,6 +14,20 @@ fun interface PdfText {
 
     /** `null` — прочитать не вышло; пустая строка — текстового слоя нет (скан). */
     fun of(file: File): String?
+
+    /**
+     * Почему файл не открылся как PDF — техническим сигналом ридера ([READER_NOT_DECODED]),
+     * или `null`: файл открывается, или беда не в нём самом (пароль, нехватка памяти).
+     *
+     * Отдельный вопрос, а не второй смысл `null` у [of]: «прочитать не вышло» там — и пароль,
+     * и сорвавшееся извлечение, и обломок вместо документа. Негодным объявляется только
+     * последний: сорвавшаяся попытка знанием не является (Конституция §13), и объект, о котором
+     * ничего не узнали, дверей чтения не теряет.
+     *
+     * По умолчанию — молчание: кто не умеет отличить поломку файла от неудачной попытки, тот
+     * никого негодным и не объявляет.
+     */
+    fun trouble(file: File): String? = null
 }
 
 class PdfBoxText : PdfText {
@@ -21,6 +37,26 @@ class PdfBoxText : PdfText {
             org.apache.pdfbox.text.PDFTextStripper().getText(document).trim()
         }
     }.getOrNull()
+
+    /**
+     * Сигнал называет тот, кто видел неразобранные байты (#1258): разбор pdfbox, бросивший
+     * `IOException`, — это и есть «байты не разобрались в документ». Пароль — тоже
+     * `IOException`, но про доступ, а не про файл: такой документ цел, его просто нельзя
+     * открыть без ключа. Пропавший файл и нехватка памяти — про попытку здесь и сейчас.
+     */
+    override fun trouble(file: File): String? {
+        if (!file.isFile) return null
+        return try {
+            org.apache.pdfbox.pdmodel.PDDocument.load(file).close()
+            null
+        } catch (locked: org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException) {
+            null
+        } catch (unparsed: java.io.IOException) {
+            READER_NOT_DECODED
+        } catch (attempt: Throwable) {
+            null
+        }
+    }
 }
 
 /**
@@ -41,6 +77,29 @@ class PdfBoxText : PdfText {
  * дальше приём отвечал «не скан», рисовалась быстрая дверь, а «Извлечь текст» по нажатию
  * отказывало и звало «Прочитать документ» — дверь, которой рядом не было. Телефон здесь тоже
  * читает слой целиком: одно правило значит и одну улику.
+ *
+ * Судится уже прочитанный слой ([PdfText.of]), а не файл: приём читает документ один раз, и
+ * то же чтение отвечает, не обломок ли это вместо PDF ([brokenPdf]). Не прочитанный слой
+ * (`null`) сканом не считается — «не прочиталось» не равно «текста нет».
  */
-fun looksScanned(pdf: PdfText, file: File): Boolean =
-    com.point.core.flow.pdfLayerUnusable(pdf.of(file))
+fun looksScanned(layer: String?): Boolean = com.point.core.flow.pdfLayerUnusable(layer)
+
+/**
+ * PDF, который не открывается как PDF вовсе, — негоден, и это знание о самом файле.
+ *
+ * Прежде компьютер такой файл не узнавал: обломок давал `null` вместо слоя, а `null` — не
+ * скан, и человеку предлагались все двери PDF подряд. Каждая потом отказывала своими словами,
+ * и все мимо: «Извлечь текст» винило компьютер («Компьютер не смог открыть этот PDF»), «В Word»
+ * советовало распознать скан. Телефон тот же файл называет повреждённым и двери чтения ему не
+ * предлагает (`notePreviewFailure` → `offeredWhenUnfit`).
+ *
+ * Правило здесь то же самое, а не похожее: приговор выносит [readerFailureIsFatal], слова
+ * произносит `readerFailure` — тот же словарь, что у телефона. Своего разбора поломки у
+ * компьютера нет. Спрашивается только у PDF, чей слой [PdfText.of] не достал: у здорового
+ * документа второго чтения не бывает.
+ *
+ * Ответ — технический сигнал, а не слова: метку кладёт приём, и слова ей даёт `readerFailure`
+ * в момент записи, как требует `UnfitReasonIsOurOwnWordsTest`.
+ */
+fun brokenPdf(pdf: PdfText, file: File): String? =
+    pdf.trouble(file)?.takeIf(::readerFailureIsFatal)

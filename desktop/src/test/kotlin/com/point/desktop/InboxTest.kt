@@ -76,9 +76,13 @@ class InboxTest {
         assertFalse(reason?.contains("error", ignoreCase = true) == true)
     }
 
+    /**
+     * Содержимое здесь — настоящее: один байт под именем `.pdf` теперь честно назван обломком
+     * (`BrokenPdfOnPcTest`), а этот тест — про то, что непустой годный файл метки не получает.
+     */
     @Test
     fun `файл с содержимым на компьютере не несёт пометки негодности`() {
-        val f = tmp.newFile("local.pdf").apply { writeBytes(byteArrayOf(1)) }
+        val f = tmp.newFile("local.txt").apply { writeText("Накладная 4512 — завтра") }
         val item = Inbox(tmp.root).addFile(f.absolutePath)
 
         assertFalse(item.obj.state.has(Feature.UNUSABLE))

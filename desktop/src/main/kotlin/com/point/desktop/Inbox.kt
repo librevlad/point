@@ -4,6 +4,7 @@ import com.point.core.flow.EMPTY_FILE_REASON
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.knowingAddress
+import com.point.core.flow.readerFailure
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -81,6 +82,47 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
      */
     fun addFiles(paths: List<String>): InboxItem {
         require(paths.size > 1) { "набор — это больше одного файла" }
+        return collection(paths)
+    }
+
+    /**
+     * Сделанное действием ложится объектом (#1407): файл — собой, набор частей — тем же
+     * объектом-коллекцией с манифестом, что и пачка брошенных файлов (#1099).
+     *
+     * «Страницы» и «Слайды» — общие с телефоном действия, и результат у них набор: папка, в
+     * которой лежат части. Компьютер принимал результат только файлом, папку молча
+     * выбрасывал — и человек получал «Готово» без единой страницы. Второго вида набора здесь
+     * не заводится: части встают в манифест в порядке набора (`collection.order`, #1207), и
+     * этот же порядок остаётся знанием набора — его читают «Объединить в PDF» и «Сканировать
+     * в PDF».
+     *
+     * Набор из одной части — всё равно набор: действие обещало набор (`produces`), и
+     * однострочный PDF разобран на страницы так же честно, как толстый. Пустая папка
+     * объектом не становится — входить в ней не во что.
+     */
+    fun land(made: com.point.core.model.ResultObject): InboxItem? {
+        val where = File(made.uri.value)
+        return when {
+            where.isFile -> addFile(where.absolutePath)
+            where.isDirectory -> partsOf(where, made.metadata)
+            else -> null
+        }
+    }
+
+    private fun partsOf(set: File, known: Map<String, String>): InboxItem? {
+        val parts = set.walkTopDown().filter(File::isFile).toList()
+        if (parts.isEmpty()) return null
+        val order = com.point.core.flow.collectionOrder(known)
+        val ordered = com.point.core.flow.inCollectionOrder(parts, order) { it.relativeTo(set).invariantSeparatorsPath }
+        return collection(
+            ordered.map(File::getAbsolutePath),
+            name = known["name"]?.takeIf { it.isNotBlank() },
+            order = known[com.point.core.flow.META_COLLECTION_ORDER],
+        )
+    }
+
+    /** Один вид набора на всё, что им становится (#1099): манифест путей и объект-коллекция. */
+    private fun collection(paths: List<String>, name: String? = null, order: String? = null): InboxItem {
         dir.mkdirs()
         val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), tr("Набор.list"))
         val manifest = File(dir, safe)
@@ -91,10 +133,11 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
                 mime = COLLECTION_MIME,
                 uri = com.point.core.model.ScratchRef(manifest.absolutePath),
                 state = com.point.core.model.ObjectState(com.point.core.model.ObjectKind.COLLECTION),
-                metadata = mapOf(
-                    "name" to tr("Набор · ") + paths.size,
+                metadata = listOfNotNull(
+                    "name" to (name ?: (tr("Набор · ") + paths.size)),
                     "collection.size" to paths.size.toString(),
-                ),
+                    order?.let { com.point.core.flow.META_COLLECTION_ORDER to it },
+                ).toMap(),
             ),
         )
     }
@@ -134,18 +177,27 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         // Скан узнаётся при приёме (#631): своего цикла обогащения у компьютера нет, а знать
         // про текстовый слой нужно раньше, чем человек увидит двери, — иначе «Извлечь текст»
         // на снимках страниц заканчивается пустотой вместо честного отсутствия двери.
-        val state = if (classified.kind == ObjectKind.PDF && looksScanned(pdf, file)) {
-            classified.with(Feature.IS_IMAGE_PDF)
-        } else {
-            classified
+        //
+        // Тем же чтением узнаётся и обломок вместо документа: слой не достался — и только
+        // тогда спрашивается, открывается ли файл как PDF вообще (`brokenPdf`). Пустой файл
+        // уже назван пустым и второй причины не получает — как и на телефоне, уже отмеченный
+        // объект не переотмечается.
+        val readsAsPdf = classified.kind == ObjectKind.PDF && !classified.has(Feature.UNUSABLE)
+        val layer = if (readsAsPdf) pdf.of(file) else null
+        val broken = if (readsAsPdf && layer == null) brokenPdf(pdf, file) else null
+        val state = when {
+            broken != null -> classified.with(Feature.UNUSABLE)
+            looksScanned(layer) -> classified.with(Feature.IS_IMAGE_PDF)
+            else -> classified
         }
 
         // Годность — часть состояния объекта (#684): та же пустота, что и на телефоне,
-        // называет себя здесь же, а не только в Feature без объяснения человеку.
-        val withFitness = if (state.has(Feature.UNUSABLE)) {
-            meta + (META_UNUSABLE_REASON to EMPTY_FILE_REASON)
-        } else {
-            meta
+        // называет себя здесь же, а не только в Feature без объяснения человеку. Повреждённый
+        // PDF называет себя словами телефона — их произносит один словарь ридера.
+        val withFitness = when {
+            broken != null -> meta + (META_UNUSABLE_REASON to readerFailure(broken, ObjectKind.PDF))
+            state.has(Feature.UNUSABLE) -> meta + (META_UNUSABLE_REASON to EMPTY_FILE_REASON)
+            else -> meta
         }
 
         // Прочитанное на телефоне приезжает значением и здесь снова становится знанием

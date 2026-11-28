@@ -52,13 +52,23 @@ class WordRealizer(
                     }
                     else -> ""
                 }
-                if (text.isBlank()) {
-                    ActionResult.Failure(tr("Нет текста (возможно, это скан — сначала распознайте текст)"), recoverable = true)
-                } else {
-                    reportStage(tr("Собираю документ"))
-                    ActionResult.Success(
-                        ResultObject(ObjectKind.OFFICE, DOCX_MIME, docx.write(toParagraphs(text)), mapOf("op" to "to-word")),
-                    )
+                // Негодный файл называет свою причину, а не гадает про скан (#994, #1101): у
+                // обломка PDF текста нет не потому, что это снимок страниц, и совет «сначала
+                // распознайте» звал к двери, которой у него уже нет. Слова — те же, что у метки
+                // на экране; сорвавшаяся попытка (`saidFailureIsFatal` — «нет») их не даёт.
+                val unfit = GraphState(input).unusableReason()?.takeIf(::saidFailureIsFatal)
+                when {
+                    text.isNotBlank() -> {
+                        reportStage(tr("Собираю документ"))
+                        ActionResult.Success(
+                            ResultObject(ObjectKind.OFFICE, DOCX_MIME, docx.write(toParagraphs(text)), mapOf("op" to "to-word")),
+                        )
+                    }
+
+                    unfit != null -> ActionResult.Failure(unfit, recoverable = false)
+
+                    else ->
+                        ActionResult.Failure(tr("Нет текста (возможно, это скан — сначала распознайте текст)"), recoverable = true)
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: tr("Не удалось создать документ"), recoverable = true) }
         }
