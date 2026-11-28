@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import com.point.core.flow.ALL_PAGES
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.READER_NO_PAGES
@@ -24,9 +23,9 @@ class PdfRendererRasterizer @Inject constructor(
     private val store: ObjectStore,
 ) : PdfRasterizer {
 
-    override suspend fun rasterize(obj: PointObject): RasterizedPages = rasterize(obj, ALL_PAGES)
+    override suspend fun rasterize(obj: PointObject): RasterizedPages = rasterize(obj, except = emptySet())
 
-    override suspend fun rasterize(obj: PointObject, pages: IntRange): RasterizedPages = withContext(Dispatchers.IO) {
+    override suspend fun rasterize(obj: PointObject, except: Set<Int>): RasterizedPages = withContext(Dispatchers.IO) {
         val src = File(obj.uri.value)
 
         ParcelFileDescriptor.open(src, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
@@ -43,12 +42,12 @@ class PdfRendererRasterizer @Inject constructor(
                 // Но срез не молчит: настоящий счёт страниц уходит дальше вместе с папкой, и
                 // чтение говорит человеку «100 из 150», а не «100 из 100» — непрочитанный хвост
                 // не выдаётся за конец документа (см. PdfRasterizer.rasterize). И срез больше не
-                // навсегда: заход начинается с той страницы, которую просят, и следующее чтение
+                // навсегда: заход рисует сотню ещё не прочитанных страниц, и следующее чтение
                 // рисует хвост (карточка «Не отвечать «Ничего не нашлось» по скану, прочитанному
                 // не целиком»).
-                val drawn = pagesToDraw(pages, renderer.pageCount, MAX_PAGES)
-                if (drawn.last < minOf(pages.last, renderer.pageCount)) {
-                    Log.w(TAG, "PDF has ${renderer.pageCount} pages; rasterising pages ${drawn.first}-${drawn.last}")
+                val drawn = pagesToDraw(except, renderer.pageCount, MAX_PAGES)
+                if (drawn.size == MAX_PAGES && drawn.last() < renderer.pageCount) {
+                    Log.w(TAG, "PDF has ${renderer.pageCount} pages; rasterising ${drawn.size} up to page ${drawn.last()}")
                 }
                 for (number in drawn) {
                     val page = renderer.openPage(number - 1)
@@ -68,7 +67,7 @@ class PdfRendererRasterizer @Inject constructor(
                         page.close()
                     }
                 }
-                RasterizedPages(ScratchRef(dir.absolutePath), total = renderer.pageCount, first = drawn.first)
+                RasterizedPages(ScratchRef(dir.absolutePath), total = renderer.pageCount, numbers = drawn)
             } finally {
                 renderer.close()
             }

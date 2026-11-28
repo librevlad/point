@@ -160,23 +160,22 @@ fun pageCoverageOf(metadata: Map<String, String>): PageCoverage? {
     return PageCoverage(pages, total)
 }
 
-/** Все страницы документа — просьба к растеризатору без предела. */
-val ALL_PAGES: IntRange = 1..Int.MAX_VALUE
-
 /**
- * Какие страницы рисовать за один заход: просимые [wanted] в пределах документа на [pageCount]
- * страниц — и не больше [atMost] подряд, считая с первой просимой.
+ * Какие страницы рисовать за один заход: страницы документа на [pageCount] страниц, кроме уже
+ * прочитанных [except], по порядку — и не больше [atMost].
  *
  * Одно правило на телефон и компьютер: телефон бережёт память и время и рисует за заход не
  * больше сотни, компьютер — сколько попросили. Заход начинается с первой непросмотренной
  * страницы, а не с первой страницы документа: иначе длинный скан читался бы с начала каждый раз
  * и до хвоста не доходил никогда.
+ *
+ * Сотня — сотня непрочитанных, а не сотня подряд: страница, на которой читатель срывается
+ * каждый раз, занимает в заходе одно место, а не держит на себе начало окна. Иначе скан на 250
+ * страниц с вечно сорванной третьей рисовал бы 3–102 снова и снова, и страницы после 102-й не
+ * читались бы никогда.
  */
-fun pagesToDraw(wanted: IntRange, pageCount: Int, atMost: Int = Int.MAX_VALUE): IntRange {
-    val from = maxOf(1, wanted.first)
-    val last = minOf(wanted.last.toLong(), pageCount.toLong(), from.toLong() + atMost - 1).toInt()
-    return from..last
-}
+fun pagesToDraw(except: Set<Int>, pageCount: Int, atMost: Int = Int.MAX_VALUE): List<Int> =
+    (1..pageCount).asSequence().filter { it !in except }.take(atMost).toList()
 
 /**
  * Чтение документа начато и до конца не доведено: часть страниц просмотрена, часть — нет.
@@ -203,19 +202,10 @@ internal const val PAGE_BREAK = "\n\n"
  * Что уже прочитано у документа здесь — с чего продолжать следующий заход.
  *
  * @param texts текст каждой страницы, на которой он есть, — по номеру страницы в документе
- * @param covered какие страницы здесь просмотрены: с текстом и пустые
- * @param total сколько страниц в документе; `0` — неизвестно (прочтение до счёта страниц)
+ * @param covered какие страницы здесь просмотрены: с текстом и пустые — их следующий заход не
+ * рисует и не читает
  */
-internal class ReadSoFar(val texts: Map<Int, String>, val covered: Set<Int>, val total: Int) {
-
-    /** Какие страницы просить у растеризатора: от первой непросмотренной до последней. */
-    val next: IntRange
-        get() {
-            val first = generateSequence(1) { it + 1 }.first { it !in covered }
-            val last = if (total > 0) (total downTo 1).firstOrNull { it !in covered } ?: first else Int.MAX_VALUE
-            return first..last
-        }
-}
+internal class ReadSoFar(val texts: Map<Int, String>, val covered: Set<Int>)
 
 /**
  * Прочитанное раньше, разложенное обратно по страницам, — или `null`, если продолжать нечего и
@@ -251,5 +241,5 @@ internal fun readSoFar(metadata: Map<String, String>, text: String?): ReadSoFar?
 
     val lost = starts.map { it.page }.toSet() - texts.keys
     val covered = (coverage?.pages ?: texts.keys) - lost
-    return ReadSoFar(texts, covered, coverage?.total ?: 0)
+    return ReadSoFar(texts, covered)
 }

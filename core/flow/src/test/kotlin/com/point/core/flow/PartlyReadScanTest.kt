@@ -32,16 +32,15 @@ class PartlyReadScanTest {
      * больше [atMost] страниц за заход. Имена файлов — настоящие номера страниц.
      */
     private class Document(private val total: Int, private val atMost: Int = Int.MAX_VALUE) : PdfRasterizer {
-        val asked = mutableListOf<IntRange>()
+        val drawn = mutableListOf<List<Int>>()
 
-        override suspend fun rasterize(obj: PointObject) = rasterize(obj, ALL_PAGES)
+        override suspend fun rasterize(obj: PointObject) = rasterize(obj, except = emptySet())
 
-        override suspend fun rasterize(obj: PointObject, pages: IntRange): RasterizedPages {
-            asked += pages
-            val drawn = pagesToDraw(pages, total, atMost)
+        override suspend fun rasterize(obj: PointObject, except: Set<Int>): RasterizedPages {
+            val pages = pagesToDraw(except, total, atMost).also { drawn += it }
             val dir = File.createTempFile("pages-", "").apply { delete(); mkdirs(); deleteOnExit() }
-            drawn.forEach { File(dir, "page-%03d.jpg".format(it)).apply { writeBytes(ByteArray(4)); deleteOnExit() } }
-            return RasterizedPages(ScratchRef(dir.absolutePath), total, first = drawn.first)
+            pages.forEach { File(dir, "page-%03d.jpg".format(it)).apply { writeBytes(ByteArray(4)); deleteOnExit() } }
+            return RasterizedPages(ScratchRef(dir.absolutePath), total, numbers = pages)
         }
 
         override suspend fun rasterizeFirstPage(obj: PointObject) = null
@@ -258,12 +257,49 @@ class PartlyReadScanTest {
         assertEquals(foundInDocumentLabel(1, listOf(cutAt + 5)), whole.find("Сторінка ${cutAt + 5}."))
     }
 
-    @Test fun `заход рисует просимое в пределах документа и не больше предела`() {
-        assertEquals(1..100, pagesToDraw(ALL_PAGES, pageCount = 110, atMost = 100))
-        assertEquals(101..110, pagesToDraw(101..110, pageCount = 110, atMost = 100))
-        assertEquals(101..200, pagesToDraw(101..250, pageCount = 250, atMost = 100))
-        assertEquals(2..2, pagesToDraw(2..2, pageCount = 3))
-        assertTrue("за концом документа нарисовано что-то", pagesToDraw(120..130, pageCount = 110).isEmpty())
+    /**
+     * Страница, на которой читатель срывается каждый раз, не держит на себе дочитывание: сотня
+     * телефона — сотня непрочитанных страниц, а не сотня подряд от сорванной. Прежде скан на 250
+     * страниц с вечно сорванной третьей рисовал 3–102 снова и снова, и хвост за 102-й не читался
+     * никогда, хотя слова чтения обещали, что его дочитает «Дочитать документ».
+     */
+    @Test fun `вечно сорванная страница не мешает дочитать хвост длинного скана`() = runTest {
+        val phone = Document(total = 250, atMost = 100)
+        val reader = Reader { page -> if (page == 3) error("engine crashed") else "Сторінка $page." }
+        val realizer = ReadDocumentRealizer(phone, reader, keeper)
+
+        var read = scan.learned(realizer.perform(scan, null))
+        reader.read.clear()
+        read = read.learned(realizer.perform(read, null))
+        assertTrue("второй заход перечитал прочитанное: ${reader.read}", reader.read.none { it in 1..100 && it != 3 })
+        read = read.learned(realizer.perform(read, null))
+
+        assertEquals(
+            "сотня захода снова ушла на те же страницы",
+            listOf((1..100).toList(), listOf(3) + (101..199).toList(), listOf(3) + (200..250).toList()),
+            phone.drawn,
+        )
+        assertEquals("хвост за сотней так и не дочитан", (1..250).toSet() - 3, pageCoverageOf(read.metadata)!!.pages)
+        val tail = read.find("Сторінка 250.")
+        assertTrue("слово с последней страницы не нашлось на своей странице: $tail", tail.startsWith(foundInDocumentLabel(1, listOf(250))))
+        assertTrue("у скана с непрочитанной страницей не осталось двери дочитать", door.accepts(GraphState(read)))
+
+        // Заход, в котором сорвалась только та же страница, знания не добыл: это срыв операции,
+        // а не ответ о документе (`not investigated` ≠ `not found`).
+        assertTrue(realizer.perform(read, null) is ActionResult.Failure)
+    }
+
+    @Test fun `заход рисует непрочитанное в пределах документа и не больше предела`() {
+        assertEquals((1..100).toList(), pagesToDraw(emptySet(), pageCount = 110, atMost = 100))
+        assertEquals((101..110).toList(), pagesToDraw((1..100).toSet(), pageCount = 110, atMost = 100))
+        assertEquals((101..200).toList(), pagesToDraw((1..100).toSet(), pageCount = 250, atMost = 100))
+        assertEquals(listOf(2), pagesToDraw(setOf(1, 3), pageCount = 3))
+        assertTrue("прочитанный целиком документ нарисован снова", pagesToDraw((1..110).toSet(), pageCount = 110).isEmpty())
+        assertEquals(
+            "сорванная страница держит на себе сотню захода",
+            listOf(3) + (101..199).toList(),
+            pagesToDraw((1..100).toSet() - 3, pageCount = 250, atMost = 100),
+        )
     }
 
     @Test fun `счёт просмотренных страниц переживает запись и чтение`() {

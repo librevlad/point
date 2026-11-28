@@ -88,12 +88,12 @@ class ScannedPdfReadsTest {
      * (карточка «Не отвечать «Ничего не нашлось» по скану, прочитанному не целиком»): страница,
      * на которой сервис отказал, уходит в сервис одна, а не вместе со всем документом.
      */
-    @Test fun `компьютер рисует просимые страницы под их номерами в документе`() = runBlocking {
-        val drawn = PcPdfRasterizer(dpi = 10f).rasterize(scannedPdf(pages = 5), 3..4)
+    @Test fun `компьютер рисует непрочитанные страницы под их номерами в документе`() = runBlocking {
+        val drawn = PcPdfRasterizer(dpi = 10f).rasterize(scannedPdf(pages = 5), except = setOf(1, 3, 5))
 
         assertEquals("счёт документа подменён счётом нарисованного", 5, drawn.total)
-        assertEquals(3, drawn.first)
-        assertEquals(listOf("page-0003.png", "page-0004.png"), File(drawn.dir.value).listFiles().orEmpty().map { it.name }.sorted())
+        assertEquals(listOf(2, 4), drawn.numbers)
+        assertEquals(listOf("page-0002.png", "page-0004.png"), File(drawn.dir.value).listFiles().orEmpty().map { it.name }.sorted())
     }
 
     /**

@@ -119,15 +119,16 @@ class ReadDocumentRealizer(
                 reportStage(tr("Разбираю PDF на страницы"))
                 val known = textRefForTravel(input.metadata)?.let { ref -> runCatching { File(ref).readText() }.getOrNull() }
                 val before = readSoFar(input.metadata, known)
-                val drawn = rasterizer.rasterize(input, before?.next ?: ALL_PAGES)
+                val drawn = rasterizer.rasterize(input, except = before?.covered.orEmpty())
 
-                // Номер страницы — по документу: первая нарисованная — `drawn.first`, а не
-                // первая страница документа. Порядок файлов — порядок номеров в именах, и номер
-                // длиннее — страница дальше: «page-1000» идёт после «page-999».
+                // Номер страницы — по документу: его называет растеризатор (`drawn.numbers`), а
+                // не место файла в папке — продолжение рисует не с первой страницы и не подряд.
+                // Порядок файлов — порядок номеров в именах, и номер длиннее — страница дальше:
+                // «page-1000» идёт после «page-999».
                 val pages = File(drawn.dir.value).walkTopDown()
                     .filter { it.isFile }
                     .sortedWith(compareBy<File>({ it.name.length }, { it.name }))
-                    .mapIndexed { index, file -> drawn.first + index to file }
+                    .mapIndexed { index, file -> drawn.numbers.getOrElse(index) { index + 1 } to file }
                     .toList()
                 if (pages.isEmpty()) {
                     return@withContext ActionResult.Failure(
@@ -138,7 +139,7 @@ class ReadDocumentRealizer(
 
                 // Счёт страниц документа — от растеризатора, а не по папке: папка знает только
                 // нарисованное, и срезанный хвост выглядел бы концом документа.
-                val lastDrawn = pages.last().first
+                val lastDrawn = pages.maxOf { it.first }
                 val total = maxOf(drawn.total, lastDrawn)
 
                 val texts = before?.texts.orEmpty().toMutableMap()

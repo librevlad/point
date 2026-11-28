@@ -1,6 +1,5 @@
 package com.point.desktop
 
-import com.point.core.flow.ALL_PAGES
 import com.point.core.flow.Cost
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.RasterizedPages
@@ -54,17 +53,16 @@ fun pcReadDocumentRealizer(readPage: suspend (File) -> String): Realizer = ReadD
  */
 class PcPdfRasterizer(private val dpi: Float = PAGE_DPI) : PdfRasterizer {
 
-    override suspend fun rasterize(obj: PointObject): RasterizedPages = rasterize(obj, ALL_PAGES)
+    override suspend fun rasterize(obj: PointObject): RasterizedPages = rasterize(obj, except = emptySet())
 
-    override suspend fun rasterize(obj: PointObject, pages: IntRange): RasterizedPages {
+    override suspend fun rasterize(obj: PointObject, except: Set<Int>): RasterizedPages {
         val source = File(obj.uri.value).takeIf(File::isFile)
             ?: error(tr("Файла документа нет на диске"))
         val dir = Files.createTempDirectory("pages-").toFile().apply { deleteOnExit() }
-        var first = 1
+        var drawn = emptyList<Int>()
         val total = org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
             val renderer = org.apache.pdfbox.rendering.PDFRenderer(document)
-            val drawn = pagesToDraw(pages, document.numberOfPages)
-            first = drawn.first
+            drawn = pagesToDraw(except, document.numberOfPages)
             for (number in drawn) {
 
                 // Имя — настоящий номер страницы в документе, а не номер в этом заходе.
@@ -73,7 +71,7 @@ class PcPdfRasterizer(private val dpi: Float = PAGE_DPI) : PdfRasterizer {
             }
             document.numberOfPages
         }
-        return RasterizedPages(ScratchRef(dir.absolutePath), total, first)
+        return RasterizedPages(ScratchRef(dir.absolutePath), total, numbers = drawn)
     }
 
     override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? {
