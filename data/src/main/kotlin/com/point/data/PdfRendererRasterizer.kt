@@ -9,6 +9,7 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.READER_NO_PAGES
 import com.point.core.flow.READER_NOT_DECODED
+import com.point.core.flow.RasterizedPages
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +22,7 @@ class PdfRendererRasterizer @Inject constructor(
     private val store: ObjectStore,
 ) : PdfRasterizer {
 
-    override suspend fun rasterize(obj: PointObject): ScratchRef = withContext(Dispatchers.IO) {
+    override suspend fun rasterize(obj: PointObject): RasterizedPages = withContext(Dispatchers.IO) {
         val src = File(obj.uri.value)
 
         ParcelFileDescriptor.open(src, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
@@ -34,6 +35,10 @@ class PdfRendererRasterizer @Inject constructor(
                 if (renderer.pageCount == 0) error(READER_NO_PAGES)
                 val dir = File(store.newScratchFile("pages").value).apply { mkdirs() }
 
+                // Рисуются первые MAX_PAGES — это бережёт память и время телефона. Но срез не
+                // молчит: настоящий счёт страниц уходит дальше вместе с папкой, и чтение говорит
+                // человеку «100 из 150», а не «100 из 100» — непрочитанный хвост не выдаётся за
+                // конец документа (см. PdfRasterizer.rasterize).
                 val pages = minOf(renderer.pageCount, MAX_PAGES)
                 if (renderer.pageCount > MAX_PAGES) {
                     Log.w(TAG, "PDF has ${renderer.pageCount} pages; rasterising the first $MAX_PAGES")
@@ -54,7 +59,7 @@ class PdfRendererRasterizer @Inject constructor(
                         page.close()
                     }
                 }
-                ScratchRef(dir.absolutePath)
+                RasterizedPages(ScratchRef(dir.absolutePath), total = renderer.pageCount)
             } finally {
                 renderer.close()
             }

@@ -76,6 +76,35 @@ class ScanOnPcTest {
         assertTrue("кадр целиком выдан за страницу", made.metadata[META_WHOLE_FRAME] != null)
     }
 
+    /** Лист во весь кадр: рамка таблицы на нём, а под рамкой — строка подписи. */
+    private fun sheetWithPrintedFrame(): BufferedImage = BufferedImage(1200, 1400, BufferedImage.TYPE_INT_RGB).apply {
+        createGraphics().apply {
+            setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+            color = Color(240, 240, 236)
+            fillRect(0, 0, 1200, 1400)
+            color = Color.BLACK
+            stroke = java.awt.BasicStroke(4f)
+            drawRect(150, 180, 900, 1000)
+            font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 24)
+            for (i in 0 until 22) drawString("Received in full, invoice 4521, 18.07.2026", 190, 260 + i * 40)
+            drawString("Подпись получателя ________  18.07.2026", 190, 1310)
+            dispose()
+        }
+    }
+
+    @Test fun `страница PDF не обрезается по рамке таблицы на листе`() {
+        // Скан в PDF ищет лист той же дорогой, что «Скан» (DOC-1, 28.11.2026): прежде он шёл
+        // урезанной, и лист во весь кадр уходил в PDF обрезанным по рамке таблицы — без подписи.
+        val page = onFrame(sheetWithPrintedFrame()) { rgba, scratch ->
+            com.point.vision.PageVision.process(rgba, scratch)?.let { it.cols() to it.rows() }
+        }
+
+        if (page != null) {
+            val (w, h) = page
+            assertTrue("страница PDF обрезана по рамке таблицы: $w×$h", minOf(w, h) >= 1150)
+        }
+    }
+
     @Test fun `снимки набора — страницами одного PDF`() = runBlocking {
         val pages = listOf(sheetOnDesk(), sheetOnDesk()).map { it.absolutePath }
         val set = PointObject("set", "application/x-collection", ScratchRef(tmp.root.absolutePath), ObjectState(ObjectKind.COLLECTION))

@@ -36,12 +36,19 @@ class ReadDocumentActionTest {
         override suspend fun clear() = Unit
     }
 
-    /** Растеризатор рисует страницы файлами — дальше их читает движок, как на устройстве. */
-    private fun rasterizer(pages: Int): PdfRasterizer {
+    /**
+     * Растеризатор рисует страницы файлами — дальше их читает движок, как на устройстве.
+     *
+     * [total] — сколько страниц в самом документе: телефонный растеризатор рисует не больше
+     * ста, и у длинного скана нарисованных меньше, чем есть.
+     */
+    private fun rasterizer(pages: Int, total: Int = pages): PdfRasterizer {
         val dir = File.createTempFile("pages-", "").apply { delete(); mkdirs(); deleteOnExit() }
-        repeat(pages) { index -> File(dir, "page-$index.png").apply { writeBytes(ByteArray(4)); deleteOnExit() } }
+        repeat(pages) { index ->
+            File(dir, "page-%04d.png".format(index)).apply { writeBytes(ByteArray(4)); deleteOnExit() }
+        }
         return object : PdfRasterizer {
-            override suspend fun rasterize(obj: PointObject) = ScratchRef(dir.absolutePath)
+            override suspend fun rasterize(obj: PointObject) = RasterizedPages(ScratchRef(dir.absolutePath), total)
             override suspend fun rasterizeFirstPage(obj: PointObject) = null
         }
     }
@@ -152,10 +159,58 @@ class ReadDocumentActionTest {
         )
     }
 
+    /**
+     * Скан на 150 страниц: телефон рисует первые сто. Прежде человек читал «Прочитано
+     * страниц: 100 из 100», вопрос чтения закрывался «найдено», а текст пятидесяти страниц
+     * пропадал молча. Теперь назван настоящий счёт и место, где чтение остановилось, а вопрос
+     * остаётся «исследовано недостаточно».
+     */
+    @Test fun `длинный скан — сказано, сколько прочитано из скольких, и вопрос чтения не закрыт`() = runTest {
+        val done = ReadDocumentRealizer(rasterizer(pages = 100, total = 150), reads({ "строка" }), keeper)
+            .perform(document, null) as ActionResult.Done
+
+        assertTrue("счёт документа потерян: ${done.message}", "100 из 150" in done.message)
+        assertTrue("срез выдан за конец документа: ${done.message}", "100 из 100" !in done.message)
+        assertTrue("не сказано, где чтение остановилось: ${done.message}", "дальше 100-й страницы" in done.message)
+        assertEquals(
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(done.findings!!.metadata, KnownCapabilities.IMAGE_TEXT),
+        )
+        assertTrue("прочитанное начало не стало знанием", Feature.HAS_TEXT in done.findings!!.features)
+    }
+
+    /**
+     * Начало длинного скана пустое — это не «в документе нет текста»: до хвоста чтение не
+     * дошло. Приговор документу закрыл бы вопрос «не нашлось», и второй раз его бы не задали.
+     */
+    @Test fun `пустое начало длинного скана — не приговор документу`() = runTest {
+        val done = ReadDocumentRealizer(rasterizer(pages = 100, total = 150), reads({ "" }), keeper)
+            .perform(document, null) as ActionResult.Done
+
+        assertTrue("приговор всему документу по его началу: ${done.message}", done.message != NO_TEXT_IN_DOCUMENT)
+        assertTrue("счёт документа потерян: ${done.message}", "100 из 150" in done.message)
+        assertEquals(
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(done.findings!!.metadata, KnownCapabilities.IMAGE_TEXT),
+        )
+    }
+
+    /** Документ в пределе — как прежде: прочитан весь, вопрос закрыт, лишних приписок нет. */
+    @Test fun `скан на 20 страниц прочитан целиком — как прежде`() = runTest {
+        val done = read(20, { "строка" }) as ActionResult.Done
+
+        assertTrue("счёт документа не тот: ${done.message}", "20 из 20" in done.message)
+        assertTrue("целый документ назван недочитанным: ${done.message}", "дальше" !in done.message)
+        assertEquals(
+            InvestigationState.FOUND,
+            investigationStateOf(done.findings!!.metadata, KnownCapabilities.IMAGE_TEXT),
+        )
+    }
+
     /** Битый PDF: разбор сорвался целиком — своими словами про PDF, а не хвостом библиотеки. */
     @Test fun `битый документ объясняется своими словами, а не текстом библиотеки`() = runTest {
         val broken = object : PdfRasterizer {
-            override suspend fun rasterize(obj: PointObject): ScratchRef = error("PDF header not found")
+            override suspend fun rasterize(obj: PointObject): RasterizedPages = error("PDF header not found")
             override suspend fun rasterizeFirstPage(obj: PointObject) = null
         }
 

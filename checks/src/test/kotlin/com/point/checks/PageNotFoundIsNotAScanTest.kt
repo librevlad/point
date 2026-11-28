@@ -29,7 +29,7 @@ class PageNotFoundIsNotAScanTest {
     @Test
     fun `проверка и правда читает конвейер скана, а не пустоту`() {
         assertTrue("файл конвейера скана не нашёлся — сломан путь, а не продукт", scan.isFile)
-        assertTrue("в файле нет поиска страницы — читается не тот файл", "detectDocument" in code(scan.readText()))
+        assertTrue("в файле нет поиска страницы — читается не тот файл", "pageCorners" in code(scan.readText()))
     }
 
     @Test

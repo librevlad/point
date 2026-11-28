@@ -68,10 +68,7 @@ internal suspend fun picturesToPdf(
     name: String,
     page: suspend (File) -> PdfPicture?,
 ): ActionResult {
-    val files = com.point.core.flow.inCollectionOrder(
-        children(input).map(::File).filter(File::isFile),
-        com.point.core.flow.collectionOrder(input.metadata),
-    ) { it.name }
+    val files = collectionFiles(input, children)
 
     var pages = 0
     var wholeFrames = 0

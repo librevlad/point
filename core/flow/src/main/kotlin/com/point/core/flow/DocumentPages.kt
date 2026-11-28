@@ -29,19 +29,36 @@ data class PagesRead(
 )
 
 /**
- * @param total сколько страниц в документе
+ * @param total сколько страниц в документе — в самом документе, а не дошедших до чтения
  * @param readable на скольких страницах нашёлся текст
  * @param broken сколько страниц сорвалось — движок или сервис до текста не дошёл
  * @param brokenSaid чем сорвалось — словами того слоя, который это видел
+ * @param drawn сколько страниц дошло до чтения: растеризатор вправе нарисовать не все
+ * (`PdfRasterizer.rasterize`), и страницы за срезом не прочитаны — ни с текстом, ни без
  */
-fun pagesRead(total: Int, readable: Int, broken: Int, brokenSaid: String? = null): PagesRead = when {
+fun pagesRead(
+    total: Int,
+    readable: Int,
+    broken: Int,
+    brokenSaid: String? = null,
+    drawn: Int = total,
+): PagesRead = when {
 
     readable > 0 -> PagesRead(
-        pagesReadSaid(readable, total) + brokenNote(broken, brokenSaid),
+        pagesReadSaid(readable, total) + unreadNote(drawn, total) + brokenNote(broken, brokenSaid),
         if (readable == total) InvestigationState.FOUND else InvestigationState.INSUFFICIENTLY_INVESTIGATED,
     )
 
     broken > 0 -> PagesRead(brokenSaid ?: READ_NOT_NOW, state = null)
+
+    // Пусто на прочитанных страницах — ещё не «в документе нет текста», если до части страниц
+    // чтение не дошло. Приговор документу по его началу — тот же обман, что «100 из 100» у
+    // скана на 150 страниц: вопрос закрылся бы «не нашлось», а хвост никто не смотрел
+    // (`not investigated` ≠ `not found`). Поэтому — «исследовано недостаточно» и счёт вслух.
+    drawn < total -> PagesRead(
+        tr("Прочитано страниц: {0} из {1} — текста на них нет", drawn, total) + unreadNote(drawn, total),
+        InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+    )
 
     else -> PagesRead(NO_TEXT_IN_DOCUMENT, InvestigationState.NOT_FOUND)
 }
@@ -49,6 +66,14 @@ fun pagesRead(total: Int, readable: Int, broken: Int, brokenSaid: String? = null
 /** Прочитано — знание о документе, а не о страницах: текст ложится на сам документ. */
 private fun pagesReadSaid(readable: Int, total: Int): String =
     tr("Прочитано страниц: {0} из {1} — текст у документа", readable, total)
+
+/**
+ * Чтение остановилось раньше конца документа — и человек слышит где (тот же класс, что #1255).
+ * Без этой приписки «100 из 150» читается как «на остальных пятидесяти текста нет», хотя до
+ * них не дошли: срез — предел чтения, а не свойство документа.
+ */
+private fun unreadNote(drawn: Int, total: Int): String =
+    if (drawn >= total) "" else tr(" · дальше {0}-й страницы Point не читает", drawn)
 
 /**
  * Часть страниц сорвалась — и человек об этом слышит (#1255). Без этой приписки «1 из 10»

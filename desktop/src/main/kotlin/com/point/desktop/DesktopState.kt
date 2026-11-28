@@ -133,6 +133,17 @@ class DesktopState(
      * и его действия, оставшиеся с прошлого входа, не предлагаются.
      */
     private val linked: () -> Boolean = { true },
+
+    /**
+     * Сделанное действием становится объектом ленты (#1407).
+     *
+     * Шов свой, а не [reopenPath]: тот открывает файл по пути, а результат действия бывает и
+     * набором — папкой частей, у которой порядок частей лежит знанием в самом результате
+     * (`collection.order`, #1207). Пока результат ложился через путь, папку «Страниц» и
+     * «Слайдов» молча выбрасывало, а человеку говорилось «Готово» без единой страницы.
+     * В работе здесь `Inbox.land`; без него результат открывается по пути, как прежде.
+     */
+    private val landResult: (com.point.core.model.ResultObject) -> InboxItem? = { made -> reopenPath(made.uri.value) },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + background)
 
@@ -321,14 +332,21 @@ class DesktopState(
     fun bubblesFor(item: InboxItem): List<Bubble> {
 
         // Тот же вывод уместного смысла, что и на телефоне: из знания объекта (ADR-0001 §14).
-        // Показанное мышью место — Focus (#1379): с ним рядом встают «Взять фрагмент» и
-        // «Замазать», как на телефоне после выделения.
-        val graph = com.point.core.flow.GraphState(
-            item.obj,
-            focus = com.point.core.flow.focusOf(item.obj.metadata, item.obj.id),
-        )
+        val graph = graphOf(item)
         return registry.bubblesFor(graph.copy(intent = com.point.core.flow.leadingIntent(graph)))
     }
+
+    /**
+     * Граф объекта для выбора и порядка дверей — один на реестр и на показанный список.
+     *
+     * Показанное мышью место — Focus (#1379): с ним рядом встают «Взять фрагмент» и
+     * «Замазать», как на телефоне после выделения. Список действий прежде выводил смысл из
+     * графа без Focus, а реестр — с ним, и одно и то же действие судилось двумя смыслами.
+     */
+    private fun graphOf(item: InboxItem) = com.point.core.flow.GraphState(
+        item.obj,
+        focus = com.point.core.flow.focusOf(item.obj.metadata, item.obj.id),
+    )
 
     /**
      * Человек обвёл места на снимке (#1379). Focus едет к исполнителю тем же путём, что и на
@@ -712,7 +730,7 @@ class DesktopState(
         }
 
         if (result is ActionResult.Success) {
-            val born = runCatching { reopenPath(result.result.uri.value) }.getOrNull()
+            val born = runCatching { landResult(result.result) }.getOrNull()
             if (born != null) {
                 val named = result.result.metadata["name"]
                 val item2 = if (named.isNullOrBlank()) {
@@ -914,20 +932,33 @@ class DesktopState(
      * Единый список действий: свои и телефонные ранжируются вместе — по смыслу и пользе,
      * а не по тому, чей реестр их родил (аудит, блок 2.3). Недоступное телефонное видно
      * с причиной, а не скрыто (PC5: возможности дорастают на глазах).
+     *
+     * Пересортировка нужна ровно для этого — вставить телефонные действия среди своих, — и
+     * свои она обязана оставить в том порядке, в каком их поставил реестр (#840, #1411).
+     * Прежде она судила своих заново по объявленному числу `meta.priority`, а реестр — по
+     * знанию: `priority(state)` и «вопрос уже отвечен». Показанный список молча отменял оба
+     * правила: «Скан» у прочитанного снимка не поднимался (#1044), расшифрованная запись
+     * снова звала «Расшифровать» первым (#1411). Теперь ступени те же, что у реестра, плюс
+     * одна своя — недоступное ниже доступного; последнего судьи нет, и равные остаются в
+     * порядке реестра (сортировка устойчива).
+     *
+     * Телефонное действие отвеченным не считается: в объявлении телефона нет, на какой вопрос
+     * отвечает его дверь, а угадывать по имени — значит топить чужое действие по совпадению.
      */
     fun actionsFor(item: InboxItem): List<ActionChoice> {
-        val graph = com.point.core.flow.GraphState(item.obj)
+        val graph = graphOf(item)
         val intent = com.point.core.flow.leadingIntent(graph)
         val here = bubblesFor(item).map { bubble ->
             val capability = runCatching { registry.byId(bubble.capabilityId) }.getOrNull()
-            Triple(
+            Ranked(
                 ActionChoice(bubble.title, onPhone = false, bubble = bubble, icon = bubble.icon),
-                capability?.meta?.priority ?: com.point.core.flow.PC_CAP_DEFAULT_PRIORITY,
-                intent != null && capability != null && intent in capability.intents(item.obj.state),
+                answered = capability != null && com.point.core.flow.alreadyAnswered(capability, graph),
+                servesIntent = intent != null && capability != null && intent in capability.intents(item.obj.state),
+                priority = capability?.priority(item.obj.state) ?: com.point.core.flow.PC_CAP_DEFAULT_PRIORITY,
             )
         }
         val phone = phoneActionsFor(item).map { action ->
-            Triple(
+            Ranked(
                 ActionChoice(
                     action.label,
                     onPhone = true,
@@ -941,21 +972,30 @@ class DesktopState(
                     remote = action,
                     icon = "phone",
                 ),
-                action.priority,
-                false,
+                answered = false,
+                servesIntent = false,
+                priority = action.priority,
             )
         }
         return (here + phone)
             .sortedWith(
                 compareBy(
-                    { (_, _, servesIntent) -> if (servesIntent) 0 else 1 },
-                    { (choice, _, _) -> if (choice.unavailable == null) 0 else 1 },
-                    { (_, priority, _) -> priority },
-                    { (choice, _, _) -> choice.title },
+                    { if (it.answered) 1 else 0 },
+                    { if (it.servesIntent) 0 else 1 },
+                    { if (it.choice.unavailable == null) 0 else 1 },
+                    { it.priority },
                 ),
             )
-            .map { it.first }
+            .map { it.choice }
     }
+
+    /** Действие единого списка и то, чем оно меряется рядом с остальными. */
+    private class Ranked(
+        val choice: ActionChoice,
+        val answered: Boolean,
+        val servesIntent: Boolean,
+        val priority: Int,
+    )
 
     /**
      * Вопрос до дела: телефон, который ответит через час, не может быть выбран за спиной

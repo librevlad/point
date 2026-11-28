@@ -194,7 +194,7 @@ class FlowViewModelTest {
         store.kind = ObjectKind.PDF
         val vm = vm(
             pdf = object : com.point.core.flow.PdfRasterizer {
-                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterize(obj: PointObject) = com.point.core.flow.RasterizedPages(ScratchRef("/pages"), total = 0)
                 override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
                     error(com.point.core.flow.READER_NO_PAGES)
             },
@@ -242,7 +242,7 @@ class FlowViewModelTest {
         store.kind = ObjectKind.PDF
         val vm = vm(
             pdf = object : com.point.core.flow.PdfRasterizer {
-                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterize(obj: PointObject) = com.point.core.flow.RasterizedPages(ScratchRef("/pages"), total = 0)
                 override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
                     error(com.point.core.flow.READER_NOT_DECODED)
             },
@@ -275,7 +275,7 @@ class FlowViewModelTest {
         store.kind = ObjectKind.PDF
         val vm = vm(
             pdf = object : com.point.core.flow.PdfRasterizer {
-                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterize(obj: PointObject) = com.point.core.flow.RasterizedPages(ScratchRef("/pages"), total = 0)
                 override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
                     throw java.io.IOException("No space left on device")
             },
@@ -312,7 +312,7 @@ class FlowViewModelTest {
         store.kind = ObjectKind.PDF
         val vm = vm(
             pdf = object : com.point.core.flow.PdfRasterizer {
-                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterize(obj: PointObject) = com.point.core.flow.RasterizedPages(ScratchRef("/pages"), total = 0)
                 override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
                     throw SecurityException("password required")
             },
@@ -6567,7 +6567,7 @@ private class FakeSensorySettings : com.point.core.flow.SensorySettings {
 }
 
 private class FakePdfRasterizer : com.point.core.flow.PdfRasterizer {
-    override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+    override suspend fun rasterize(obj: PointObject) = com.point.core.flow.RasterizedPages(ScratchRef("/pages"), total = 0)
     override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
 }
 
