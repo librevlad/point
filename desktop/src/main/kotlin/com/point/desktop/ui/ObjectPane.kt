@@ -72,8 +72,11 @@ internal fun ObjectPane(
     val rest = sections.filter { it.topic != SectionTopic.VALUE }
 
     // Причина, общая для всех действий, сказана подписью объекта — у действий остаётся их
-    // обещание (#874).
-    val sharedReason = com.point.core.flow.sharedUnusableReason(actions.map { it.bubble?.unusableReason })
+    // обещание (#874). Судятся свои двери: о годности этого объекта говорит здешний реестр, а
+    // телефонные действия причины не несут и не должны рассыпать общую фразу по каждой строке.
+    val sharedReason = com.point.core.flow.sharedUnusableReason(
+        actions.mapNotNull { it.bubble }.map { it.unusableReason },
+    )
 
     // Значение, у которого есть продолжения, стоит заголовком своего раздела и не повторяется
     // строкой знания: одно значение — одно место.

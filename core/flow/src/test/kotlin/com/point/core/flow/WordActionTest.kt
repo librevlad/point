@@ -79,6 +79,41 @@ class WordActionTest {
         override suspend fun write(paragraphs: List<String>) = ScratchRef(path)
     }
 
+    private val noPdfText = object : PdfTextExtractor {
+        override suspend fun extractText(obj: PointObject, atMost: Int?) = ""
+    }
+
+    private fun markedPdf(said: String) = PointObject(
+        "id",
+        "application/pdf",
+        ScratchRef("/tmp/x.pdf"),
+        ObjectState(ObjectKind.PDF, setOf(com.point.core.model.Feature.UNUSABLE)),
+        metadata = mapOf(META_UNUSABLE_REASON to said),
+    )
+
+    /**
+     * Обломку PDF не советуют распознать скан (#994): дверь «Распознать» ему не предлагается, а
+     * дело не в снимке страниц. Ему называют то же, что сказано на экране, — один раз и навсегда.
+     */
+    @Test
+    fun `обломок PDF отказывает словами своей метки, а не советом распознать скан`() = runTest {
+        val said = readerFailure(READER_NOT_DECODED, ObjectKind.PDF)
+
+        val result = WordRealizer(testKnowledge(noPdfText), docxTo("/x"), noOcr).perform(markedPdf(said), null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertEquals(said, (result as ActionResult.Failure).reason)
+        org.junit.Assert.assertFalse("повтор не починит повреждённый файл", result.recoverable)
+    }
+
+    /** Сорвавшаяся попытка о файле ничего не сказала (#1101): прежний совет остаётся при нём. */
+    @Test
+    fun `метка о сорвавшейся попытке не выдаётся за поломку файла`() = runTest {
+        val result = WordRealizer(testKnowledge(noPdfText), docxTo("/x"), noOcr).perform(markedPdf(READ_NOT_NOW), null)
+
+        assertTrue((result as ActionResult.Failure).reason.contains("распознайте"))
+    }
+
     @Test
     fun `на PDF слышно чтение текста и сборку документа`() = runTest {
         val pdf = object : PdfTextExtractor {

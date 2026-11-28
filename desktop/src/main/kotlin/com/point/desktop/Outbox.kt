@@ -28,6 +28,10 @@ class Outbox(
      * главного экрана упирался в пустышку и не доходил до соседних записей. Теперь набор
      * едет одним архивом, страницы в нём лежат в порядке набора, — тем, что телефон умеет
      * принять и открыть.
+     *
+     * Набор, который лёг на компьютере объектом, — манифест путей (#1099, #1407), и он едет
+     * тем же архивом своих частей. Прежде в очередь вставал сам манифест: телефон получал
+     * вместо страниц список путей этого компьютера, а компьютер говорил «Ждёт телефона».
      */
     @Synchronized
     fun add(obj: PointObject): Int {
@@ -35,9 +39,14 @@ class Outbox(
         val id = nextId()
         val source = File(obj.uri.value)
         val name = obj.metadata["name"] ?: source.name
-        val meta = if (source.isDirectory) {
+        val parts = when {
+            source.isDirectory -> folderParts(source, collectionOrder(obj.metadata))
+            obj.mime == COLLECTION_MIME -> manifestParts(obj)
+            else -> null
+        }
+        val meta = if (parts != null) {
             val bin = File(dir, "$id.bin")
-            runCatching { bin.outputStream().use { out -> zipSet(source, collectionOrder(obj.metadata), out) } }
+            runCatching { bin.outputStream().use { out -> zipParts(parts, out) } }
                 .onFailure { bin.delete(); throw it }
             packedForTravel(obj.metadata) + mapOf("name" to setArchiveName(name), "mime" to SET_ARCHIVE_MIME)
         } else {
@@ -178,13 +187,32 @@ internal fun setArchiveName(name: String): String =
  * велит, остальные — за ними по имени. Пустой набор архивом не притворяется: отдать телефону
  * нечего, и это отказ, а не пустой файл.
  */
-internal fun zipSet(dir: File, order: List<String>, out: java.io.OutputStream) {
+internal fun zipSet(dir: File, order: List<String>, out: java.io.OutputStream) =
+    zipParts(folderParts(dir, order), out)
+
+/** Части набора-папки с именами внутри архива — путями от самой папки. */
+private fun folderParts(dir: File, order: List<String>): List<Pair<String, File>> {
     val files = dir.walkTopDown().filter(File::isFile).toList()
-    require(files.isNotEmpty()) { "набор пуст" }
-    val pages = com.point.core.flow.inCollectionOrder(files, order) { it.relativeTo(dir).invariantSeparatorsPath }
+    return com.point.core.flow.inCollectionOrder(files, order) { it.relativeTo(dir).invariantSeparatorsPath }
+        .map { it.relativeTo(dir).invariantSeparatorsPath to it }
+}
+
+/**
+ * Части набора-манифеста — в том же порядке, что у «Объединить в PDF» ([collectionFiles]).
+ * Части брошенной пачки лежат в разных папках и бывают тёзками: в архиве у каждой своё имя.
+ */
+private fun manifestParts(obj: PointObject): List<Pair<String, File>> {
+    val taken = mutableSetOf<String>()
+    return collectionFiles(obj).map { file ->
+        uniqueChildName(taken, file.name).also { taken += it } to file
+    }
+}
+
+private fun zipParts(parts: List<Pair<String, File>>, out: java.io.OutputStream) {
+    require(parts.isNotEmpty()) { "набор пуст" }
     java.util.zip.ZipOutputStream(out).use { zip ->
-        pages.forEach { file ->
-            zip.putNextEntry(java.util.zip.ZipEntry(file.relativeTo(dir).invariantSeparatorsPath))
+        parts.forEach { (entry, file) ->
+            zip.putNextEntry(java.util.zip.ZipEntry(entry))
             file.inputStream().use { it.copyTo(zip) }
             zip.closeEntry()
         }

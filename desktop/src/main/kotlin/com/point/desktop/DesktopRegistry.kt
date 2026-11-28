@@ -4,6 +4,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
+import com.point.core.flow.unusableReason
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.LatentBubble
@@ -37,7 +38,9 @@ class DesktopRegistry(
             .filter { runnable(it.id, state) }
 
         // Негодному объекту читать себя не предлагается — то же правило, что на телефоне
-        // (#994): компьютер сам помечает пустой файл при приёме (`Inbox.kt`).
+        // (#994): компьютер сам помечает при приёме пустой файл и PDF, который не открывается
+        // как PDF (`Inbox.kt`).
+        val unfit = graph.unusableReason()
         return com.point.core.flow.offeredWhenUnfit(state, graph.facts, applicable)
             // Отвеченный вопрос уступает следующему шагу — то же правило, что на телефоне
             // (#1411): расшифрованная запись не зовёт «Расшифровать» первым.
@@ -58,6 +61,12 @@ class DesktopRegistry(
                     // действия попадали в одну группу.
                     intent = com.point.core.flow.primaryIntentOf(it, state),
                     yields = it.yields(state),
+
+                    // Оставшаяся дверь называет причину негодности до нажатия — то же поле,
+                    // что заполняет телефон (#684/#582). Экран компьютера его читал, а реестр
+                    // не заполнял никогда: «В Word» у обломка PDF молчало, пока не отказывало
+                    // по нажатию словами про скан.
+                    unusableReason = unfit,
 
                     // Какое найденное значение действие продолжает — то же правило, что на
                     // телефоне: действие встаёт к значению, а не в группу вида функции.
