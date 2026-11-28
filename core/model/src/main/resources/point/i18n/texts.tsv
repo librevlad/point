@@ -87,6 +87,8 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 {0} — ждёт телефона: выполнится, когда вы его откроете	{0} — чекає на телефон: виконається, коли ви його відкриєте	{0}: waiting for the phone, runs when you open it
 {0} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект	{0} — чекає на телефон: відкрийте на телефоні головний екран Point і заберіть об’єкт	{0}: waiting for the phone. Open Point's home screen on the phone and pick up the item
 {0} — откройте «{1}» на домашнем экране	{0} — відкрийте «{1}» на домашньому екрані	{0}: open “{1}” on the home screen
+{0}. Сюда доехало только начало текста	{0}. Сюди доїхав лише початок тексту	{0}. Only the start of the text reached this device
+{0}. Текст сюда доехал только до страницы {1}	{0}. Текст сюди доїхав лише до сторінки {1}	{0}. The text reached this device only up to page {1}
 {0}: {1} — {2} в настройках	{0}: {1} — {2} у налаштуваннях	{0}: {1}. {2} in settings
 {0}: {1} — попробуйте завтра	{0}: {1} — спробуйте завтра	{0}: {1}. Try tomorrow
 {0}: ключ не задан	{0}: ключ не задано	{0}: no key set
@@ -151,6 +153,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 В коллекции нет изображений для PDF	У наборі немає зображень для PDF	The set has no pictures for a PDF
 В наборе нет картинок — добавьте снимки, и PDF соберётся	У наборі немає картинок — додайте знімки, і PDF збереться	The set has no pictures. Add photos and the PDF will come together
 В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста	У наборі немає сторінок для таблиці — ні знімка, ні PDF, ні тексту	The set has no pages for a table: no picture, PDF or text
+В начале документа ничего не нашлось: дальше текст сюда не доехал	На початку документа нічого не знайшлося: далі текст сюди не доїхав	Nothing found at the start of the document: the rest of the text didn't reach this device
 В области ничего не нашлось	В області нічого не знайшлося	Nothing was found in the area
 В объекте нет ссылки, которую можно открыть	В об’єкті немає посилання, яке можна відкрити	The item has no link to open
 В проверенной части ошибок не нашлось ({0}) — текст оставлен как был	У перевіреній частині помилок не знайшлося ({0}) — текст лишився як був	No mistakes in the checked part ({0}). The text is left as it was
@@ -230,6 +233,7 @@ Whisper слушает по ключу Groq	Whisper слухає за ключе
 Действие не выполнилось — попробуйте ещё раз	Дія не виконалася — спробуйте ще раз	The action didn't run. Try again
 До сервера Point не дозвониться	До сервера Point не додзвонитися	Can't reach the Point server
 До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз.	До сервера Point не додзвонитися. Перевірте інтернет і спробуйте ще раз.	Can't reach the Point server. Check your internet and try again.
+До страницы {0} ничего не нашлось: дальше текст сюда не доехал	До сторінки {0} нічого не знайшлося: далі текст сюди не доїхав	Nothing found up to page {0}: the rest of the text didn't reach this device
 Добавить	Додати	Add
 Добавить в контакты	Додати в контакти	Add to contacts
 Документ	Документ	Document

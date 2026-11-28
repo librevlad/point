@@ -114,7 +114,9 @@ internal suspend fun travellingMeta(
     val text = runCatching {
         store.readText(
             obj.copy(uri = com.point.core.model.ScratchRef(ref)),
-            limit = com.point.core.flow.READ_TEXT_TRAVEL_LIMIT,
+
+            // Знак сверх предела — по нему видно, что едет обрезок (#1014).
+            limit = com.point.core.flow.READ_TEXT_TRAVEL_READ,
         )
     }.getOrNull()
 

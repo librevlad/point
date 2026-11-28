@@ -205,6 +205,74 @@ class FindActionTest {
         assertTrue("отказ говорит о странице, а не о документе: $said", "документ" in said.lowercase())
     }
 
+    /**
+     * Договор на 60 страниц, прочитанный на одном устройстве и доехавший до другого (#1014): в
+     * дорогу берётся начало текста ([READ_TEXT_TRAVEL_LIMIT]), а границы страниц едут целиком.
+     * Каждая страница — ровно 3 000 знаков, поэтому 34-я начинается со знака 99 066, а 35-я —
+     * уже за пределом дороги.
+     */
+    private fun contractFromAnotherDevice(words: Map<Int, String>): PointObject {
+        val read = StringBuilder()
+        val starts = mutableListOf<PageStart>()
+        (1..60).forEach { page ->
+            if (read.isNotEmpty()) read.append("\n\n")
+            starts += PageStart(page, read.length)
+            read.append(("Сторінка $page. ${words[page].orEmpty()} " + "умови договору ".repeat(200)).take(3_000))
+        }
+        val there = mapOf(META_OCR_TEXT_REF to "/там/прочитане.txt", META_OCR_TEXT_PAGES to pageStartsWire(starts))
+        val packed = knowledgePackedForTravel(there, read.toString().take(READ_TEXT_TRAVEL_READ))
+        val kept = File.createTempFile("arrived", ".txt").apply {
+            deleteOnExit()
+            writeText(textArrivedFromTravel(packed)!!)
+        }
+        val landed = knowledgeArrivedFromTravel(packed, kept.absolutePath)
+        return PointObject(
+            "pdf",
+            "application/pdf",
+            ScratchRef("/договір.pdf"),
+            ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF) + landed.features),
+            landed.metadata,
+        )
+    }
+
+    /**
+     * Ловит находку ревью #1014: телефон прочитал скан договора на 60 страниц, человек продолжил
+     * на компьютере. Туда доехало начало текста, и слово со страницы 45 получало «Ничего не
+     * нашлось» — ответ о документе, большую часть которого поиск не видел.
+     */
+    @Test
+    fun `в тексте, доехавшем не целиком, ненайденное не выдаётся за ответ о документе`() = runTest {
+        val contract = contractFromAnotherDevice(mapOf(45 to "Іванов"))
+
+        val said = (FindRealizer().perform(contract, "Іванов") as ActionResult.Done).message
+
+        assertNotEquals("про страницу, которая сюда не доехала, сказано «ничего не нашлось»", foundOnPageLabel(0), said)
+        assertEquals("ответ не говорит, докуда искали", foundInPartLabel(0, emptyList(), cutPage = 34), said)
+    }
+
+    /** Находка в доехавшем начале названа, но не звучит как «во всём документе одно место». */
+    @Test
+    fun `в тексте, доехавшем не целиком, найденное не выдаётся за все места документа`() = runTest {
+        val contract = contractFromAnotherDevice(mapOf(3 to "Петренко", 45 to "Петренко"))
+
+        val said = (FindRealizer().perform(contract, "петренко") as ActionResult.Done).message
+
+        assertNotEquals("одно место из двух названо как все места документа", foundInDocumentLabel(1, listOf(3)), said)
+        assertEquals(foundInPartLabel(1, listOf(3), cutPage = 34), said)
+    }
+
+    /**
+     * Граница страницы за концом текста — улика обрыва и без пометки о дороге: страница, которая
+     * начинается там, где текста уже нет, в нём не лежит (#1014).
+     */
+    @Test
+    fun `граница страницы за концом текста — тоже обрыв, даже без пометки`() = runTest {
+        val said = (FindRealizer().perform(readScan("Одержувач Іванов", pages = "1:0,2:400"), "Петров") as ActionResult.Done)
+            .message
+
+        assertNotEquals("про страницу 2, которой в тексте нет, сказано «ничего не нашлось»", foundOnPageLabel(0), said)
+    }
+
     /** Экран телефона ищет подсветкой ровно там, где исполнитель искал бы по слою слов. */
     @Test
     fun `подсветка на странице — у страницы, а прочитанный скан ищется по тексту`() {

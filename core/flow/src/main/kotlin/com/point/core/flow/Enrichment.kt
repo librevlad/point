@@ -116,6 +116,32 @@ const val META_ORIGIN_ID = "origin.id"
 /** Длиннее в дорогу не берём: это уже документ, а не знание о нём. */
 const val READ_TEXT_TRAVEL_LIMIT = 100_000
 
+/**
+ * Сколько знаков читать в дорогу: на один больше, чем едет (#1014).
+ *
+ * Читавшие ровно по пределу не могли отличить текст длиной в предел от обрезанного — и
+ * обрезок уезжал на ту сторону без единой пометки. По лишнему знаку [knowledgePackedForTravel]
+ * видит, что текст длиннее дороги, и называет обрезок обрезком ([META_OCR_TEXT_CUT]).
+ */
+const val READ_TEXT_TRAVEL_READ = READ_TEXT_TRAVEL_LIMIT + 1
+
+/**
+ * Прочитанный текст доехал сюда не целиком: значение — сколько знаков доехало (#1014).
+ *
+ * В дорогу текст обрезается ([READ_TEXT_TRAVEL_LIMIT]), и на той стороне обрезок ложился
+ * файлом как текст документа — ничем не помеченный. «Найти в документе» искало по нему и
+ * про слово со страницы 45 шестидесятистраничного договора отвечало «Ничего не нашлось»:
+ * ответ о документе, большую часть которого поиск не видел. Потеря знания при переносе —
+ * дефект; раз весь текст в дорогу не берётся, та сторона обязана хотя бы знать, что у неё
+ * только начало.
+ *
+ * Ключ — пометка при прочтении, как и границы страниц ([META_OCR_TEXT_PAGES]): уходит вместе с
+ * текстом ([withoutKnowledge]) и едет с ним дальше. Значение — длина обрезка, а не «да»:
+ * пометка говорит только о том тексте, с которым приехала, и текст другой длины, легший
+ * потом под той же ссылкой, ею не оговаривается.
+ */
+const val META_OCR_TEXT_CUT = "$META_OCR_TEXT_REF.cut"
+
 /** Ссылка, по которой лежит прочитанный текст этого устройства, — её и надо прочитать в дорогу. */
 fun textRefForTravel(meta: Map<String, String>): String? =
     meta[META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
@@ -144,13 +170,20 @@ fun shownTextRef(obj: PointObject): String? =
  * подпись, и на той стороне она отправляет в «или» уже второе обычное перечитывание, а снять
  * её нечем. Текст доехал — пометки едут с ним: прочтение было сильным на самом деле.
  *
- * [text] — то, что лежит по ссылке; `null`, если прочитать не удалось.
+ * [text] — то, что лежит по ссылке, прочитанное с запасом в один знак ([READ_TEXT_TRAVEL_READ]);
+ * `null`, если прочитать не удалось.
+ *
+ * Длиннее дороги — едет начало, и оно названо обрезком ([META_OCR_TEXT_CUT], #1014): иначе
+ * та сторона принимала начало за весь текст документа и отвечала о документе по нему.
  */
 fun knowledgePackedForTravel(meta: Map<String, String>, text: String?): Map<String, String> {
     if (textRefForTravel(meta) == null) return meta
     val carried = text?.takeIf { it.isNotBlank() }
         ?: return withoutKnowledge(meta, setOf(META_OCR_TEXT_REF))
-    return meta - META_OCR_TEXT_REF + (META_READ_TEXT to carried.take(READ_TEXT_TRAVEL_LIMIT))
+    val travelling = carried.take(READ_TEXT_TRAVEL_LIMIT)
+    val packed = meta - META_OCR_TEXT_REF + (META_READ_TEXT to travelling)
+    if (travelling.length == carried.length) return packed
+    return packed + (META_OCR_TEXT_CUT to travelling.length.toString())
 }
 
 /** Текст, приехавший значением: его надо положить файлом этого устройства (#811). */

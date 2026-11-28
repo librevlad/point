@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -142,5 +143,69 @@ class DocumentSearchTest {
         )
         assertEquals("1:0,3:12", again[META_OCR_TEXT_PAGES])
         assertFalse("прежние границы ушли в спор", (META_OCR_TEXT_PAGES + META_ALT_SUFFIX) in again)
+    }
+
+    /**
+     * В дорогу едет начало текста, и оно названо обрезком (#1014): иначе та сторона принимала
+     * начало за весь документ и отвечала о документе по нему. Текст, уложившийся в дорогу, едет
+     * без оговорок — даже длиной ровно в предел.
+     */
+    @Test fun `обрезок в дорогу назван обрезком, а уложившийся текст — нет`() {
+        val read = mapOf(META_OCR_TEXT_REF to "/a.txt", META_OCR_TEXT_PAGES to "1:0")
+
+        val cut = knowledgePackedForTravel(read, "умови договору ".repeat(10_000).take(READ_TEXT_TRAVEL_READ))
+        val fits = knowledgePackedForTravel(read, "у".repeat(READ_TEXT_TRAVEL_LIMIT))
+
+        assertEquals(READ_TEXT_TRAVEL_LIMIT, cut[META_READ_TEXT]?.length)
+        assertEquals("обрезок едет без пометки", READ_TEXT_TRAVEL_LIMIT.toString(), cut[META_OCR_TEXT_CUT])
+        assertEquals("границы страниц не доехали вместе с обрезком", "1:0", cut[META_OCR_TEXT_PAGES])
+        assertFalse("текст ровно по пределу назван обрезком", META_OCR_TEXT_CUT in fits)
+    }
+
+    /**
+     * Пометка говорит только о том тексте, с которым приехала (#1014): ушёл текст — ушла и она,
+     * новый обрезок приносит свою длину, а текст другой длины, легший под той же ссылкой, ею не
+     * оговаривается.
+     */
+    @Test fun `пометка об обрезке живёт и уходит вместе со своим текстом`() {
+        val arrived = mapOf(META_OCR_TEXT_REF to "/a.txt", META_OCR_TEXT_CUT to "100000")
+
+        assertTrue(textCutShort(arrived, 100_000))
+        assertFalse("свежий текст другой длины назван обрезком", textCutShort(arrived, 4_200))
+        assertFalse(META_OCR_TEXT_CUT in withoutKnowledge(arrived, setOf(META_OCR_TEXT_REF)))
+
+        val again = mergeKnowledge(
+            arrived,
+            mapOf(META_OCR_TEXT_REF to "/b.txt", META_OCR_TEXT_CUT to "99000"),
+            REFRESHABLE_KNOWLEDGE,
+        )
+        assertEquals("99000", again[META_OCR_TEXT_CUT])
+        assertFalse("прежняя пометка ушла в спор", (META_OCR_TEXT_CUT + META_ALT_SUFFIX) in again)
+    }
+
+    @Test fun `граница страницы за концом текста — обрыв, а внутри текста — нет`() {
+        assertTrue(textCutShort(mapOf(META_OCR_TEXT_PAGES to "1:0,2:400"), length = 120))
+        assertFalse(textCutShort(mapOf(META_OCR_TEXT_PAGES to "1:0,2:40"), length = 120))
+        assertFalse("без границ и без пометки текст считается целым", textCutShort(emptyMap(), length = 120))
+    }
+
+    /**
+     * Ответ по обрезку говорит, докуда искали (#1014): «ничего не нашлось» и «нашлось 1 место»
+     * без оговорки звучали бы как ответ обо всём документе.
+     */
+    @Test fun `ответ по обрезку говорит, докуда искали, и не звучит как ответ о документе`() {
+        assertNotEquals(foundOnPageLabel(0), foundInPartLabel(0, emptyList(), cutPage = 34))
+        assertNotEquals(foundOnPageLabel(0), foundInPartLabel(0, null, cutPage = null))
+        assertTrue("страница обрыва не названа", "34" in foundInPartLabel(0, emptyList(), cutPage = 34))
+
+        val found = foundInPartLabel(1, listOf(3), cutPage = 34)
+        assertTrue("найденное потерялось за оговоркой: $found", found.startsWith(foundInDocumentLabel(1, listOf(3))))
+        assertTrue("страница обрыва не названа: $found", "34" in found)
+
+        assertEquals(
+            "обрыв на первой же странице назван «до страницы 1», а не началом документа",
+            foundInPartLabel(0, null, cutPage = null),
+            foundInPartLabel(0, emptyList(), cutPage = 1),
+        )
     }
 }

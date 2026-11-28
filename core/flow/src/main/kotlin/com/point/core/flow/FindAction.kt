@@ -84,6 +84,9 @@ class FindRealizer : Realizer {
      *
      * Текста нет или он не открылся — это отказ операции словами про документ, а не «ничего не
      * нашлось»: искать было не в чем, и выдать это за ответ значило бы солгать о документе.
+     *
+     * Текст доехал с другого устройства не целиком — ответ говорит, докуда искали
+     * ([foundInPartLabel]): по одному началу «ничего не нашлось» было бы той же ложью.
      */
     private fun inDocument(input: PointObject, query: String): ActionResult {
         val ref = textRefForTravel(input.metadata)
@@ -94,7 +97,12 @@ class FindRealizer : Realizer {
                 recoverable = false,
             )
         val hits = findInText(text, query)
-        return ActionResult.Done(foundInDocumentLabel(hits.size, pagesOf(hits, pageStartsOf(input.metadata))))
+        val starts = pageStartsOf(input.metadata)
+        val pages = pagesOf(hits, starts)
+        if (textCutShort(input.metadata, text.length)) {
+            return ActionResult.Done(foundInPartLabel(hits.size, pages, pageCutAt(starts, text.length)))
+        }
+        return ActionResult.Done(foundInDocumentLabel(hits.size, pages))
     }
 
     private fun atomLayer(input: PointObject): AtomLayer? =

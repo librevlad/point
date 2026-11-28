@@ -18,7 +18,9 @@ import java.io.File
 internal fun packedForTravel(meta: Map<String, String>): Map<String, String> {
     val ref = com.point.core.flow.textRefForTravel(meta) ?: return meta
     val text = runCatching {
-        File(ref).takeIf(File::isFile)?.readText()?.take(com.point.core.flow.READ_TEXT_TRAVEL_LIMIT)
+
+        // Знак сверх предела — по нему видно, что едет обрезок (#1014).
+        File(ref).takeIf(File::isFile)?.readText()?.take(com.point.core.flow.READ_TEXT_TRAVEL_READ)
     }.getOrNull()
     return com.point.core.flow.knowledgePackedForTravel(meta, text)
 }
