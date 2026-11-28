@@ -17,15 +17,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.WindowInfo
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.point.desktop.ui.NewObjectWays
+import com.point.desktop.ui.newObjectKey
 import com.point.desktop.ui.windowKeys
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
@@ -42,6 +45,10 @@ import org.junit.Test
  * Отсюда же вторая половина обещания: фокус, который просят на каждом возврате в окно,
  * выдёргивает курсор из поля, в которое человек печатает. Здесь проверено и то, и другое —
  * поведением сцены, а не чтением исходника.
+ *
+ * И третья (находка ревью #1014): клавишу, которую поле умеет само, первым слышит поле.
+ * Корень слушал клавиши раньше поля, и Ctrl+V брал буфер новым объектом, а в поле не
+ * вставлялось ни буквы — ни в вопрос действия, ни в поле ключа в настройках.
  */
 @OptIn(
     androidx.compose.ui.ExperimentalComposeUiApi::class,
@@ -54,29 +61,47 @@ class HotkeyReachesRootTest {
         override var isWindowFocused: Boolean by mutableStateOf(focused)
     }
 
-    private val pasted = AtomicInteger(0)
+    /** Сколько раз окно взяло буфер новым объектом. */
+    private val taken = AtomicInteger(0)
+
+    /** Сколько раз окно открыло выбор файла. */
+    private val picked = AtomicInteger(0)
     private val backed = AtomicInteger(0)
+
+    /** Что лежит в буфере человека. Свой у теста: системный принадлежит тому, кто за компьютером. */
+    private val copied = "ключ-из-браузера"
+
+    private class Copied(private val text: String) : ClipboardManager {
+        override fun getText() = AnnotatedString(text)
+
+        override fun setText(annotatedString: AnnotatedString) = Unit
+    }
+
+    private val ways = NewObjectWays(
+        pickFile = { picked.incrementAndGet() },
+        takeClipboard = { taken.incrementAndGet() },
+        grabScreen = {},
+        receiveFile = {},
+    )
 
     /** Курсор стоит в поле — то есть буквы человека пойдут туда, а не мимо. */
     private var caretInField = false
 
     private var typed by mutableStateOf("")
 
-    /** Тот же разбор клавиш, что делает окно: Ctrl+Shift+V — взять буфер, Esc — шаг назад. */
+    /** Тот же разбор клавиш, что делает окно: клавиши нового объекта и Esc — шаг назад. */
     private fun onKey(event: KeyEvent): Boolean {
-        if (event.type != KeyEventType.KeyDown) return false
-        val paste = event.isCtrlPressed && event.isShiftPressed && event.key == Key.V
-        val back = event.key == Key.Escape
-        if (paste) pasted.incrementAndGet()
+        if (newObjectKey(event, ways)) return true
+        val back = event.type == KeyEventType.KeyDown && event.key == Key.Escape
         if (back) backed.incrementAndGet()
-        return paste || back
+        return back
     }
 
     private fun window(
         window: OsWindow = OsWindow(focused = true),
         content: @Composable () -> Unit = {},
     ) = ImageComposeScene(width = 300, height = 200, density = Density(1f)) {
-        CompositionLocalProvider(LocalWindowInfo provides window) {
+        CompositionLocalProvider(LocalWindowInfo provides window, LocalClipboardManager provides Copied(copied)) {
             Box(Modifier.fillMaxSize().windowKeys(::onKey)) { content() }
         }
     }
@@ -110,9 +135,9 @@ class HotkeyReachesRootTest {
         try {
             scene.frames()
 
-            scene.sendKeyEvent(down(Key.V, ctrl = true, shift = true))
+            scene.sendKeyEvent(down(Key.V, ctrl = true))
 
-            assertEquals("Ctrl+Shift+V не дошёл до корня окна", 1, pasted.get().toLong())
+            assertEquals("Ctrl+V не дошёл до корня окна", 1, taken.get().toLong())
         } finally {
             scene.close()
         }
@@ -154,6 +179,50 @@ class HotkeyReachesRootTest {
             scene.sendKeyEvent(down(Key.Escape))
 
             assertEquals("Esc из поля не дошёл до окна — шага назад не будет", 1, backed.get().toLong())
+        } finally {
+            scene.close()
+        }
+    }
+
+    /**
+     * Ловит находку ревью #1014: человек скопировал ключ в браузере и нажал Ctrl+V в поле окна.
+     * Буфер ложится в поле, а не уходит новым объектом мимо него.
+     */
+    @Test
+    fun `Ctrl+V в поле вставляет в поле, а не берёт буфер новым объектом`() {
+        val scene = window { KeyField() }
+        try {
+            scene.frames()
+            scene.click(Offset(150f, 20f))
+            scene.frames()
+            assertTrue("клик по полю не поставил в него курсор — проверять нечего", caretInField)
+
+            scene.sendKeyEvent(down(Key.V, ctrl = true))
+            scene.frames()
+
+            assertEquals("буфер ушёл новым объектом, а не в поле", 0, taken.get().toLong())
+            assertEquals("в поле не вставилось скопированное", copied, typed)
+        } finally {
+            scene.close()
+        }
+    }
+
+    /**
+     * Клавиши окна, которых поле не знает, из поля по-прежнему доходят до окна (#1014): Ctrl+O —
+     * выбрать файл — не теряется оттого, что курсор стоит в поле.
+     */
+    @Test
+    fun `клавиша окна, которой поле не знает, доходит до окна и из поля`() {
+        val scene = window { KeyField() }
+        try {
+            scene.frames()
+            scene.click(Offset(150f, 20f))
+            scene.frames()
+            assertTrue("клик по полю не поставил в него курсор — проверять нечего", caretInField)
+
+            scene.sendKeyEvent(down(Key.O, ctrl = true))
+
+            assertEquals("Ctrl+O из поля не дошёл до окна", 1, picked.get().toLong())
         } finally {
             scene.close()
         }

@@ -40,6 +40,10 @@ import com.point.desktop.DesktopState
  * если действие их предложило, и одна строка для своего. Слова кнопок — те же, что у вопроса
  * на телефоне: «Готово» запускает действие с ответом, «Отмена» снимает вопрос. Enter в поле —
  * то же «Готово»; пустой ответ ничего не запускает.
+ *
+ * Esc в поле — то же «Отмена» (находка ревью #1014): шаг назад снимает сначала вопрос, а не
+ * весь объект. Без этого Esc доходил до окна и закрывал объект, а вопрос оставался висеть на
+ * нём до следующего открытия.
  */
 @Composable
 internal fun AskPanel(ask: DesktopState.InputAsk, onAnswer: (String) -> Unit, onDismiss: () -> Unit) {
@@ -71,8 +75,10 @@ internal fun AskPanel(ask: DesktopState.InputAsk, onAnswer: (String) -> Unit, on
                 .focusRequester(focus)
                 .onPreviewKeyEvent { event ->
                     val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
+                    val escape = event.key == Key.Escape
                     if (enter && event.type == KeyEventType.KeyDown) submit()
-                    enter
+                    if (escape && event.type == KeyEventType.KeyDown) onDismiss()
+                    enter || escape
                 }
                 .clip(shape)
                 .background(Color.White.copy(alpha = 0.06f))

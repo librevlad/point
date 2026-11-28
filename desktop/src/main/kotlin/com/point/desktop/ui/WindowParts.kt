@@ -131,8 +131,9 @@ private fun lineWord(n: Int): String = trPlural(n, "строка", "строки
 internal fun newObjectKey(event: KeyEvent, ways: NewObjectWays): Boolean {
     if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return false
 
-    // Ctrl+V — как везде на компьютере; корень не слышит его, когда человек печатает в поле
-    // (#1025), поэтому Shift здесь не страховка, а лишний палец.
+    // Ctrl+V — как везде на компьютере. Когда человек печатает в поле, Ctrl+V сначала слышит
+    // поле и вставляет буфер в себя (`windowKeys`, находка ревью #1014), поэтому Shift здесь
+    // не страховка, а лишний палец.
     when {
         event.key == Key.O && !event.isShiftPressed -> ways.pickFile()
         event.key == Key.V -> ways.takeClipboard()
