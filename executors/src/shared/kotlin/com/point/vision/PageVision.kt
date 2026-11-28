@@ -38,12 +38,15 @@ object PageVision {
      * Ненайденная страница исходным кадром не подменяется: снаружи это было бы неотличимо от
      * успеха. Кадр целиком — отдельная дорога ([processAsIs]), и результат её помечается.
      *
-     * Геометрия та же, что у «Скана» ([straightened]): прежде страница PDF выпрямлялась только
-     * по углам, без расправления изгиба, и изогнутая таблица в PDF оставалась кривой, хотя
-     * «Скан» того же снимка выходил ровным (DOC-1, сверка 28.11.2026).
+     * Лист ищется той же дорогой, что у «Скана» ([straightened]): прежде страница PDF
+     * выпрямлялась только по углам, без расправления изгиба, и изогнутая таблица в PDF
+     * оставалась кривой, хотя «Скан» того же снимка выходил ровным (DOC-1, сверка 28.11.2026).
+     *
+     * Но только найденный лист: кадр, расправленный по линиям целиком, листом не назван — у
+     * PDF такая страница уходит кадром целиком и помечается, как прежде (проверка 28.11.2026).
      */
     fun process(rgba: Mat, scratch: MutableList<Mat>, readTurns: Int? = null): Mat? =
-        straight(rgba, scratch)?.let { page ->
+        straight(rgba, scratch)?.takeIf { it.sheet }?.let { page ->
             val turns = readTurns ?: PageOrientation.quarterTurns(page.mat, scratch)
             binarise(PageOrientation.turned(page.mat, turns, scratch), scratch)
         }
@@ -99,8 +102,11 @@ object PageVision {
     /** Выпрямленная страница и её углы на развёрнутом кадре; `null` — углов нет. */
     class Page(val mat: Mat, val quad: PageQuad?)
 
-    /** Лист, выпрямленный так, как лежал на кадре, и его углы; `null` — углов нет. */
-    private class Straight(val mat: Mat, val corners: Array<Point>?)
+    /**
+     * Лист, выпрямленный так, как лежал на кадре, и его углы (`null` — углов нет). [sheet] —
+     * лист найден по краям; без него это кадр целиком, расправленный по линиям.
+     */
+    private class Straight(val mat: Mat, val corners: Array<Point>?, val sheet: Boolean)
 
     /**
      * Общая геометрия «Скана» и скана в PDF: лист отделяется от стола по краям, изогнутый
@@ -111,9 +117,10 @@ object PageVision {
         val found = pageCorners(rgba, scratch)
         if (found != null) {
             val flat = warp(rgba, found, scratch)
-            return dewarpByTps(flat, scratch, minBend = BENT_FRAC)?.let { Straight(it, null) } ?: Straight(flat, found)
+            return dewarpByTps(flat, scratch, minBend = BENT_FRAC)?.let { Straight(it, null, sheet = true) }
+                ?: Straight(flat, found, sheet = true)
         }
-        return dewarpByTps(rgba, scratch)?.let { Straight(it, null) }
+        return dewarpByTps(rgba, scratch)?.let { Straight(it, null, sheet = false) }
     }
 
     /** Общий хвост цветных путей: выбелить бумагу и увеличить мелкое (#1333). */
@@ -185,13 +192,18 @@ object PageVision {
         Imgproc.morphologyEx(otsu, otsu, Imgproc.MORPH_OPEN, kernel)
 
         // Углы, режущие текст, страницей не считаются (#1044): копия без концов строк вышла
-        // бы ровной и молча неполной.
-        // Рамка, напечатанная на листе, — не край листа: за ней та же бумага (кадр 04).
+        // бы ровной и молча неполной. Четырёхугольник почти во весь кадр — не найденный лист,
+        // а кадр целиком: выданный за страницу, он прятал бы, что листа не нашли (#1333).
         val frame = Size(small.cols().toDouble(), small.rows().toDouble())
+        // И хотя бы один край — настоящий, а не рамка, напечатанная на листе (кадр 04): такой
+        // край — сплошная черта пером, а по обе её стороны та же бумага. Четырёхугольник, у
+        // которого все края у кромки кадра, листа не показал вовсе. Касается и модели углов:
+        // на разлинованном листе без краёв она обводила крайние линии сетки.
         val whole: (Array<Point>) -> Boolean = {
             PageQuads.plausible(it, frame) &&
+                PageQuads.area(it) <= MAX_PAGE_FRACTION * frameArea &&
                 !PageEdges.cutsText(gray, it, scratch) &&
-                !PageEdges.paperBeyondEverySide(gray, it, scratch)
+                PageEdges.edgesOf(gray, small, it, scratch) == PageEdges.Edges.SHEET
         }
 
         // Светлый стол того же тона, что бумага, сливается с листом в одно пятно (кадр 19:
@@ -411,10 +423,14 @@ object PageVision {
         if (s < 1.0) Imgproc.resize(rgba, small, Size(rgba.cols() * s, rgba.rows() * s)) else rgba.copyTo(small)
         val w = small.cols()
         val h = small.rows()
+        // Страница меньше ядер поиска линий — линий на ней не найти, а нулевое ядро OpenCV
+        // отвергает исключением (проверка 28.11.2026: расправление теперь зовётся и на
+        // вырезанном листе, а он бывает узкой полосой).
+        if (w / 12 < 2 || h / 28 < 2) return null
         val gray = Mat().also { scratch += it }
         Imgproc.cvtColor(small, gray, Imgproc.COLOR_RGBA2GRAY)
 
-        val hk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size((w / 12).toDouble(), 1.0)).also { scratch += it }
+        val hk =Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size((w / 12).toDouble(), 1.0)).also { scratch += it }
         val vk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(1.0, (h / 28).toDouble())).also { scratch += it }
         var hRules = detectRules(gray, 0, 0.30, hk, scratch)
         val vRules = detectRules(gray, 1, 0.10, vk, scratch)

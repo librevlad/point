@@ -93,20 +93,40 @@ internal object PageEdges {
         ).any { it.cuts() }
     }
 
+    /** Что за краями найденного четырёхугольника. */
+    enum class Edges {
+        /** Ни одного края не видно — все у кромки кадра: листа ничто не показало, это кадр целиком. */
+        UNSEEN,
+
+        /** Рамка, напечатанная на листе: за каждым видимым краем — та же бумага. */
+        PRINTED_FRAME,
+
+        /** Хотя бы один видимый край — настоящий: за ним не та же бумага. */
+        SHEET,
+    }
+
     /**
-     * Не рамка ли это, напечатанная на листе (#1044, кадр 04 корпуса): за каждым видимым краем
-     * четырёхугольника — та же бумага, что у края изнутри.
+     * Край листа ли это (#1044, кадр 04 корпуса) — или рамка, напечатанная на листе: вдоль
+     * каждого видимого края идёт сплошная тёмная черта, а по обе её стороны — та же бумага,
+     * той же яркости и того же тона.
      *
      * Лист, заполнивший кадр, края на снимке не имеет, и самым крупным четырёхугольником
      * становится рамка таблицы на нём. Текста она не режет, а всё, что за ней, — терялось.
-     * У настоящего края по ту сторону стол, обложка, тень — хотя бы с одной стороны листа.
-     * Края на кромке снимка не в счёт: что за ними, не видно.
+     * У настоящего края по ту сторону другое — стол, обложка, — либо, если стол того же тона,
+     * нет сплошной черты: край листа на столе — это перепад, а не линия, проведённая пером.
+     * Одной яркости мало (проверка 28.11.2026): светлое дерево той же яркости, что бумага,
+     * отличается только тоном, и лист на нём со всех сторон выходил «рамкой».
+     * Края на кромке снимка не в счёт: что за ними, не видно. Если не видно ни одного,
+     * четырёхугольник ничем не показал лист — это кадр целиком без полей (разлинованный лист
+     * без краёв: модель углов обводила крайние линии сетки, проверка 28.11.2026).
+     *
+     * [rgba] — тот же кадр, что [gray], в цвете: по нему сравнивается тон.
      */
-    fun paperBeyondEverySide(gray: Mat, corners: Array<Point>, scratch: MutableList<Mat>): Boolean {
+    fun edgesOf(gray: Mat, rgba: Mat, corners: Array<Point>, scratch: MutableList<Mat>): Edges {
         val (tl, tr, br, bl) = corners
         val pageW = maxOf(PageVision.distance(tl, tr), PageVision.distance(bl, br))
         val pageH = maxOf(PageVision.distance(tl, bl), PageVision.distance(tr, br))
-        if (pageW < 1.0 || pageH < 1.0) return false
+        if (pageW < 1.0 || pageH < 1.0) return Edges.UNSEEN
         val s = WORK_SIDE / maxOf(pageW, pageH)
         val w = pageW * s
         val h = pageH * s
@@ -115,37 +135,78 @@ internal object PageEdges {
         val src = MatOfPoint2f(tl, tr, br, bl).also { scratch += it }
         val dst = MatOfPoint2f(Point(m, m), Point(m + w, m), Point(m + w, m + h), Point(m, m + h)).also { scratch += it }
         val transform = Imgproc.getPerspectiveTransform(src, dst).also { scratch += it }
+        val size = Size(w + 2 * m, h + 2 * m)
         val canvas = Mat().also { scratch += it }
-        Imgproc.warpPerspective(gray, canvas, transform, Size(w + 2 * m, h + 2 * m), Imgproc.INTER_LINEAR, Core.BORDER_CONSTANT)
+        Imgproc.warpPerspective(gray, canvas, transform, size, Imgproc.INTER_LINEAR, Core.BORDER_CONSTANT)
         val seen = Mat().also { scratch += it }
         Imgproc.warpPerspective(
             Mat.ones(gray.size(), CvType.CV_8U).also { scratch += it }, seen, transform, canvas.size(),
             Imgproc.INTER_NEAREST, Core.BORDER_CONSTANT,
         )
+        val colour = Mat().also { scratch += it }
+        Imgproc.warpPerspective(rgba, colour, transform, size, Imgproc.INTER_LINEAR, Core.BORDER_CONSTANT)
+        val bgr = Mat().also { scratch += it }
+        Imgproc.cvtColor(colour, bgr, Imgproc.COLOR_RGBA2BGR)
+        val lab = Mat().also { scratch += it }
+        Imgproc.cvtColor(bgr, lab, Imgproc.COLOR_BGR2Lab)
+        val tone = ArrayList<Mat>().also { Core.split(lab, it) }.onEach { scratch += it }
+        val ink = Mat().also { scratch += it }
+        Imgproc.adaptiveThreshold(canvas, ink, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY_INV, 25, 15.0)
 
-        val g = (GAP * maxOf(w, h)).toInt()
-        val st = (STRIP * maxOf(w, h)).toInt()
+        val g = (GAP * maxOf(w, h)).toInt().coerceAtLeast(1)
+        val st = (STRIP * maxOf(w, h)).toInt().coerceAtLeast(1)
         val x0 = m.toInt()
         val y0 = m.toInt()
         val x1 = (m + w).toInt()
         val y1 = (m + h).toInt()
-        // Изнутри полоса у самого края, снаружи — сразу за ним: у рамки на листе обе — бумага.
+
+        // Изнутри полоса у самого края, снаружи — сразу за ним; поперёк края — где идёт черта.
+        // Полоса черты шире зазора: углы, найденные чуть наискось, кладут рамку не точно на
+        // край, а с перекосом в несколько точек (разлинованный лист, проверка 28.11.2026).
+        val lb = STROKE_BAND * g
+        class Side(val inner: Rect, val outer: Rect, val line: Rect, val along: Int)
         val sides = listOf(
-            Pair(Rect(x0 + g, y0, st, y1 - y0), Rect(x0 - g - st, y0, st, y1 - y0)),
-            Pair(Rect(x1 - g - st, y0, st, y1 - y0), Rect(x1 + g, y0, st, y1 - y0)),
-            Pair(Rect(x0, y0 + g, x1 - x0, st), Rect(x0, y0 - g - st, x1 - x0, st)),
-            Pair(Rect(x0, y1 - g - st, x1 - x0, st), Rect(x0, y1 + g, x1 - x0, st)),
+            Side(Rect(x0 + g, y0, st, y1 - y0), Rect(x0 - g - st, y0, st, y1 - y0), Rect(x0 - lb, y0, 2 * lb, y1 - y0), along = 0),
+            Side(Rect(x1 - g - st, y0, st, y1 - y0), Rect(x1 + g, y0, st, y1 - y0), Rect(x1 - lb, y0, 2 * lb, y1 - y0), along = 0),
+            Side(Rect(x0, y0 + g, x1 - x0, st), Rect(x0, y0 - g - st, x1 - x0, st), Rect(x0, y0 - lb, x1 - x0, 2 * lb), along = 1),
+            Side(Rect(x0, y1 - g - st, x1 - x0, st), Rect(x0, y1 + g, x1 - x0, st), Rect(x0, y1 - lb, x1 - x0, 2 * lb), along = 1),
         )
         var visible = 0
-        for ((inner, outer) in sides) {
-            val outSeen = seen.submat(outer)
-            if (Core.countNonZero(outSeen) < MIN_SEEN * outer.area()) continue
+        for (side in sides) {
+            val outSeen = seen.submat(side.outer)
+            if (Core.countNonZero(outSeen) < MIN_EDGE_SEEN * side.outer.area()) continue
             visible++
-            val paper = median(canvas.submat(inner), null)
-            val beyond = median(canvas.submat(outer), outSeen)
-            if (Math.abs(paper - beyond) > SAME_PAPER_LEVELS) return false
+            val bright = Math.abs(median(canvas.submat(side.inner), null) - median(canvas.submat(side.outer), outSeen))
+            if (bright > SAME_PAPER_LEVELS) return Edges.SHEET
+            val da = median(tone[1].submat(side.inner), null) - median(tone[1].submat(side.outer), outSeen)
+            val db = median(tone[2].submat(side.inner), null) - median(tone[2].submat(side.outer), outSeen)
+            if (Math.hypot(da, db) > PaperColor.FOREIGN_TONE) return Edges.SHEET
+            if (strokeCover(ink.submat(side.line), side.along, scratch) < STROKE_COVER) return Edges.SHEET
         }
-        return visible > 0
+        return if (visible > 0) Edges.PRINTED_FRAME else Edges.UNSEEN
+    }
+
+    /**
+     * Какую долю длины края покрывает черта: длинные отрезки чернил вдоль края (буквы и пятна
+     * короче и отсеиваются), и по каждой точке вдоль края — есть ли такой отрезок поперёк
+     * полосы. [along] — 0, если край вертикальный (идём по рядам), 1 — горизонтальный.
+     */
+    private fun strokeCover(band: Mat, along: Int, scratch: MutableList<Mat>): Double {
+        val length = (if (along == 0) band.rows() else band.cols())
+        if (length <= 0) return 0.0
+        val run = (length * STROKE_RUN).coerceAtLeast(9.0)
+        val kernel = Imgproc.getStructuringElement(
+            Imgproc.MORPH_RECT, if (along == 0) Size(1.0, run) else Size(run, 1.0),
+        ).also { scratch += it }
+        val lines = Mat().also { scratch += it }
+        Imgproc.morphologyEx(band, lines, Imgproc.MORPH_OPEN, kernel)
+        val reduced = Mat().also { scratch += it }
+        // Максимум OpenCV считает только в том же типе, что вход (8 бит).
+        Core.reduce(lines, reduced, if (along == 0) 1 else 0, Core.REDUCE_MAX)
+        val values = ByteArray(reduced.total().toInt())
+        reduced.get(0, 0, values)
+        if (values.isEmpty()) return 0.0
+        return values.count { it.toInt() != 0 }.toDouble() / values.size
     }
 
     private fun median(m: Mat, mask: Mat?): Double {
@@ -226,4 +287,20 @@ internal object PageEdges {
 
     /** Насколько (уровней яркости из 255) бумага по обе стороны рамки может разниться. */
     private const val SAME_PAPER_LEVELS = 12.0
+
+    /** Какую долю края должна покрыть черта, чтобы край был рамкой, проведённой по листу. */
+    private const val STROKE_COVER = 0.85
+
+    /**
+     * Сколько полосы за краем должно быть на снимке, чтобы край считался видимым, — меньше,
+     * чем для разреза: чтобы назвать край настоящим, хватает узкой полоски стола (кадр 23:
+     * тёмный стол за правым краем шириной в полтора десятка точек кадра поиска).
+     */
+    private const val MIN_EDGE_SEEN = 0.1
+
+    /** Полоса поиска черты — во сколько зазоров в каждую сторону от края. */
+    private const val STROKE_BAND = 5
+
+    /** Отрезок черты не короче этой доли края: буквы короче, линия длиннее. */
+    private const val STROKE_RUN = 0.08
 }

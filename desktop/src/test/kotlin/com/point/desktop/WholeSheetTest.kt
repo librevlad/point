@@ -174,6 +174,111 @@ class WholeSheetTest {
         assertTrue("сама страница потерялась", quad.holds(600.0, 700.0))
     }
 
+    /** Светлое тёплое дерево с волокнами — той же яркости, что зеленоватая страница. */
+    private fun java.awt.Graphics2D.lightWood(width: Int, height: Int) {
+        color = Color(222, 196, 160)
+        fillRect(0, 0, width, height)
+        val random = java.util.Random(19)
+        repeat(300) {
+            val shade = random.nextInt(14) - 7
+            color = Color(222 + shade, 196 + shade, 160 + shade)
+            val y = random.nextInt(height)
+            drawLine(0, y, width, y + random.nextInt(30) - 15)
+        }
+    }
+
+    @Test
+    fun `лист на светлом столе другого тона находится и без тёмной обложки рядом`() {
+        // Проверка 28.11.2026: стол той же яркости со всех сторон — и лист выходил «рамкой на
+        // листе», потому что за краем сравнивалась одна яркость, а не тон.
+        for (offBottom in listOf(false, true)) {
+            val shot = canvas(1200, 1400) {
+                lightWood(1200, 1400)
+                color = Color(204, 212, 196)
+                fillRect(120, 110, 960, if (offBottom) 1290 else 1180)
+                color = Color(40, 40, 40)
+                font = Font(Font.SANS_SERIF, Font.PLAIN, 24)
+                var y = 190
+                while (y < (if (offBottom) 1380 else 1250)) {
+                    drawString(text, 160, y)
+                    y += 40
+                }
+            }
+
+            val quad = page(shot)?.quad
+
+            assertNotNull("лист на светлом столе не найден (низ за кадром: $offBottom)", quad)
+            assertTrue("сама страница потерялась", quad!!.holds(600.0, 700.0))
+            assertFalse("в страницу вошло дерево сверху", quad.holds(600.0, 50.0))
+            assertFalse("в страницу вошло дерево слева", quad.holds(50.0, 700.0))
+        }
+    }
+
+    @Test
+    fun `кадр целиком не выдаётся за найденный лист`() {
+        // Проверка 28.11.2026: чек той же яркости, что стол, занимал меньшинство светлого
+        // пятна — тоном бумаги становился тон стола, отрезался сам чек, и кадр целиком выходил
+        // «выпрямленной страницей» без пометки.
+        val shot = canvas(1200, 1400) {
+            lightWood(1200, 1400)
+            color = Color(236, 236, 230)
+            fillRect(450, 500, 330, 900)
+            color = Color(40, 40, 40)
+            font = Font(Font.SANS_SERIF, Font.PLAIN, 18)
+            var y = 560
+            while (y < 1380) {
+                drawString("Чек 4521 · 18.07.2026", 470, y)
+                y += 34
+            }
+        }
+
+        val quad = page(shot)?.quad
+
+        if (quad != null) {
+            assertFalse(
+                "весь кадр, со столом, выдан за найденный лист",
+                quad.holds(40.0, 40.0) && quad.holds(1160.0, 40.0) && quad.holds(40.0, 1360.0) && quad.holds(1160.0, 1360.0),
+            )
+        }
+    }
+
+    @Test
+    fun `узкая полоса и крошечный кадр не роняют скан`() {
+        // Проверка 28.11.2026: расправление по линиям зовётся теперь и на вырезанном листе, и
+        // на полосе ниже ядер поиска линий OpenCV падала. Падение «Скана» на телефоне уходит в
+        // запасной путь без пометки «кадр целиком».
+        val strip = canvas(300, 200) {
+            color = Color(40, 35, 30)
+            fillRect(0, 0, 300, 200)
+            color = Color(240, 240, 236)
+            fillRect(5, 87, 290, 26)
+        }
+        val banner = canvas(1000, 20) { color = Color(240, 240, 236); fillRect(0, 0, 1000, 20) }
+
+        for (shot in listOf(strip, banner)) {
+            onFrame(shot) { rgba, scratch -> PageVision.process(rgba, scratch) }
+            page(shot)
+        }
+    }
+
+    @Test
+    fun `разлинованный кадр без листа уходит в PDF кадром целиком, а не страницей`() {
+        // Проверка 28.11.2026: скан в PDF стал звать общую геометрию «Скана», и кадр, у
+        // которого листа нет, а линии есть, уходил в PDF найденной страницей без пометки.
+        val grid = canvas(1200, 1400) {
+            color = Color(240, 240, 236)
+            fillRect(0, 0, 1200, 1400)
+            color = Color(30, 30, 30)
+            stroke = java.awt.BasicStroke(3f)
+            for (i in 0..10) drawLine(0, 60 + i * 125, 1200, 60 + i * 125)
+            for (i in 0..7) drawLine(40 + i * 160, 0, 40 + i * 160, 1400)
+        }
+
+        val made = onFrame(grid) { rgba, scratch -> PageVision.process(rgba, scratch) != null }
+
+        assertFalse("кадр без листа выдан в PDF найденной страницей", made)
+    }
+
     @Test
     fun `охватывающий четырёхугольник берёт пятиугольник целиком и не выходит за кадр`() {
         val pentagon = listOf(Point(70.0, 130.0), Point(1110.0, 70.0), Point(1060.0, 1399.0), Point(260.0, 1399.0), Point(45.0, 1150.0))

@@ -119,7 +119,7 @@ internal object PaperColor {
      * С какого расхождения с тоном бумаги (a/b в Lab) светлое — уже не бумага. Внутри листа
      * корпуса расхождение почти всегда меньше 6, светлое дерево отстоит на 12–13.
      */
-    private const val FOREIGN_TONE = 8.0
+    const val FOREIGN_TONE = 8.0
 
     /** Чужое пятно меньше этой доли кадра столом не считается. */
     private const val MIN_FOREIGN_FRACTION = 0.01

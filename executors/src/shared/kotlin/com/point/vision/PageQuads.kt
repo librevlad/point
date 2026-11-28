@@ -113,6 +113,9 @@ internal object PageQuads {
         return Point(a.x + t * r.x, a.y + t * r.y)
     }
 
+    /** Площадь четырёхугольника (или любого многоугольника) по его вершинам. */
+    fun area(corners: Array<Point>): Double = Math.abs(signedArea(corners.toList()))
+
     private fun cross(o: Point, a: Point, b: Point): Double = (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 
     /** Площадь многоугольника со знаком обхода (по часовой в координатах снимка — плюс). */
