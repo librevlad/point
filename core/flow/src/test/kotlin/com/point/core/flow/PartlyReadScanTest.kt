@@ -94,6 +94,25 @@ class PartlyReadScanTest {
         if (number == 107) append(" Одержувач Петренко")
     }
 
+    @Test fun `скан на 110 страниц, прочитанный на сотню, на слово из хвоста не отвечает «ничего»`() = runTest {
+        val phone = Document(total = 110, atMost = 100)
+        val reader = Reader(::page)
+
+        val first = ReadDocumentRealizer(phone, reader, keeper).perform(scan, null)
+        val read = scan.learned(first)
+
+        assertEquals("прочитанное начало выдано за весь документ", InvestigationState.INSUFFICIENTLY_INVESTIGATED, stateOf(read))
+        assertEquals(PageCoverage((1..100).toSet(), total = 110), pageCoverageOf(read.metadata))
+
+        val tail = read.find("Петренко")
+        assertNotEquals("про хвост, которого никто не читал, сказано «ничего не нашлось»", foundOnPageLabel(0), tail)
+        assertTrue("ответ не говорит, сколько прочитано из скольких: $tail", "100" in tail && "110" in tail)
+
+        val head = read.find("1 450")
+        assertTrue("найденное в прочитанном не названо со страницей: $head", head.startsWith(foundInDocumentLabel(1, listOf(3))))
+        assertTrue("найденное звучит как все места документа: $head", "110" in head)
+    }
+
     /**
      * «Дочитать» — следующий виток того же чтения: дверь не закрывается, пока документ прочитан
      * не целиком, и читает только непросмотренное, а текст ложится в порядке страниц.
@@ -173,6 +192,11 @@ class PartlyReadScanTest {
         assertEquals(InvestigationState.INSUFFICIENTLY_INVESTIGATED, stateOf(read))
         assertEquals("сорвавшаяся страница посчитана прочитанной", setOf(1, 3), pageCoverageOf(read.metadata)!!.pages)
         assertTrue("после срыва дочитать нечем", door.accepts(GraphState(read)))
+        assertNotEquals(
+            "по слову со страницы, которую не прочли, сказано «ничего не нашлось»",
+            foundOnPageLabel(0),
+            read.find("друга"),
+        )
 
         reader.read.clear()
         val whole = read.learned(realizer.perform(read, null))
